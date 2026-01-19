@@ -4,7 +4,9 @@ import config from '../config';
 import { Send, User, Bot, Loader2, RotateCcw, ArrowRight, MessageCircle, Info, ShieldAlert, CheckCircle2, Lightbulb, HelpCircle } from 'lucide-react';
 import { AppStep } from '../types';
 
-const StepDemo = ({ formData, sessionId, onNext, setCurrentStep }) => {
+import Cookies from 'js-cookie';
+
+const StepDemo = ({ formData, sessionId, agentId, onNext, setCurrentStep }) => {
     const [messages, setMessages] = useState([
         { role: 'model', text: '你好！我是你的 AI 智能客服，有什麼可以幫你的嗎？' }
     ]);
@@ -31,9 +33,14 @@ const StepDemo = ({ formData, sessionId, onNext, setCurrentStep }) => {
         setLastResponseInfo(null);
 
         try {
+            const line_user_id = Cookies.get('line_user_id');
+            const line_user_name = Cookies.get('line_user_name');
             const response = await axios.post(`${config.API_URL}/api/chat`, {
                 message: msgText,
                 history: messages,
+                line_user_id: line_user_id,
+                user_name: line_user_name,
+                agent_id: agentId,
                 session_id: sessionId
             });
 

@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import config from '../config';
-import { Rocket, CheckCircle2, Copy, ExternalLink, MessageCircle, ShieldCheck, Loader2, Key, Lock, ArrowRight } from 'lucide-react';
+import { Rocket, CheckCircle2, Copy, ExternalLink, MessageCircle, ShieldCheck, Loader2, Key, Lock, ArrowRight, Home } from 'lucide-react';
 
-const StepDeploy = ({ formData, sessionId }) => {
+const StepDeploy = ({ formData, sessionId, agentId, onHome }) => {
     const [isDeploying, setIsDeploying] = useState(false);
     const [isDeployed, setIsDeployed] = useState(false);
     const [deployedChannelId, setDeployedChannelId] = useState('');
@@ -23,7 +23,7 @@ const StepDeploy = ({ formData, sessionId }) => {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    session_id: sessionId,
+                    agent_id: agentId,
                     access_token: lineConfig.accessToken,
                     channel_secret: lineConfig.channelSecret
                 })
@@ -191,7 +191,7 @@ const StepDeploy = ({ formData, sessionId }) => {
                             </div>
                             <h3 className="text-4xl font-black text-slate-800 mb-4">部署成功！</h3>
                             <p className="text-slate-500 mb-10 text-lg">
-                                您的 LINE AI 客服已正式啟動，您可以立即開始與 AI 對話，或查看運行數據。
+                                您的 LINE AI 客服已正式啟動，您現在可以回到首頁管理您的 Agent 或進行其他設定。
                             </p>
 
                             <div className="space-y-4 mb-10">
@@ -204,13 +204,13 @@ const StepDeploy = ({ formData, sessionId }) => {
                                 </div>
                             </div>
 
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                <button className="py-4 border border-slate-200 rounded-2xl font-bold text-slate-600 hover:bg-slate-50 transition-all flex items-center justify-center gap-2">
-                                    查看統計數據
-                                </button>
-                                <button className="py-4 bg-slate-900 text-white rounded-2xl font-bold hover:bg-slate-800 transition-all shadow-xl shadow-slate-200 flex items-center justify-center gap-2">
-                                    測試 AI 對話
-                                    <ExternalLink size={18} />
+                            <div className="flex justify-center">
+                                <button
+                                    onClick={onHome}
+                                    className="w-full py-4 bg-brand-600 text-white rounded-2xl font-bold hover:bg-brand-700 transition-all shadow-xl shadow-brand-100 flex items-center justify-center gap-2 active:scale-95"
+                                >
+                                    <Home size={20} />
+                                    回到首頁
                                 </button>
                             </div>
                         </div>

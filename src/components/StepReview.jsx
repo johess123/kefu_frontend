@@ -3,7 +3,9 @@ import axios from 'axios';
 import config from '../config';
 import { Loader2, MessageSquare, UserCheck, ArrowRight, Plus, Trash2, Save, CheckCircle, ChevronRight, Edit3 } from 'lucide-react';
 
-const StepReview = ({ onNext, onEdit, formData, setFormData, sessionId, reviewData, setReviewData }) => {
+import Cookies from 'js-cookie';
+
+const StepReview = ({ onNext, onEdit, formData, setFormData, sessionId, agentId, reviewData, setReviewData, setAgentId }) => {
     const [isLoading, setIsLoading] = useState(false);
     const [selectedFaqIndex, setSelectedFaqIndex] = useState(0);
     const [isEditingFaq, setIsEditingFaq] = useState(false);
@@ -35,22 +37,29 @@ const StepReview = ({ onNext, onEdit, formData, setFormData, sessionId, reviewDa
     const handleConfirm = async () => {
         setIsLoading(true);
         try {
-            // In a real app, we might want to save the edited FAQs back to the server here
-            // For now, we'll just proceed with the reviewData session
-            await axios.post(`${config.API_URL}/api/confirm_setup`, {
+            const line_user_id = Cookies.get('line_user_id');
+            const res = await axios.post(`${config.API_URL}/api/confirm_setup`, {
                 config_id: reviewData.config_id,
                 session_id: sessionId,
+                line_user_id: line_user_id,
+                agent_id: agentId, // Pass agentId for update
                 faqs: reviewData.faqs, // Pass potential edits
                 handoff_triggers: reviewData.handoff_triggers,
                 handoff_preview: reviewData.handoff_preview
             });
-            // Update global formData with edits
-            setFormData({
-                ...formData,
-                faqs: reviewData.faqs,
-                handoffTriggers: reviewData.handoff_triggers,
-            });
-            onNext();
+
+            if (res.data.status === 'ok') {
+                setAgentId(res.data.agent_id);
+                // Update global formData with edits
+                setFormData({
+                    ...formData,
+                    faqs: reviewData.faqs,
+                    handoffTriggers: reviewData.handoff_triggers,
+                });
+                onNext();
+            } else {
+                alert(res.data.message || '設定失敗');
+            }
         } catch (error) {
             console.error('Error confirming setup:', error);
             alert('設定失敗');
