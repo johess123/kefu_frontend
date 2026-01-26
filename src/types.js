@@ -14,6 +14,7 @@ export const ToneType = {
 
 export const DEFAULT_FORM_DATA = {
     brandDescription: '',
+    websiteUrl: '',
     tone: ToneType.WARM,
     toneAvoid: '',
     faqs: [],

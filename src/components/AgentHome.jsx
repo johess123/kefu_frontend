@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Layout, Plus, Edit2, Bot, Calendar, ArrowRight, Loader2, MessageCircle } from 'lucide-react';
+import { Layout, Plus, Edit2, Bot, Calendar, ArrowRight, Loader2, MessageCircle, ExternalLink, LayoutGrid } from 'lucide-react';
 import axios from 'axios';
 import config from '../config';
 
-const AgentHome = ({ userId, userName, onStartNew, onEditAgent }) => {
+const AgentHome = ({ userId, userName, onStartNew, onEditAgent, onEnterDashboard }) => {
     const [agents, setAgents] = useState([]);
     const [loading, setLoading] = useState(true);
 
@@ -80,12 +80,10 @@ const AgentHome = ({ userId, userName, onStartNew, onEditAgent }) => {
                                         <div className="w-12 h-12 bg-brand-50 text-brand-600 rounded-xl flex items-center justify-center">
                                             <Bot size={24} />
                                         </div>
-                                        <button
-                                            onClick={() => onEditAgent(agent)}
-                                            className="text-slate-400 hover:text-brand-600 transition-colors p-2 hover:bg-slate-50 rounded-lg"
-                                        >
-                                            <Edit2 size={18} />
-                                        </button>
+                                        <div className="flex items-center gap-2 bg-green-50 text-green-700 px-3 py-1 rounded-full border border-green-100">
+                                            <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
+                                            <span className="text-xs font-bold">營運中</span>
+                                        </div>
                                     </div>
                                     <h3 className="text-lg font-bold text-slate-900 mb-1">
                                         {agent.name || '未命名 Agent'}
@@ -94,7 +92,7 @@ const AgentHome = ({ userId, userName, onStartNew, onEditAgent }) => {
                                         {agent.config?.raw_config?.services || '暫無描述'}
                                     </p>
 
-                                    <div className="flex flex-col gap-3 pt-4 border-t border-slate-100">
+                                    <div className="flex flex-col gap-3 pt-4 border-t border-slate-100 mb-6">
                                         <div className="flex items-center gap-2 text-xs text-slate-400">
                                             <Calendar size={14} />
                                             最後更新: {new Date(agent.updated_at).toLocaleString()}
@@ -106,14 +104,23 @@ const AgentHome = ({ userId, userName, onStartNew, onEditAgent }) => {
                                             </div>
                                         )}
                                     </div>
-                                </div>
-                                <div className="p-4 bg-slate-50 flex justify-end">
-                                    <button
-                                        onClick={() => onEditAgent(agent)}
-                                        className="text-sm font-bold text-brand-600 flex items-center gap-1 group-hover:gap-2 transition-all"
-                                    >
-                                        管理設定 <ArrowRight size={16} />
-                                    </button>
+
+                                    <div className="flex gap-3">
+                                        <button
+                                            onClick={() => onEnterDashboard(agent)}
+                                            className="flex-1 bg-brand-600 hover:bg-brand-700 text-white text-sm font-bold py-3 px-4 rounded-xl transition-all flex items-center justify-center gap-2 active:scale-95 shadow-lg shadow-brand-100"
+                                        >
+                                            <LayoutGrid size={18} />
+                                            進入公司後台
+                                        </button>
+                                        <button
+                                            onClick={() => onEditAgent(agent)}
+                                            className="w-12 h-12 flex items-center justify-center border border-slate-200 rounded-xl text-slate-400 hover:text-brand-600 hover:border-brand-200 hover:bg-brand-50 transition-all active:scale-95"
+                                            title="填表流程"
+                                        >
+                                            <ExternalLink size={20} />
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
                         ))}

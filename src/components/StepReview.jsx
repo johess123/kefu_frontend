@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import config from '../config';
 import { Loader2, MessageSquare, UserCheck, ArrowRight, Plus, Trash2, Save, CheckCircle, ChevronRight, Edit3 } from 'lucide-react';
@@ -6,6 +6,7 @@ import { Loader2, MessageSquare, UserCheck, ArrowRight, Plus, Trash2, Save, Chec
 import Cookies from 'js-cookie';
 
 const StepReview = ({ onNext, onEdit, formData, setFormData, sessionId, agentId, reviewData, setReviewData, setAgentId }) => {
+    const initializedRef = useRef(false);
     const [isLoading, setIsLoading] = useState(false);
     const [selectedFaqIndex, setSelectedFaqIndex] = useState(0);
     const [isEditingFaq, setIsEditingFaq] = useState(false);
@@ -14,7 +15,11 @@ const StepReview = ({ onNext, onEdit, formData, setFormData, sessionId, agentId,
     const handleGenerate = async () => {
         setIsLoading(true);
         try {
-            const response = await axios.post(`${config.API_URL}/api/generate_prompt`, formData);
+            const line_user_id = Cookies.get('line_user_id');
+            const response = await axios.post(`${config.API_URL}/api/generate_prompt`, {
+                ...formData,
+                line_user_id
+            });
             setReviewData(response.data);
             if (response.data.faqs && response.data.faqs.length > 0) {
                 setSelectedFaqIndex(0);
@@ -29,7 +34,8 @@ const StepReview = ({ onNext, onEdit, formData, setFormData, sessionId, agentId,
     };
 
     useEffect(() => {
-        if (!reviewData && !isLoading) {
+        if (!reviewData && !isLoading && !initializedRef.current) {
+            initializedRef.current = true;
             handleGenerate();
         }
     }, []);

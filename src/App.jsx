@@ -6,6 +6,7 @@ import StepReview from './components/StepReview';
 import StepDemo from './components/StepDemo';
 import StepDeploy from './components/StepDeploy';
 import AgentHome from './components/AgentHome';
+import BackendDashboard from './components/BackendDashboard';
 import { Layout, MessageSquare, ListChecks, PlayCircle, RefreshCw, ArrowRight, Rocket, Loader2, Home } from 'lucide-react';
 import liff from '@line/liff';
 import axios from 'axios';
@@ -37,6 +38,8 @@ const App = () => {
     const [isVerifying, setIsVerifying] = useState(true);
     const [lineUserId, setLineUserId] = useState(null);
     const [lineUserName, setLineUserName] = useState(null);
+    const [showDashboard, setShowDashboard] = useState(false);
+    const [selectedAgent, setSelectedAgent] = useState(null);
 
     useEffect(() => {
         const initLIFF = async () => {
@@ -153,7 +156,8 @@ const App = () => {
         }
 
         setFormData({
-            brandDescription: rawConfig.merchant_name + " " + rawConfig.services,
+            brandDescription: rawConfig.merchant_name + " " + (rawConfig.services || ''),
+            websiteUrl: rawConfig.website_url || '',
             tone: rawConfig.tone || '親切自然',
             toneAvoid: rawConfig.tone_avoid || '',
             faqs: rawConfig.faqs || [],
@@ -162,6 +166,16 @@ const App = () => {
         });
 
         handleStartFilling(agent._id);
+    };
+
+    const handleEnterDashboard = (agent) => {
+        setSelectedAgent(agent);
+        setShowDashboard(true);
+    };
+
+    const handleBackFromDashboard = () => {
+        setShowDashboard(false);
+        setSelectedAgent(null);
     };
 
     const renderStep = () => {
@@ -215,14 +229,25 @@ const App = () => {
         }
     };
 
-    const renderLanding = () => (
-        <AgentHome
-            userId={lineUserId}
-            userName={lineUserName}
-            onStartNew={() => handleStartFilling()}
-            onEditAgent={handleEditAgent}
-        />
-    );
+    const renderLanding = () => {
+        if (showDashboard) {
+            return (
+                <BackendDashboard
+                    agent={selectedAgent}
+                    onBack={handleBackFromDashboard}
+                />
+            );
+        }
+        return (
+            <AgentHome
+                userId={lineUserId}
+                userName={lineUserName}
+                onStartNew={() => handleStartFilling()}
+                onEditAgent={handleEditAgent}
+                onEnterDashboard={handleEnterDashboard}
+            />
+        );
+    };
 
     if (isVerifying) {
         return (
