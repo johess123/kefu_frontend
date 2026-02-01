@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Bot, ArrowLeft, ArrowRight, Trash2, Plus, CheckCircle2, Globe, Sparkles, Loader2, AlertCircle } from 'lucide-react';
+import { Bot, ArrowLeft, ArrowRight, Trash2, Plus, CheckCircle2, Globe, Sparkles, Loader2, AlertCircle, Stethoscope, RotateCcw } from 'lucide-react';
 import axios from 'axios';
 import Cookies from 'js-cookie';
 import config from '../config';
@@ -10,6 +10,8 @@ const StepWizard = ({ formData, setFormData, onComplete }) => {
     const [isGeneratingFaqs, setIsGeneratingFaqs] = useState(false);
     const [urlError, setUrlError] = useState('');
     const [optimizingFaqIds, setOptimizingFaqIds] = useState(new Set());
+    const [isAnalyzing, setIsAnalyzing] = useState(false);
+    const [analysisReport, setAnalysisReport] = useState(null);
 
     const totalQuestions = 4;
 
@@ -200,6 +202,52 @@ const StepWizard = ({ formData, setFormData, onComplete }) => {
             }
         };
 
+        const handleAnalyzeFaqs = async () => {
+            if (formData.faqs.length === 0) {
+                alert('請先新增問答組');
+                return;
+            }
+            if (!formData.brandDescription.trim()) {
+                alert('請先填寫品牌描述');
+                setQIndex(0);
+                return;
+            }
+
+            setIsAnalyzing(true);
+            try {
+                const line_user_id = Cookies.get('line_user_id');
+                const response = await axios.post(`${config.API_URL}/api/analyze_faqs`, {
+                    brandDescription: formData.brandDescription,
+                    faqs: formData.faqs,
+                    line_user_id: line_user_id
+                });
+
+                if (response.data && !response.data.error) {
+                    setAnalysisReport(response.data);
+                } else {
+                    alert('健檢失敗：' + (response.data.error || '未知錯誤'));
+                }
+            } catch (error) {
+                console.error('Failed to analyze FAQs:', error);
+                alert('健檢過程中發生錯誤');
+            } finally {
+                setIsAnalyzing(false);
+            }
+        };
+
+        const applySuggestion = (faqId, optimizedQ, optimizedA) => {
+            updateField('faqs', formData.faqs.map(f =>
+                f.id === faqId ? { ...f, question: optimizedQ, answer: optimizedA } : f
+            ));
+            // Remove suggestion from report after applying
+            if (analysisReport) {
+                setAnalysisReport(prev => ({
+                    ...prev,
+                    suggestions: prev.suggestions.filter(s => s.id !== faqId)
+                }));
+            }
+        };
+
         return (
             <div className="space-y-4">
                 {/* AI suggestion block */}
@@ -261,6 +309,36 @@ const StepWizard = ({ formData, setFormData, onComplete }) => {
                                         onChange={(e) => updateFAQ(faq.id, 'question', e.target.value)}
                                     />
                                 </div>
+
+                                {analysisReport && analysisReport.suggestions.find(s => s.id === faq.id) && (
+                                    <div className="ml-6 p-3 bg-amber-50 border border-amber-100 rounded-xl relative">
+                                        <div className="flex items-start gap-2 mb-2">
+                                            <AlertCircle size={14} className="text-amber-500 mt-0.5" />
+                                            <p className="text-xs text-amber-700 font-medium">
+                                                建議優化：{analysisReport.suggestions.find(s => s.id === faq.id).suggestion}
+                                            </p>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <input
+                                                type="text"
+                                                readOnly
+                                                className="flex-1 p-2 bg-white border border-amber-200 rounded text-xs text-amber-800"
+                                                value={analysisReport.suggestions.find(s => s.id === faq.id).optimized_q}
+                                            />
+                                            <button
+                                                onClick={() => {
+                                                    const s = analysisReport.suggestions.find(s => s.id === faq.id);
+                                                    applySuggestion(faq.id, s.optimized_q, s.optimized_a);
+                                                }}
+                                                className="flex items-center gap-1 px-3 py-1.5 bg-white border border-amber-300 text-amber-600 rounded-lg text-xs font-bold hover:bg-amber-50 transition-all shadow-sm whitespace-nowrap"
+                                            >
+                                                <RotateCcw size={12} />
+                                                <span>取代</span>
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
+
                                 <div className="flex items-start gap-2">
                                     <span className="text-xs font-black text-slate-300 uppercase mt-2">A</span>
                                     <textarea
@@ -287,13 +365,44 @@ const StepWizard = ({ formData, setFormData, onComplete }) => {
                     </div>
                 )}
 
-                <button
-                    onClick={addFAQ}
-                    className="w-full py-3 flex items-center justify-center space-x-2 border-2 border-dashed border-brand-300 text-brand-600 rounded-xl hover:bg-brand-50 hover:border-brand-500 transition-colors"
-                >
-                    <Plus size={18} />
-                    <span>新增問答組</span>
-                </button>
+                <div className="flex gap-3">
+                    <button
+                        onClick={addFAQ}
+                        className="flex-1 py-3 flex items-center justify-center space-x-2 border-2 border-dashed border-brand-300 text-brand-600 rounded-xl hover:bg-brand-50 hover:border-brand-500 transition-colors"
+                    >
+                        <Plus size={18} />
+                        <span>手動新增一組</span>
+                    </button>
+                    <button
+                        onClick={handleAnalyzeFaqs}
+                        disabled={isAnalyzing || formData.faqs.length === 0}
+                        className="px-6 py-3 flex items-center justify-center space-x-2 border border-slate-200 text-slate-600 rounded-xl hover:bg-slate-50 transition-colors disabled:opacity-50"
+                    >
+                        {isAnalyzing ? (
+                            <Loader2 size={18} className="animate-spin" />
+                        ) : (
+                            <Stethoscope size={18} />
+                        )}
+                        <span>AI 智能健檢</span>
+                    </button>
+                </div>
+
+                {analysisReport && (
+                    <div className="mt-4 p-5 bg-emerald-50 border border-emerald-100 rounded-2xl relative">
+                        <div className="flex items-center gap-2 mb-3">
+                            <CheckCircle2 size={20} className="text-emerald-500" />
+                            <h4 className="font-bold text-emerald-900">
+                                AI 健檢報告 (得分: {analysisReport.score})
+                            </h4>
+                        </div>
+                        <p className="text-sm text-emerald-800 leading-relaxed mb-3">
+                            {analysisReport.report}
+                        </p>
+                        <p className="text-xs text-emerald-600 italic">
+                            * 請查看上方卡片中的具體優化建議，點擊「取代」即可快速修正。
+                        </p>
+                    </div>
+                )}
             </div>
         );
     };

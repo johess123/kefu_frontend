@@ -11,6 +11,7 @@ import { Layout, MessageSquare, ListChecks, PlayCircle, RefreshCw, ArrowRight, R
 import liff from '@line/liff';
 import axios from 'axios';
 import Cookies from 'js-cookie';
+import FoundingPartnerLanding from './components/FoundingPartnerLanding';
 
 const StepTab = ({ active, icon, label, disabled, onClick }) => (
     <button
@@ -40,6 +41,7 @@ const App = () => {
     const [lineUserName, setLineUserName] = useState(null);
     const [showDashboard, setShowDashboard] = useState(false);
     const [selectedAgent, setSelectedAgent] = useState(null);
+    const [showFoundingLanding, setShowFoundingLanding] = useState(true);
 
     useEffect(() => {
         const initLIFF = async () => {
@@ -210,6 +212,7 @@ const App = () => {
                     <StepDemo
                         formData={formData}
                         sessionId={sessionId}
+                        setSessionId={setSessionId}
                         agentId={agentId}
                         onNext={() => setCurrentStep(AppStep.DEPLOY)}
                         setCurrentStep={setCurrentStep}
@@ -249,11 +252,19 @@ const App = () => {
         );
     };
 
-    if (isVerifying) {
+    if (showFoundingLanding) {
         return (
-            <div className="min-h-screen flex items-center justify-center bg-slate-50">
-                <Loader2 className="w-10 h-10 text-brand-600 animate-spin" />
-            </div>
+            <FoundingPartnerLanding
+                isVerifying={isVerifying}
+                onLaunch={() => {
+                    if (!isAuthorized && !isVerifying) {
+                        // 如果驗證完畢但非管理員，顯示授權錯誤
+                        setShowFoundingLanding(false);
+                    } else {
+                        setShowFoundingLanding(false);
+                    }
+                }}
+            />
         );
     }
 
@@ -267,6 +278,12 @@ const App = () => {
                     <h2 className="text-xl font-bold text-slate-800 mb-2">權限不足</h2>
                     <p className="text-slate-600">您目前不具備管理員權限，無法進入此系統。</p>
                     <p className="text-slate-400 text-sm mt-4">請聯繫管理員協助。</p>
+                    <button
+                        onClick={() => setShowFoundingLanding(true)}
+                        className="mt-6 text-brand-600 font-bold hover:underline"
+                    >
+                        返回首頁
+                    </button>
                 </div>
             </div>
         );

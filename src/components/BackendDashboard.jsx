@@ -48,7 +48,7 @@ import { DEFAULT_HANDOFF_OPTIONS } from '../types';
 
 const BackendDashboard = ({ agent, onBack }) => {
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-    const [activeMenu, setActiveMenu] = useState('dashboard');
+    const [activeMenu, setActiveMenu] = useState('agents');
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [currentAgent, setCurrentAgent] = useState(agent);
     const [availableSubagents, setAvailableSubagents] = useState([]);
@@ -93,6 +93,8 @@ const BackendDashboard = ({ agent, onBack }) => {
     });
     const [isStatsLoading, setIsStatsLoading] = useState(false);
     const [showAllHistory, setShowAllHistory] = useState(false);
+    const [isBrandInfoExpanded, setIsBrandInfoExpanded] = useState(false);
+    const [isPersonaExpanded, setIsPersonaExpanded] = useState(false);
 
     const formatToken = (val) => {
         if (val === undefined || val === null) return '0';
@@ -481,7 +483,7 @@ const BackendDashboard = ({ agent, onBack }) => {
     const menuItems = [
         {
             group: '', items: [
-                { id: 'dashboard', label: '營運儀表板', icon: <LayoutGrid size={20} />, active: true }
+                { id: 'dashboard', label: '營運儀表板', icon: <LayoutGrid size={20} />, isLocked: true }
             ]
         },
         {
@@ -491,8 +493,8 @@ const BackendDashboard = ({ agent, onBack }) => {
         },
         {
             group: '客戶互動', items: [
-                { id: 'inbox', label: '對話收件匣', icon: <MessageSquare size={20} />, badge: '1' },
-                { id: 'crm', label: '客戶管理 (CRM)', icon: <UserCircle size={20} /> },
+                { id: 'inbox', label: '對話收件匣', icon: <MessageSquare size={20} />, isLocked: true },
+                { id: 'crm', label: '客戶管理 (CRM)', icon: <UserCircle size={20} />, isLocked: true },
                 { id: 'channels', label: '渠道串接', icon: <Globe size={20} /> }
             ]
         },
@@ -509,7 +511,7 @@ const BackendDashboard = ({ agent, onBack }) => {
     };
 
     return (
-        <div className="min-h-screen bg-[#F8F9FC] flex">
+        <div className="h-screen bg-[#F8F9FC] flex overflow-hidden">
             {/* Sidebar Overlay */}
             {isSidebarOpen && (
                 <div
@@ -547,11 +549,13 @@ const BackendDashboard = ({ agent, onBack }) => {
                                         <button
                                             key={item.id}
                                             onClick={() => {
+                                                if (item.isLocked) return;
                                                 setActiveMenu(item.id);
                                                 setIsSidebarOpen(false);
                                             }}
                                             className={`
                                                 w-full flex items-center justify-between px-3 py-2.5 rounded-xl transition-all
+                                                ${item.isLocked ? 'cursor-not-allowed' : ''}
                                                 ${activeMenu === item.id
                                                     ? 'bg-brand-50 text-brand-700 font-medium'
                                                     : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'}
@@ -559,9 +563,11 @@ const BackendDashboard = ({ agent, onBack }) => {
                                         >
                                             <div className="flex items-center gap-3">
                                                 {item.icon}
-                                                <span>{item.label}</span>
+                                                <span className={item.isLocked ? 'text-slate-400' : ''}>{item.label}</span>
                                             </div>
-                                            {item.badge && (
+                                            {item.isLocked ? (
+                                                <Lock size={14} className="text-slate-400" />
+                                            ) : item.badge && (
                                                 <span className="bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">
                                                     {item.badge}
                                                 </span>
@@ -591,7 +597,7 @@ const BackendDashboard = ({ agent, onBack }) => {
                             <div className="flex items-center justify-between bg-white rounded-lg p-2 border border-slate-100">
                                 <div className="flex items-center gap-1">
                                     <span className="text-yellow-500">🪙</span>
-                                    <span className="text-xs font-bold text-slate-700">1,250</span>
+                                    <span className="text-xs font-bold text-slate-700">Unlimited</span>
                                 </div>
                                 <button className="text-slate-400 hover:text-brand-600">
                                     <Plus size={16} />
@@ -632,10 +638,10 @@ const BackendDashboard = ({ agent, onBack }) => {
                     </div>
 
                     <div className="flex items-center gap-4">
-                        <button className="relative w-10 h-10 flex items-center justify-center text-slate-500 hover:bg-slate-50 rounded-xl transition-colors">
+                        {/* <button className="relative w-10 h-10 flex items-center justify-center text-slate-500 hover:bg-slate-50 rounded-xl transition-colors">
                             <Bell size={20} />
                             <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full border-2 border-white"></span>
-                        </button>
+                        </button> */}
                         <div className="hidden sm:flex items-center gap-4 border-l border-slate-100 pl-4 ml-4">
                             <div className="text-right">
                                 <div className="text-xs font-bold text-slate-900">商家管理員</div>
@@ -651,7 +657,7 @@ const BackendDashboard = ({ agent, onBack }) => {
                 </header>
 
                 {/* Dashboard Content */}
-                <div className="flex-1 overflow-y-auto p-6 lg:p-8">
+                <div className="flex-1 overflow-y-auto p-6">
                     {(() => {
                         switch (activeMenu) {
                             case 'dashboard':
@@ -741,12 +747,12 @@ const BackendDashboard = ({ agent, onBack }) => {
                                                         <p className="text-slate-500 text-sm">這是「客服部專員」的大腦。AI 會優先檢索這裡的內容來回答客戶。</p>
                                                     </div>
                                                 </div>
-                                                <div className="flex items-center gap-4">
+                                                {/* <div className="flex items-center gap-4">
                                                     <div className="bg-red-50 text-red-500 px-4 py-2 rounded-2xl flex items-center gap-2 border border-red-100 shadow-sm">
                                                         <Bell size={18} className="animate-pulse" />
                                                         <span className="text-sm font-bold">待處理 (1)</span>
                                                     </div>
-                                                </div>
+                                                </div> */}
                                             </div>
 
                                             {/* FAQ Content Area */}
@@ -963,16 +969,16 @@ const BackendDashboard = ({ agent, onBack }) => {
                                                         <p className="text-slate-500 text-sm">管理品牌核心設定、金流與 Agent 角色個性。</p>
                                                     </div>
                                                 </div>
-                                                <div className="flex items-center gap-4">
+                                                {/* <div className="flex items-center gap-4">
                                                     <div className="bg-red-50 text-red-500 px-4 py-2 rounded-2xl flex items-center gap-2 border border-red-100 shadow-sm">
                                                         <Bell size={18} className="animate-pulse" />
                                                         <span className="text-sm font-bold">待處理 (1)</span>
                                                     </div>
-                                                </div>
+                                                </div> */}
                                             </div>
 
                                             {/* Token Usage Section - Image 2 */}
-                                            <div className="bg-white rounded-[32px] border border-slate-200 shadow-sm overflow-hidden mb-8">
+                                            {/* <div className="bg-white rounded-[32px] border border-slate-200 shadow-sm overflow-hidden mb-8">
                                                 <div className="p-8 border-b border-slate-100 bg-slate-50/30">
                                                     <h3 className="font-bold text-slate-700 flex items-center gap-3">
                                                         <Zap size={18} className="text-brand-600" />
@@ -1072,101 +1078,119 @@ const BackendDashboard = ({ agent, onBack }) => {
                                                         </div>
                                                     </div>
                                                 </div>
-                                            </div>
+                                            </div> */}
 
                                             {/* Basic Info & Persona - Image 3 */}
                                             <div className="space-y-8">
                                                 <div className="bg-white rounded-[32px] border border-slate-200 shadow-sm overflow-hidden">
-                                                    <div className="p-8 border-b border-slate-100 bg-slate-50/30">
+                                                    <div
+                                                        className="p-8 border-b border-slate-100 bg-slate-50/30 cursor-pointer flex items-center justify-between group"
+                                                        onClick={() => setIsBrandInfoExpanded(!isBrandInfoExpanded)}
+                                                    >
                                                         <h3 className="font-bold text-slate-700 flex items-center gap-3">
                                                             <Package size={18} className="text-brand-600" />
                                                             品牌基本資訊
                                                         </h3>
-                                                    </div>
-                                                    <div className="p-8 space-y-6">
-                                                        <div>
-                                                            <label className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3 block">商家名稱 / 管理員暱稱</label>
-                                                            <div className="relative">
-                                                                <User className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300" size={18} />
-                                                                <input
-                                                                    type="text"
-                                                                    value={rootConfig.merchant_name}
-                                                                    onChange={(e) => setRootConfig({ ...rootConfig, merchant_name: e.target.value })}
-                                                                    className="w-full pl-12 pr-4 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-brand-500/10 focus:border-brand-500 outline-none transition-all font-medium text-slate-700"
-                                                                />
-                                                            </div>
-                                                        </div>
-                                                        <div>
-                                                            <label className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3 block">品牌/服務描述 (最高指令)</label>
-                                                            <textarea
-                                                                rows={4}
-                                                                value={rootConfig.services}
-                                                                onChange={(e) => setRootConfig({ ...rootConfig, services: e.target.value })}
-                                                                className="w-full p-6 bg-slate-50 border border-slate-200 rounded-3xl focus:ring-2 focus:ring-brand-500/10 focus:border-brand-500 outline-none transition-all text-sm leading-relaxed text-slate-600"
-                                                                placeholder="描述您所提供的服務內容..."
-                                                            />
-                                                            <p className="text-[10px] text-slate-400 mt-2 ml-2">這會是所有 Agent 理解你業務的核心依據。</p>
-                                                        </div>
-                                                        <div>
-                                                            <label className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3 block">網站連結 (選填)</label>
-                                                            <div className="relative">
-                                                                <Globe className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300" size={18} />
-                                                                <input
-                                                                    type="text"
-                                                                    value={rootConfig.website_url}
-                                                                    onChange={(e) => setRootConfig({ ...rootConfig, website_url: e.target.value })}
-                                                                    className="w-full pl-12 pr-4 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-brand-500/10 focus:border-brand-500 outline-none transition-all font-medium text-slate-500"
-                                                                    placeholder="https://..."
-                                                                />
-                                                            </div>
+                                                        <div className="text-slate-400 group-hover:text-slate-600 transition-colors">
+                                                            {isBrandInfoExpanded ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
                                                         </div>
                                                     </div>
+                                                    {isBrandInfoExpanded && (
+                                                        <div className="p-8 space-y-6 animate-in fade-in slide-in-from-top-2 duration-300">
+                                                            <div>
+                                                                <label className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3 block">商家名稱 / 管理員暱稱</label>
+                                                                <div className="relative">
+                                                                    <User className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300" size={18} />
+                                                                    <input
+                                                                        type="text"
+                                                                        value={rootConfig.merchant_name}
+                                                                        onChange={(e) => setRootConfig({ ...rootConfig, merchant_name: e.target.value })}
+                                                                        className="w-full pl-12 pr-4 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-brand-500/10 focus:border-brand-500 outline-none transition-all font-medium text-slate-700"
+                                                                    />
+                                                                </div>
+                                                            </div>
+                                                            <div>
+                                                                <label className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3 block">品牌/服務描述 (最高指令)</label>
+                                                                <textarea
+                                                                    rows={4}
+                                                                    value={rootConfig.services}
+                                                                    onChange={(e) => setRootConfig({ ...rootConfig, services: e.target.value })}
+                                                                    className="w-full p-6 bg-slate-50 border border-slate-200 rounded-3xl focus:ring-2 focus:ring-brand-500/10 focus:border-brand-500 outline-none transition-all text-sm leading-relaxed text-slate-600"
+                                                                    placeholder="描述您所提供的服務內容..."
+                                                                />
+                                                                <p className="text-[10px] text-slate-400 mt-2 ml-2">這會是所有 Agent 理解你業務的核心依據。</p>
+                                                            </div>
+                                                            <div>
+                                                                <label className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3 block">網站連結 (選填)</label>
+                                                                <div className="relative">
+                                                                    <Globe className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300" size={18} />
+                                                                    <input
+                                                                        type="text"
+                                                                        value={rootConfig.website_url}
+                                                                        onChange={(e) => setRootConfig({ ...rootConfig, website_url: e.target.value })}
+                                                                        className="w-full pl-12 pr-4 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-brand-500/10 focus:border-brand-500 outline-none transition-all font-medium text-slate-500"
+                                                                        placeholder="https://..."
+                                                                    />
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    )}
                                                 </div>
 
                                                 <div className="bg-white rounded-[32px] border border-slate-200 shadow-sm overflow-hidden">
-                                                    <div className="p-8 border-b border-slate-100 bg-slate-50/30">
+                                                    <div
+                                                        className="p-8 border-b border-slate-100 bg-slate-50/30 cursor-pointer flex items-center justify-between group"
+                                                        onClick={() => setIsPersonaExpanded(!isPersonaExpanded)}
+                                                    >
                                                         <h3 className="font-bold text-slate-700 flex items-center gap-3">
                                                             <Sparkles size={18} className="text-brand-600" />
                                                             語氣與人設 (Persona)
                                                         </h3>
+                                                        <div className="text-slate-400 group-hover:text-slate-600 transition-colors">
+                                                            {isPersonaExpanded ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
+                                                        </div>
                                                     </div>
-                                                    <div className="p-8 space-y-8">
-                                                        <div>
-                                                            <label className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4 block">選擇語氣</label>
-                                                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                                                                {['親切有溫度', '專業簡潔', '像朋友聊天', '活潑可愛'].map(t => (
-                                                                    <button
-                                                                        key={t}
-                                                                        onClick={() => setRootConfig({ ...rootConfig, tone: t })}
-                                                                        className={`py-4 rounded-2xl font-bold text-sm transition-all border ${rootConfig.tone === t ? 'bg-brand-50 border-brand-500 text-brand-600 shadow-sm' : 'bg-white border-slate-100 text-slate-500 hover:bg-slate-50'}`}
-                                                                    >
-                                                                        {t}
-                                                                    </button>
-                                                                ))}
+                                                    {isPersonaExpanded && (
+                                                        <div className="animate-in fade-in slide-in-from-top-2 duration-300">
+                                                            <div className="p-8 space-y-8">
+                                                                <div>
+                                                                    <label className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4 block">選擇語氣</label>
+                                                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                                                        {['親切有溫度', '專業簡潔', '像朋友聊天', '活潑可愛'].map(t => (
+                                                                            <button
+                                                                                key={t}
+                                                                                onClick={() => setRootConfig({ ...rootConfig, tone: t })}
+                                                                                className={`py-4 rounded-2xl font-bold text-sm transition-all border ${rootConfig.tone === t ? 'bg-brand-50 border-brand-500 text-brand-600 shadow-sm' : 'bg-white border-slate-100 text-slate-500 hover:bg-slate-50'}`}
+                                                                            >
+                                                                                {t}
+                                                                            </button>
+                                                                        ))}
+                                                                    </div>
+                                                                </div>
+                                                                <div>
+                                                                    <label className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3 block">避免用詞 (Negative Prompt)</label>
+                                                                    <input
+                                                                        type="text"
+                                                                        value={rootConfig.tone_avoid}
+                                                                        onChange={(e) => setRootConfig({ ...rootConfig, tone_avoid: e.target.value })}
+                                                                        className="w-full px-6 py-5 bg-slate-900 text-white rounded-2xl outline-none placeholder:text-slate-600 border border-slate-800 focus:border-brand-500 transition-all text-sm"
+                                                                        placeholder="例如：不要太油條、禁止使用簡體字..."
+                                                                    />
+                                                                </div>
+                                                            </div>
+
+                                                            <div className="px-10 py-8 bg-slate-50/50 border-t border-slate-100 flex justify-end">
+                                                                <button
+                                                                    disabled={isSaving}
+                                                                    onClick={handleSaveRootConfig}
+                                                                    className="bg-brand-600 hover:bg-brand-700 disabled:opacity-50 text-white font-bold px-10 py-3.5 rounded-2xl shadow-lg shadow-brand-200 transition-all active:scale-95 flex items-center gap-2"
+                                                                >
+                                                                    {isSaving ? <Loader2 className="animate-spin" size={20} /> : <Check size={20} />}
+                                                                    儲存設定
+                                                                </button>
                                                             </div>
                                                         </div>
-                                                        <div>
-                                                            <label className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3 block">避免用詞 (Negative Prompt)</label>
-                                                            <input
-                                                                type="text"
-                                                                value={rootConfig.tone_avoid}
-                                                                onChange={(e) => setRootConfig({ ...rootConfig, tone_avoid: e.target.value })}
-                                                                className="w-full px-6 py-5 bg-slate-900 text-white rounded-2xl outline-none placeholder:text-slate-600 border border-slate-800 focus:border-brand-500 transition-all text-sm"
-                                                                placeholder="例如：不要太油條、禁止使用簡體字..."
-                                                            />
-                                                        </div>
-                                                    </div>
-
-                                                    <div className="px-10 py-8 bg-slate-50/50 border-t border-slate-100 flex justify-end">
-                                                        <button
-                                                            disabled={isSaving}
-                                                            onClick={handleSaveRootConfig}
-                                                            className="bg-brand-600 hover:bg-brand-700 disabled:opacity-50 text-white font-bold px-10 py-3.5 rounded-2xl shadow-lg shadow-brand-200 transition-all active:scale-95 flex items-center gap-2"
-                                                        >
-                                                            {isSaving ? <Loader2 className="animate-spin" size={20} /> : <Check size={20} />}
-                                                            儲存設定
-                                                        </button>
-                                                    </div>
+                                                    )}
                                                 </div>
                                             </div>
                                         </div>
@@ -1712,7 +1736,7 @@ const BackendDashboard = ({ agent, onBack }) => {
                 )}
 
                 {/* Pending Notification to match Image 3 */}
-                <div className="fixed bottom-8 right-8 lg:bottom-12 lg:right-12">
+                {/* <div className="fixed bottom-8 right-8 lg:bottom-12 lg:right-12">
                     <div className="bg-white rounded-2xl shadow-2xl border border-red-50 p-4 flex items-center gap-4 animate-bounce">
                         <div className="w-12 h-12 bg-red-50 text-red-500 rounded-xl flex items-center justify-center">
                             <Bell className="animate-pulse" size={24} />
@@ -1723,7 +1747,7 @@ const BackendDashboard = ({ agent, onBack }) => {
                         </div>
                         <ChevronRight className="text-slate-300" size={20} />
                     </div>
-                </div>
+                </div> */}
             </main>
         </div>
     );

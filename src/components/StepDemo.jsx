@@ -6,7 +6,7 @@ import { AppStep } from '../types';
 
 import Cookies from 'js-cookie';
 
-const StepDemo = ({ formData, sessionId, agentId, onNext, setCurrentStep }) => {
+const StepDemo = ({ formData, sessionId, setSessionId, agentId, onNext, setCurrentStep }) => {
     const [messages, setMessages] = useState([
         { role: 'model', text: '你好！我是你的 AI 智能客服，有什麼可以幫你的嗎？' }
     ]);
@@ -74,6 +74,12 @@ const StepDemo = ({ formData, sessionId, agentId, onNext, setCurrentStep }) => {
     const resetChat = () => {
         setMessages([{ role: 'model', text: '你好！我是你的 AI 智能客服，有什麼可以幫你的嗎？' }]);
         setLastResponseInfo(null);
+        // Refresh session ID to match backend dashboard behavior
+        axios.get(`${config.API_URL}/api/init_session`).then(res => {
+            if (res.data.session_id) {
+                setSessionId(res.data.session_id);
+            }
+        }).catch(err => console.error('Failed to reset session:', err));
     };
 
     const handleFaqClick = (question) => {
