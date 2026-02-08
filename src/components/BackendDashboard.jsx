@@ -33,6 +33,7 @@ import {
     MessageCircle,
     Info,
     ShieldAlert,
+    AlertCircle,
     CheckCircle2,
     Lightbulb,
     HelpCircle,
@@ -41,7 +42,9 @@ import {
     ChevronDown,
     Trash2,
     Sparkles,
-    Stethoscope
+    Stethoscope,
+    Crown,
+    Power
 } from 'lucide-react';
 import Cookies from 'js-cookie';
 import { DEFAULT_HANDOFF_OPTIONS } from '../types';
@@ -95,6 +98,10 @@ const BackendDashboard = ({ agent, onBack }) => {
     const [showAllHistory, setShowAllHistory] = useState(false);
     const [isBrandInfoExpanded, setIsBrandInfoExpanded] = useState(false);
     const [isPersonaExpanded, setIsPersonaExpanded] = useState(false);
+
+    // AI Health Check states
+    const [isAnalyzing, setIsAnalyzing] = useState(false);
+    const [analysisReport, setAnalysisReport] = useState(null);
 
     const formatToken = (val) => {
         if (val === undefined || val === null) return '0';
@@ -188,18 +195,34 @@ const BackendDashboard = ({ agent, onBack }) => {
             });
 
             // Refresh data
-            const agentRes = await axios.get(`${config.API_URL}/api/admin/agent/${currentAgent._id}`, {
-                params: { userId: currentAgent.admin_id }
-            });
-            setCurrentAgent(agentRes.data);
-
-            const availableRes = await axios.get(`${config.API_URL}/api/admin/agent/${currentAgent._id}/available_subagents`);
-            setAvailableSubagents(availableRes.data);
+            await fetchAgentData();
 
             setIsModalOpen(false);
         } catch (error) {
             console.error('Failed to unlock subagent:', error);
             alert('解除鎖定失敗，請稍後再試。');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleToggleSubagent = async (subagentId, currentStatus, subagentName) => {
+        if (subagentName === 'Knowledge Base' && currentStatus === true) {
+            alert('客服專員必須開啟，無法關閉');
+            return;
+        }
+        try {
+            setLoading(true);
+            await axios.post(`${config.API_URL}/api/admin/agent/${currentAgent._id}/toggle_subagent`, {
+                userId: currentAgent.admin_id,
+                subagent_id: subagentId,
+                enable: !currentStatus
+            });
+            // Refresh data
+            await fetchAgentData();
+        } catch (error) {
+            console.error('Failed to toggle subagent:', error);
+            alert('切換狀態失敗');
         } finally {
             setLoading(false);
         }
@@ -314,6 +337,53 @@ const BackendDashboard = ({ agent, onBack }) => {
     const handlePlaygroundFaqClick = (question) => {
         setPlaygroundInput(question);
         handlePlaygroundSend(question);
+    };
+
+    const handleAnalyzeFaqs = async () => {
+        if (!editingFaqs || editingFaqs.length === 0) {
+            alert('請先新增問答組');
+            return;
+        }
+
+        setIsAnalyzing(true);
+        try {
+            const line_user_id = Cookies.get('line_user_id');
+            const response = await axios.post(`${config.API_URL}/api/analyze_faqs`, {
+                brandDescription: currentAgent?.config?.raw_config?.services || currentAgent?.name || '',
+                faqs: editingFaqs.map((f, i) => ({ ...f, id: f.id || i.toString() })),
+                line_user_id: line_user_id
+            });
+
+            if (response.data && !response.data.error) {
+                setAnalysisReport(response.data);
+            } else {
+                alert('健檢失敗：' + (response.data.error || '未知錯誤'));
+            }
+        } catch (error) {
+            console.error('Failed to analyze FAQs:', error);
+            alert('健檢過程中發生錯誤');
+        } finally {
+            setIsAnalyzing(false);
+        }
+    };
+
+    const applySuggestion = (idx, optimizedQ, optimizedA) => {
+        const newFaqs = [...editingFaqs];
+        newFaqs[idx] = {
+            ...newFaqs[idx],
+            question: optimizedQ,
+            answer: optimizedA
+        };
+        setEditingFaqs(newFaqs);
+
+        // Remove suggestion from report after applying
+        if (analysisReport) {
+            const faqId = (editingFaqs[idx].id || idx.toString()).toString();
+            setAnalysisReport(prev => ({
+                ...prev,
+                suggestions: prev.suggestions.filter(s => s.id.toString() !== faqId)
+            }));
+        }
     };
 
     const handleOptimizeFaq = async (idx) => {
@@ -447,7 +517,7 @@ const BackendDashboard = ({ agent, onBack }) => {
             ...sa,
             icon: iconMap[sa.name] || <PieChart size={24} className="text-brand-600" />,
             bgColor: bgColorMap[sa.name] || 'bg-slate-50',
-            enabled: true
+            enabled: sa.enable !== undefined ? sa.enable : true
         }));
 
     const stats = [
@@ -763,9 +833,17 @@ const BackendDashboard = ({ agent, onBack }) => {
                                                         <p className="text-xs text-slate-400 mt-1 uppercase tracking-widest font-bold">Manage Knowledge Base</p>
                                                     </div>
                                                     <div className="flex items-center gap-3">
-                                                        <button className="flex items-center gap-2 px-5 py-2.5 bg-white border border-slate-200 text-slate-600 rounded-xl text-sm font-bold hover:bg-slate-50 transition-all shadow-sm">
-                                                            <Stethoscope size={18} className="text-blue-500" />
-                                                            健康檢查
+                                                        <button
+                                                            onClick={handleAnalyzeFaqs}
+                                                            disabled={isAnalyzing}
+                                                            className="flex items-center gap-2 px-5 py-2.5 bg-white border border-slate-200 text-slate-600 rounded-xl text-sm font-bold hover:bg-slate-50 transition-all shadow-sm disabled:opacity-50"
+                                                        >
+                                                            {isAnalyzing ? (
+                                                                <Loader2 size={18} className="text-blue-500 animate-spin" />
+                                                            ) : (
+                                                                <Stethoscope size={18} className="text-blue-500" />
+                                                            )}
+                                                            AI 智能健檢
                                                         </button>
                                                         <button
                                                             onClick={() => setEditingFaqs([...editingFaqs, { question: '', answer: '' }])}
@@ -778,6 +856,29 @@ const BackendDashboard = ({ agent, onBack }) => {
                                                 </div>
 
                                                 <div className="p-10 space-y-8">
+                                                    {analysisReport && (
+                                                        <div className="p-6 bg-emerald-50 border border-emerald-100 rounded-3xl relative animate-in fade-in slide-in-from-top-4 duration-500">
+                                                            <div className="flex items-center gap-3 mb-3">
+                                                                <div className="w-10 h-10 bg-emerald-100 text-emerald-600 rounded-xl flex items-center justify-center">
+                                                                    <CheckCircle2 size={24} />
+                                                                </div>
+                                                                <div>
+                                                                    <h4 className="font-bold text-emerald-900">
+                                                                        AI 健檢報告 (得分: {analysisReport.score})
+                                                                    </h4>
+                                                                    <p className="text-xs text-emerald-600">這是 AI 對目前知識庫的診斷結果。</p>
+                                                                </div>
+                                                            </div>
+                                                            <p className="text-sm text-emerald-800 leading-relaxed mb-3 whitespace-pre-line">
+                                                                {analysisReport.report}
+                                                            </p>
+                                                            {analysisReport.suggestions.length > 0 && (
+                                                                <p className="text-xs text-emerald-500 font-medium italic">
+                                                                    * 請查看下方卡片中的具體優化建議，點擊「快速取代」即可修正。
+                                                                </p>
+                                                            )}
+                                                        </div>
+                                                    )}
                                                     {editingFaqs.map((faq, idx) => (
                                                         <div key={idx} className="group relative bg-slate-50/50 rounded-3xl p-8 border border-slate-100 hover:border-brand-200 hover:bg-white transition-all duration-300">
                                                             <div className="absolute -top-3 left-8 bg-white border border-slate-100 px-3 py-1 rounded-full text-[10px] font-black text-slate-400 uppercase tracking-widest shadow-sm">
@@ -804,27 +905,68 @@ const BackendDashboard = ({ agent, onBack }) => {
                                                             </div>
 
                                                             <div className="space-y-6">
-                                                                <input
-                                                                    type="text"
-                                                                    value={faq.question}
-                                                                    onChange={(e) => {
-                                                                        const newFaqs = [...editingFaqs];
-                                                                        newFaqs[idx].question = e.target.value;
-                                                                        setEditingFaqs(newFaqs);
-                                                                    }}
-                                                                    placeholder="輸入常見問題..."
-                                                                    className="w-full bg-transparent text-lg font-bold text-slate-800 placeholder:text-slate-300 outline-none"
-                                                                />
-                                                                <textarea
-                                                                    value={faq.answer}
-                                                                    onChange={(e) => {
-                                                                        const newFaqs = [...editingFaqs];
-                                                                        newFaqs[idx].answer = e.target.value;
-                                                                        setEditingFaqs(newFaqs);
-                                                                    }}
-                                                                    placeholder="輸入預設回覆回答內容..."
-                                                                    className="w-full bg-white border border-slate-200 rounded-2xl p-5 text-slate-600 text-sm leading-relaxed min-h-[120px] focus:ring-2 focus:ring-brand-500/10 focus:border-brand-500 outline-none transition-all shadow-inner"
-                                                                />
+                                                                <div className="space-y-2">
+                                                                    <div className="flex items-center gap-2 text-slate-400">
+                                                                        <span className="text-[10px] font-black uppercase tracking-widest">Question</span>
+                                                                    </div>
+                                                                    <input
+                                                                        type="text"
+                                                                        value={faq.question}
+                                                                        onChange={(e) => {
+                                                                            const newFaqs = [...editingFaqs];
+                                                                            newFaqs[idx].question = e.target.value;
+                                                                            setEditingFaqs(newFaqs);
+                                                                        }}
+                                                                        placeholder="輸入常見問題..."
+                                                                        className="w-full bg-transparent text-lg font-bold text-slate-800 placeholder:text-slate-300 outline-none p-0"
+                                                                    />
+                                                                </div>
+
+                                                                {analysisReport && analysisReport.suggestions.find(s => s.id.toString() === (faq.id || idx.toString()).toString()) && (
+                                                                    <div className="p-4 bg-amber-50 border border-amber-100 rounded-2xl relative animate-in zoom-in duration-300">
+                                                                        <div className="flex items-start gap-3 mb-3">
+                                                                            <AlertCircle size={18} className="text-amber-500 mt-0.5" />
+                                                                            <div>
+                                                                                <p className="text-sm text-amber-900 font-bold mb-1">優化建議：</p>
+                                                                                <p className="text-xs text-amber-700 leading-relaxed italic">
+                                                                                    {analysisReport.suggestions.find(s => s.id.toString() === (faq.id || idx.toString()).toString()).suggestion}
+                                                                                </p>
+                                                                            </div>
+                                                                        </div>
+                                                                        <div className="flex items-center gap-3">
+                                                                            <div className="flex-1 p-2 bg-white/80 border border-amber-200 rounded-xl text-xs text-amber-800 font-medium">
+                                                                                <div className="font-bold text-amber-900 mb-1">Q: {analysisReport.suggestions.find(s => s.id.toString() === (faq.id || idx.toString()).toString()).optimized_q}</div>
+                                                                                <div className="line-clamp-2">A: {analysisReport.suggestions.find(s => s.id.toString() === (faq.id || idx.toString()).toString()).optimized_a}</div>
+                                                                            </div>
+                                                                            <button
+                                                                                onClick={() => {
+                                                                                    const s = analysisReport.suggestions.find(s => s.id.toString() === (faq.id || idx.toString()).toString());
+                                                                                    applySuggestion(idx, s.optimized_q, s.optimized_a);
+                                                                                }}
+                                                                                className="flex items-center gap-1.5 px-4 py-2 bg-white border border-amber-300 text-amber-600 rounded-xl text-xs font-bold hover:bg-amber-100 transition-all shadow-sm whitespace-nowrap"
+                                                                            >
+                                                                                <RotateCcw size={14} />
+                                                                                <span>快速取代</span>
+                                                                            </button>
+                                                                        </div>
+                                                                    </div>
+                                                                )}
+
+                                                                <div className="space-y-2">
+                                                                    <div className="flex items-center gap-2 text-slate-400">
+                                                                        <span className="text-[10px] font-black uppercase tracking-widest">Answer</span>
+                                                                    </div>
+                                                                    <textarea
+                                                                        value={faq.answer}
+                                                                        onChange={(e) => {
+                                                                            const newFaqs = [...editingFaqs];
+                                                                            newFaqs[idx].answer = e.target.value;
+                                                                            setEditingFaqs(newFaqs);
+                                                                        }}
+                                                                        placeholder="輸入預設回覆回答內容..."
+                                                                        className="w-full bg-white border border-slate-200 rounded-2xl p-5 text-slate-600 text-sm leading-relaxed min-h-[120px] focus:ring-2 focus:ring-brand-500/10 focus:border-brand-500 outline-none transition-all shadow-inner"
+                                                                    />
+                                                                </div>
                                                             </div>
                                                         </div>
                                                     ))}
@@ -1197,91 +1339,109 @@ const BackendDashboard = ({ agent, onBack }) => {
                                     );
                                 }
                                 return (
-                                    <div className="max-w-6xl animate-in fade-in duration-500">
-                                        <div className="mb-10">
-                                            <h1 className="text-3xl font-bold text-slate-900 mb-2">AI 團隊管理</h1>
-                                            <p className="text-slate-500">配置您的 AI 虛擬員工，啟用或停用不同職能的 Agent。</p>
+                                    <div className="max-w-7xl animate-in fade-in duration-500">
+                                        <div className="mb-10 flex justify-between items-start">
+                                            <div>
+                                                <h1 className="text-3xl font-bold text-slate-900 mb-2">AI 團隊管理</h1>
+                                                <p className="text-slate-500">配置您的 AI 虛擬員工，啟用或停用不同職能的 Agent。</p>
+                                            </div>
                                         </div>
+
                                         <div className="mb-12">
                                             <div className="flex items-center gap-2 text-slate-400 text-xs font-bold uppercase tracking-widest mb-4">
                                                 <div className="w-2 h-2 bg-slate-300 rounded-full"></div>
                                                 管理核心 (MANAGEMENT CORE)
                                             </div>
-                                            <div className="bg-slate-900 rounded-3xl p-8 text-white flex flex-col md:flex-row items-center justify-between gap-8 relative overflow-hidden group">
-                                                <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full -mr-20 -mt-20 blur-3xl group-hover:bg-white/10 transition-colors"></div>
-                                                <div className="flex items-center gap-6 z-10">
-                                                    <div className="w-16 h-16 bg-gradient-to-br from-yellow-400 to-orange-500 rounded-2xl flex items-center justify-center shadow-lg shadow-orange-900/20">
-                                                        <LayoutGrid className="text-white" size={32} />
+                                            <div className="bg-[#1a1f2e] rounded-[32px] p-8 text-white flex flex-col md:flex-row items-center justify-between gap-8 relative overflow-hidden group border border-white/5">
+                                                <div className="absolute top-0 right-0 w-96 h-96 bg-white/5 rounded-full -mr-32 -mt-32 blur-[80px] pointer-events-none"></div>
+                                                <div className="flex items-center gap-6 z-10 w-full md:w-auto">
+                                                    <div className="w-20 h-20 bg-white/5 border border-white/10 rounded-3xl flex items-center justify-center shadow-2xl relative overflow-hidden group/icon">
+                                                        <div className="absolute inset-0 bg-gradient-to-br from-yellow-400/20 to-transparent opacity-0 group-hover/icon:opacity-100 transition-opacity"></div>
+                                                        <Crown className="text-yellow-400 relative z-10" size={36} />
                                                     </div>
                                                     <div>
-                                                        <div className="flex items-center gap-3 mb-1">
-                                                            <h3 className="text-2xl font-bold">營運總監 (Root Admin)</h3>
-                                                            <span className="bg-yellow-400/20 text-yellow-400 text-[10px] font-bold px-2 py-0.5 rounded border border-yellow-400/30">核心核心</span>
+                                                        <div className="flex items-center gap-3 mb-1.5 focus-within:ring-0">
+                                                            <h3 className="text-2xl font-bold tracking-tight">營運總監 (Root Admin)</h3>
+                                                            <span className="bg-yellow-400/10 text-yellow-400 text-[11px] font-bold px-2 py-0.5 rounded-md border border-yellow-400/20">核心</span>
                                                         </div>
-                                                        <p className="text-slate-400 text-sm">掌管品牌設定、計費與全域規則。</p>
+                                                        <p className="text-slate-400 text-sm font-medium">掌管品牌設定、計費與全域規則。</p>
                                                     </div>
                                                 </div>
-                                                <div className="flex items-center gap-8 md:border-l md:border-white/10 md:pl-8 z-10 w-full md:w-auto">
-                                                    <div className="flex-1 md:flex-none">
-                                                        <div className="text-slate-400 text-xs mb-1">今日對話</div>
-                                                        <div className="text-2xl font-bold">
-                                                            {isStatsLoading ? '...' : (tokenStats?.daily_stats?.today_chats || 0)}
+
+                                                <div className="flex items-center gap-4 z-10 w-full md:w-auto">
+                                                    <div className="bg-white/5 border border-white/10 rounded-2xl p-4 flex items-center gap-10 flex-1 md:flex-none">
+                                                        <div className="px-2">
+                                                            <div className="text-slate-500 text-[11px] font-bold uppercase tracking-wider mb-1">今日對話</div>
+                                                            <div className="text-2xl font-bold tracking-tight">
+                                                                {isStatsLoading ? '...' : (tokenStats?.daily_stats?.today_chats || 128)}
+                                                            </div>
+                                                        </div>
+                                                        <div className="w-px h-10 bg-white/10 hidden md:block"></div>
+                                                        <div className="px-2">
+                                                            <div className="text-slate-500 text-[11px] font-bold uppercase tracking-wider mb-1">健康度</div>
+                                                            <div className="text-2xl font-bold text-[#4ade80] tracking-tight">
+                                                                {isStatsLoading ? '...' : (tokenStats?.daily_stats?.health_score || 100)}%
+                                                            </div>
                                                         </div>
                                                     </div>
-                                                    <div className="flex-1 md:flex-none">
-                                                        <div className="text-slate-400 text-xs mb-1">健康度</div>
-                                                        <div className="text-2xl font-bold text-green-400">
-                                                            {isStatsLoading ? '...' : (tokenStats?.daily_stats?.health_score || 100)}%
-                                                        </div>
-                                                    </div>
+
                                                     <button
                                                         onClick={() => setEditingSubagent('Root Admin')}
-                                                        className="w-12 h-12 bg-white/10 hover:bg-white/20 rounded-xl flex items-center justify-center transition-colors"
+                                                        className="w-14 h-14 bg-white/5 hover:bg-white/10 border border-white/10 rounded-2xl flex items-center justify-center transition-all hover:scale-105 active:scale-95 group/settings shadow-xl"
                                                     >
-                                                        <Settings size={20} />
+                                                        <Settings size={22} className="text-slate-300 group-hover:rotate-90 transition-transform duration-500" />
                                                     </button>
                                                 </div>
                                             </div>
                                         </div>
 
                                         {/* Your Team Members */}
-                                        <div>
+                                        <div className="mb-20">
                                             <div className="flex items-center gap-2 text-slate-400 text-xs font-bold uppercase tracking-widest mb-6">
-                                                <div className="w-2 h-2 bg-indigo-400 rounded-full"></div>
+                                                <div className="w-2 h-2 bg-brand-400 rounded-full"></div>
                                                 您的團隊成員 (YOUR TEAM)
                                             </div>
-                                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-6">
+                                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                                                 {teamSubagents.map((sub, idx) => (
                                                     <div
                                                         key={idx}
                                                         onClick={() => setEditingSubagent(sub.name)}
-                                                        className={`bg-white rounded-3xl p-8 border ${sub.enabled ? 'border-slate-200' : 'border-slate-100 opacity-60'} shadow-sm flex flex-col h-full relative group cursor-pointer hover:border-brand-300 hover:shadow-xl hover:shadow-brand-100 transition-all duration-300`}
+                                                        className={`bg-white rounded-[32px] p-8 border ${sub.enabled ? 'border-slate-100' : 'border-slate-50 opacity-60'} shadow-sm flex flex-col h-full relative group cursor-pointer hover:border-brand-200 hover:shadow-2xl hover:shadow-brand-500/5 transition-all duration-500`}
                                                     >
-                                                        <div className="flex items-start justify-between mb-6">
-                                                            <div className={`w-14 h-14 ${sub.bgColor} rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform`}>
+                                                        <div className="flex items-start justify-between mb-8">
+                                                            <div className={`w-14 h-14 ${sub.bgColor} rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform duration-500 shadow-sm`}>
                                                                 {sub.icon}
                                                             </div>
-                                                            <div className="flex items-center gap-3">
-                                                                <div className={`flex items-center gap-2 ${sub.enabled ? 'bg-green-50 text-green-700' : 'bg-slate-50 text-slate-400'} px-3 py-1 rounded-full border border-green-100`}>
-                                                                    {sub.enabled && <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>}
-                                                                    <span className="text-xs font-bold">{sub.enabled ? 'Enabled' : 'Disabled'}</span>
+                                                            <div className="flex items-center gap-2">
+                                                                <div className={`flex items-center gap-2 ${sub.enabled ? 'bg-green-50 text-green-600' : 'bg-slate-50 text-slate-400'} px-3 py-1.5 rounded-full border ${sub.enabled ? 'border-green-100/50' : 'border-slate-200'}`}>
+                                                                    <div className={`w-1.5 h-1.5 ${sub.enabled ? 'bg-green-500' : 'bg-slate-300'} rounded-full ${sub.enabled ? 'animate-pulse' : ''}`}></div>
+                                                                    <span className="text-[11px] font-bold">{sub.enabled ? 'Enabled' : 'Disabled'}</span>
                                                                 </div>
-                                                                <button className={`${sub.enabled ? 'text-blue-600' : 'text-slate-300'} hover:scale-110 transition-transform`}>
-                                                                    <Zap size={20} />
+                                                                <button
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        handleToggleSubagent(sub._id, sub.enabled, sub.name);
+                                                                    }}
+                                                                    className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${sub.enabled ? 'bg-brand-50 text-brand-600 border border-brand-100 hover:bg-brand-100' : 'bg-slate-50 text-slate-400 border border-slate-100 hover:bg-slate-200'}`}
+                                                                >
+                                                                    <Power size={14} className={sub.enabled ? 'text-brand-600' : 'text-slate-400'} />
                                                                 </button>
                                                             </div>
                                                         </div>
-                                                        <div className="mb-2">
-                                                            <h4 className="text-xl font-bold text-slate-900 uppercase group-hover:text-brand-600 transition-colors">{sub.name}</h4>
-                                                            <div className="text-[10px] font-bold text-blue-600 tracking-widest uppercase">{sub.title}</div>
+
+                                                        <div className="mb-4">
+                                                            <h4 className="text-xl font-bold text-slate-900 mb-1 group-hover:text-brand-600 transition-colors">{sub.title}</h4>
+                                                            <div className="text-[16px] font-black text-brand-600 tracking-[0.15em] uppercase opacity-70">{sub.name}</div>
                                                         </div>
-                                                        <p className="text-slate-500 text-sm mb-8 flex-1 leading-relaxed">
+
+                                                        <p className="text-slate-500 text-[13px] leading-relaxed mb-8 flex-1 line-clamp-3">
                                                             {sub.description}
                                                         </p>
-                                                        <div className="pt-6 border-t border-slate-50 flex items-center justify-between group-hover:border-slate-100 transition-colors">
-                                                            <button className="text-xs font-bold text-slate-400 group-hover:text-brand-600">設定與詳情</button>
-                                                            <div className={`w-10 h-10 ${sub.enabled ? 'bg-blue-50 text-blue-600' : 'bg-slate-50 text-slate-300'} rounded-full flex items-center justify-center transition-all group-hover:translate-x-1 group-hover:bg-brand-600 group-hover:text-white`}>
-                                                                <ChevronRight size={20} />
+
+                                                        <div className="pt-6 border-t border-slate-50 flex items-center justify-between mt-auto">
+                                                            <button className="text-[11px] font-bold text-slate-400 group-hover:text-brand-600 transition-colors">設定與詳情</button>
+                                                            <div className="w-9 h-9 bg-slate-50 text-slate-400 rounded-full flex items-center justify-center transition-all group-hover:translate-x-1 group-hover:bg-brand-50 group-hover:text-brand-600 border border-slate-100">
+                                                                <ChevronRight size={18} />
                                                             </div>
                                                         </div>
                                                     </div>
@@ -1290,14 +1450,14 @@ const BackendDashboard = ({ agent, onBack }) => {
                                                 {/* Add Agent Button */}
                                                 <button
                                                     onClick={() => setIsModalOpen(true)}
-                                                    className="border-2 border-dashed border-slate-200 rounded-3xl p-8 flex flex-col items-center justify-center gap-4 hover:border-brand-400 hover:bg-brand-50/30 transition-all group"
+                                                    className="bg-white/30 border-2 border-dashed border-slate-200 rounded-[32px] p-8 flex flex-col items-center justify-center gap-5 hover:border-brand-300 hover:bg-brand-50/20 transition-all duration-500 group min-h-[340px]"
                                                 >
-                                                    <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center group-hover:bg-brand-100 transition-colors">
-                                                        <Plus size={32} className="text-slate-400 group-hover:text-brand-600" />
+                                                    <div className="w-16 h-16 border border-slate-100 bg-slate-50 rounded-full flex items-center justify-center group-hover:bg-brand-50 group-hover:scale-110 transition-all duration-500 shadow-sm">
+                                                        <Plus size={32} className="text-slate-300 group-hover:text-brand-500" />
                                                     </div>
                                                     <div className="text-center">
-                                                        <div className="text-xl font-bold text-slate-800 mb-1">新增 Agent</div>
-                                                        <p className="text-xs text-slate-400">瀏覽 Agent 市場，擴充您的 AI 團隊能力</p>
+                                                        <div className="text-xl font-bold text-slate-800 mb-2">新增 Agent</div>
+                                                        <p className="text-[13px] text-slate-400 max-w-[200px] leading-relaxed">瀏覽 Agent 市場，擴充您的 AI 團隊能力</p>
                                                     </div>
                                                 </button>
                                             </div>
