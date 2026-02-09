@@ -523,7 +523,7 @@ const BackendDashboard = ({ agent, onBack }) => {
     const stats = [
         {
             label: '今日對話數',
-            value: '128',
+            value: '-',
             change: '+ 12%',
             trend: 'up',
             icon: <MessageSquare className="text-blue-500" size={24} />
@@ -1014,7 +1014,7 @@ const BackendDashboard = ({ agent, onBack }) => {
                                             </div>
 
                                             {/* Status Banner */}
-                                            <div className="bg-orange-50/50 border border-orange-100 rounded-2xl p-6 mb-8 flex items-start gap-4">
+                                            {/* <div className="bg-orange-50/50 border border-orange-100 rounded-2xl p-6 mb-8 flex items-start gap-4">
                                                 <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center border border-orange-100 shrink-0 shadow-sm">
                                                     <Shield size={20} className="text-orange-600" />
                                                 </div>
@@ -1024,7 +1024,7 @@ const BackendDashboard = ({ agent, onBack }) => {
                                                         這裡定義人機協作專員的行為。當偵測到風險或回答不出來時，<span className="font-bold">Agent 會自動轉接並建立工單 (Ticket)</span>，確保你不會漏掉任何重要客戶。
                                                     </p>
                                                 </div>
-                                            </div>
+                                            </div> */}
 
                                             {/* Config Section */}
                                             <div className="bg-white rounded-[32px] border border-slate-200 shadow-xl shadow-slate-200/50 overflow-hidden">

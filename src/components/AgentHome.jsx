@@ -128,7 +128,7 @@ const AgentHome = ({ userId, userName, onStartNew, onEditAgent, onEnterDashboard
                 )}
 
                 {/* Stats / Help Section */}
-                <div className="mt-12 grid grid-cols-1 md:grid-cols-3 gap-6">
+                {/* <div className="mt-12 grid grid-cols-1 md:grid-cols-3 gap-6">
                     <div className="bg-gradient-to-br from-brand-600 to-indigo-700 rounded-2xl p-6 text-white shadow-lg">
                         <h4 className="font-bold mb-1">提示：如何優化 Agent</h4>
                         <p className="text-brand-100 text-sm mb-4">
@@ -136,7 +136,7 @@ const AgentHome = ({ userId, userName, onStartNew, onEditAgent, onEnterDashboard
                         </p>
                         <a href="#" className="text-xs font-bold underline">查看教學影片</a>
                     </div>
-                </div>
+                </div> */}
             </div>
         </div>
     );
