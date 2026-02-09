@@ -17,9 +17,33 @@ const StepWizard = ({ formData, setFormData, onComplete }) => {
 
     const handleNext = () => {
         if (qIndex === 2) {
-            // 過濾掉 Q 跟 A 都是空的 FAQ 組
-            const filteredFaqs = formData.faqs.filter(f => f.question.trim() !== '' || f.answer.trim() !== '');
-            setFormData(prev => ({ ...prev, faqs: filteredFaqs }));
+            // 過濾掉全空的 FAQ 組
+            const cleanedFaqs = formData.faqs.filter(f => f.question.trim() !== '' || f.answer.trim() !== '');
+
+            if (cleanedFaqs.length === 0) {
+                alert('請至少新增一組 FAQ 並填寫內容');
+                return;
+            }
+
+            if (cleanedFaqs.length > 20) {
+                alert('FAQ 組數上限為 20 組');
+                return;
+            }
+
+            // 檢查是否有半殘的 FAQ (只有 Q 或只有 A) 以及字數限制
+            const hasIncomplete = cleanedFaqs.some(f => !f.question.trim() || !f.answer.trim());
+            if (hasIncomplete) {
+                alert('請填寫所有 FAQ 的問題與回答，或是刪除未填寫完整的組別');
+                return;
+            }
+
+            const tooLong = cleanedFaqs.some(f => f.question.length > 50 || f.answer.length > 200);
+            if (tooLong) {
+                alert('部分內容超過字數限制 (問題 50 字，回答 200 字)');
+                return;
+            }
+
+            setFormData(prev => ({ ...prev, faqs: cleanedFaqs }));
         }
 
         if (qIndex < totalQuestions - 1) {
@@ -54,28 +78,36 @@ const StepWizard = ({ formData, setFormData, onComplete }) => {
 
     const renderQ1 = () => (
         <div className="space-y-4">
-            <textarea
-                className="w-full p-4 border border-slate-300 rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-brand-500 min-h-[120px]"
-                placeholder="例如：手機維修｜甜點工作室｜健身教練｜塔羅占卜｜餐酒館…"
-                value={formData.brandDescription}
-                onChange={(e) => updateField('brandDescription', e.target.value)}
-            />
+            <div className="relative">
+                <textarea
+                    className="w-full p-4 border border-slate-300 rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-brand-500 min-h-[120px]"
+                    placeholder="例如：手機維修｜甜點工作室｜健身教練｜塔羅占卜｜餐酒館…"
+                    value={formData.brandDescription}
+                    maxLength={200}
+                    onChange={(e) => updateField('brandDescription', e.target.value)}
+                />
+                <div className="text-[10px] text-slate-300 text-right pr-2">{formData.brandDescription.length}/200</div>
+            </div>
             <div className="mt-4">
                 <label className="block text-sm font-medium text-slate-600 mb-2 flex items-center gap-2">
                     <Globe size={16} />
                     網站連結（選填）
                 </label>
-                <input
-                    type="url"
-                    className={`w-full p-3 border rounded-xl focus:ring-2 focus:ring-brand-500 transition-all ${urlError ? 'border-red-500 bg-red-50' : 'border-slate-300'}`}
-                    placeholder="https://your-website.com"
-                    value={formData.websiteUrl || ''}
-                    onChange={(e) => {
-                        const val = e.target.value;
-                        updateField('websiteUrl', val);
-                        validateUrl(val);
-                    }}
-                />
+                <div className="relative">
+                    <input
+                        type="url"
+                        className={`w-full p-3 border rounded-xl focus:ring-2 focus:ring-brand-500 transition-all ${urlError ? 'border-red-500 bg-red-50' : 'border-slate-300'}`}
+                        placeholder="https://your-website.com"
+                        value={formData.websiteUrl || ''}
+                        maxLength={100}
+                        onChange={(e) => {
+                            const val = e.target.value;
+                            updateField('websiteUrl', val);
+                            validateUrl(val);
+                        }}
+                    />
+                    <div className="text-[10px] text-slate-300 text-right pr-2 mt-1">{(formData.websiteUrl || '').length}/100</div>
+                </div>
                 {urlError ? (
                     <p className="mt-2 text-xs text-red-500 flex items-center gap-1">
                         <AlertCircle size={12} />
@@ -109,19 +141,27 @@ const StepWizard = ({ formData, setFormData, onComplete }) => {
             </div>
             <div className="mt-4">
                 <label className="block text-sm font-medium text-slate-600 mb-2">你希望避免的語氣/用詞？（選填）</label>
-                <input
-                    type="text"
-                    className="w-full p-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-brand-500"
-                    placeholder="例如：不要太油條、不要用簡體中文..."
-                    value={formData.toneAvoid}
-                    onChange={(e) => updateField('toneAvoid', e.target.value)}
-                />
+                <div className="relative">
+                    <input
+                        type="text"
+                        className="w-full p-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-brand-500"
+                        placeholder="例如：不要太油條、不要用簡體中文..."
+                        value={formData.toneAvoid}
+                        maxLength={50}
+                        onChange={(e) => updateField('toneAvoid', e.target.value)}
+                    />
+                    <div className="text-[10px] text-slate-300 text-right pr-2 mt-1">{(formData.toneAvoid || '').length}/50</div>
+                </div>
             </div>
         </div>
     );
 
     const renderQ3 = () => {
         const addFAQ = () => {
+            if (formData.faqs.length >= 20) {
+                alert('最多只能新增 20 組 FAQ');
+                return;
+            }
             const newFAQ = { id: Date.now().toString(), question: '', answer: '' };
             updateField('faqs', [...formData.faqs, newFAQ]);
         };
@@ -168,8 +208,12 @@ const StepWizard = ({ formData, setFormData, onComplete }) => {
 
         const handleOptimizeFaq = async (faqId) => {
             const faq = formData.faqs.find(f => f.id === faqId);
-            if (!faq.question.trim() && !faq.answer.trim()) {
-                alert('請先輸入問題或回答內容');
+            if (!faq.question.trim() || !faq.answer.trim()) {
+                alert('請先輸入完整的問題與回答內容才能進行優化');
+                return;
+            }
+            if (faq.question.length > 50 || faq.answer.length > 200) {
+                alert('內容超過字數限制 (問題 50 字，回答 200 字)');
                 return;
             }
 
@@ -207,6 +251,24 @@ const StepWizard = ({ formData, setFormData, onComplete }) => {
                 alert('請先新增問答組');
                 return;
             }
+
+            if (formData.faqs.length > 20) {
+                alert('FAQ 組數上限為 20 組');
+                return;
+            }
+
+            const hasIncomplete = formData.faqs.some(f => !f.question.trim() || !f.answer.trim());
+            if (hasIncomplete) {
+                alert('請填寫所有 FAQ 的問題與回答，再進行健檢');
+                return;
+            }
+
+            const tooLong = formData.faqs.some(f => f.question.length > 50 || f.answer.length > 200);
+            if (tooLong) {
+                alert('部分內容超過字數限制 (問題 50 字，回答 200 字)');
+                return;
+            }
+
             if (!formData.brandDescription.trim()) {
                 alert('請先填寫品牌描述');
                 setQIndex(0);
@@ -275,9 +337,12 @@ const StepWizard = ({ formData, setFormData, onComplete }) => {
                     </div>
                 </div>
 
-                <div className="max-h-[300px] overflow-y-auto pr-2 space-y-4 custom-scrollbar">
-                    {formData.faqs.map((faq) => (
-                        <div key={faq.id} className="p-4 bg-white border border-slate-200 rounded-xl shadow-sm relative group">
+                <div className="max-h-[400px] overflow-y-auto pr-2 space-y-6 custom-scrollbar pt-4">
+                    {formData.faqs.map((faq, index) => (
+                        <div key={faq.id} className="p-4 bg-white border border-slate-200 rounded-xl shadow-sm relative group pt-6">
+                            <div className="absolute -top-3 left-4 px-2 py-0.5 bg-white border border-slate-200 rounded-md text-[10px] font-black text-slate-400 uppercase tracking-wider shadow-sm z-10">
+                                FAQ {index + 1}
+                            </div>
                             <div className="absolute top-2 right-2 flex items-center gap-1">
                                 <button
                                     onClick={() => handleOptimizeFaq(faq.id)}
@@ -306,8 +371,10 @@ const StepWizard = ({ formData, setFormData, onComplete }) => {
                                         placeholder="例如：價格多少？怎麼預約？"
                                         className="w-full p-2 border-b border-slate-200 focus:border-brand-500 focus:outline-none text-sm font-medium"
                                         value={faq.question}
+                                        maxLength={50}
                                         onChange={(e) => updateFAQ(faq.id, 'question', e.target.value)}
                                     />
+                                    <div className="text-[10px] text-slate-300 ml-2">{faq.question.length}/50</div>
                                 </div>
 
                                 {analysisReport && analysisReport.suggestions.find(s => s.id === faq.id) && (
@@ -346,9 +413,11 @@ const StepWizard = ({ formData, setFormData, onComplete }) => {
                                         className="w-full p-2 bg-slate-50 rounded-lg text-sm text-slate-600 focus:outline-none focus:ring-1 focus:ring-brand-300 resize-none"
                                         rows={2}
                                         value={faq.answer}
+                                        maxLength={200}
                                         onChange={(e) => updateFAQ(faq.id, 'answer', e.target.value)}
                                     />
                                 </div>
+                                <div className="text-[10px] text-slate-300 text-right pr-2">{faq.answer.length}/200</div>
                             </div>
                         </div>
                     ))}
@@ -443,12 +512,16 @@ const StepWizard = ({ formData, setFormData, onComplete }) => {
                         <span className="text-slate-700">其他</span>
                     </label>
                     {formData.handoffCustomTrigger !== '' && (
-                        <textarea
-                            className="w-full p-3 border border-slate-300 rounded-xl text-sm"
-                            placeholder="請描述其他轉人工情況..."
-                            value={formData.handoffCustomTrigger === '其他' ? '' : formData.handoffCustomTrigger}
-                            onChange={(e) => updateField('handoffCustomTrigger', e.target.value)}
-                        />
+                        <div className="relative">
+                            <textarea
+                                className="w-full p-3 border border-slate-300 rounded-xl text-sm"
+                                placeholder="請描述其他轉人工情況..."
+                                value={formData.handoffCustomTrigger === '其他' ? '' : formData.handoffCustomTrigger}
+                                maxLength={50}
+                                onChange={(e) => updateField('handoffCustomTrigger', e.target.value)}
+                            />
+                            <div className="text-[10px] text-slate-300 text-right pr-2 mt-1">{(formData.handoffCustomTrigger === '其他' ? '' : formData.handoffCustomTrigger).length}/50</div>
+                        </div>
                     )}
                 </div>
             </div>

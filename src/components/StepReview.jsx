@@ -81,6 +81,10 @@ const StepReview = ({ onNext, onEdit, formData, setFormData, sessionId, agentId,
     };
 
     const handleAddFaq = () => {
+        if (reviewData.faqs.length >= 20) {
+            alert('最多只能新增 20 組 FAQ');
+            return;
+        }
         const newFaq = { id: Date.now().toString(), question: '', answer: '' };
         const newFaqs = [...reviewData.faqs, newFaq];
         setReviewData({ ...reviewData, faqs: newFaqs });
@@ -104,6 +108,10 @@ const StepReview = ({ onNext, onEdit, formData, setFormData, sessionId, agentId,
     };
 
     const handleSaveFaq = () => {
+        if (editingFaq.question.length > 50 || editingFaq.answer.length > 200) {
+            alert('內容超過字數限制 (問題 50 字，回答 200 字)');
+            return;
+        }
         const newFaqs = [...reviewData.faqs];
         newFaqs[selectedFaqIndex] = editingFaq;
         setReviewData({ ...reviewData, faqs: newFaqs });
@@ -212,11 +220,15 @@ const StepReview = ({ onNext, onEdit, formData, setFormData, sessionId, agentId,
                         <div>
                             <label className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 block">使用者可能問的問題</label>
                             {isEditingFaq ? (
-                                <textarea
-                                    value={editingFaq.question}
-                                    onChange={(e) => setEditingFaq({ ...editingFaq, question: e.target.value })}
-                                    className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-brand-500 outline-none text-slate-800 font-bold min-h-[100px]"
-                                />
+                                <div className="relative">
+                                    <textarea
+                                        value={editingFaq.question}
+                                        maxLength={50}
+                                        onChange={(e) => setEditingFaq({ ...editingFaq, question: e.target.value })}
+                                        className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-brand-500 outline-none text-slate-800 font-bold min-h-[100px]"
+                                    />
+                                    <div className="text-[10px] text-slate-300 text-right pr-2 mt-1">{editingFaq.question.length}/50</div>
+                                </div>
                             ) : (
                                 <div className="p-4 bg-slate-50 rounded-xl border border-slate-100 text-slate-800 font-bold text-lg leading-relaxed">
                                     {currentFaq?.question}
@@ -226,11 +238,15 @@ const StepReview = ({ onNext, onEdit, formData, setFormData, sessionId, agentId,
                         <div>
                             <label className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 block">AI 回答方式</label>
                             {isEditingFaq ? (
-                                <textarea
-                                    value={editingFaq.answer}
-                                    onChange={(e) => setEditingFaq({ ...editingFaq, answer: e.target.value })}
-                                    className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-brand-500 outline-none text-slate-600 text-sm leading-relaxed min-h-[250px]"
-                                />
+                                <div className="relative">
+                                    <textarea
+                                        value={editingFaq.answer}
+                                        maxLength={200}
+                                        onChange={(e) => setEditingFaq({ ...editingFaq, answer: e.target.value })}
+                                        className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-brand-500 outline-none text-slate-600 text-sm leading-relaxed min-h-[250px]"
+                                    />
+                                    <div className="text-[10px] text-slate-300 text-right pr-2 mt-1">{editingFaq.answer.length}/200</div>
+                                </div>
                             ) : (
                                 <div className="p-5 bg-brand-50/30 rounded-xl border border-brand-100 text-slate-600 text-sm leading-relaxed whitespace-pre-wrap">
                                     {currentFaq?.answer}

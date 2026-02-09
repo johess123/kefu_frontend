@@ -173,22 +173,28 @@ const StepDemo = ({ formData, sessionId, setSessionId, agentId, onNext, setCurre
                     {/* Input */}
                     <div className="p-4 bg-white border-t border-slate-100">
                         <div className="flex items-center gap-2 relative">
-                            <input
-                                type="text"
-                                value={input}
-                                onChange={(e) => setInput(e.target.value)}
-                                onKeyDown={handleKeyDown}
-                                placeholder="輸入測試訊息內容..."
-                                className="w-full pl-5 pr-14 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-all text-sm"
-                                disabled={isLoading}
-                            />
-                            <button
-                                onClick={() => handleSend()}
-                                disabled={!input.trim() || isLoading}
-                                className="absolute right-2 p-2.5 bg-brand-600 text-white rounded-xl hover:bg-brand-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-md shadow-brand-100 active:scale-95"
-                            >
-                                <Send size={20} />
-                            </button>
+                            <div className="flex-1 relative">
+                                <input
+                                    type="text"
+                                    value={input}
+                                    onChange={(e) => setInput(e.target.value.slice(0, 100))}
+                                    onKeyDown={handleKeyDown}
+                                    placeholder="輸入測試訊息內容..."
+                                    maxLength={100}
+                                    className="w-full pl-5 pr-28 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-all text-sm"
+                                    disabled={isLoading}
+                                />
+                                <div className="absolute right-14 top-1/2 -translate-y-1/2 text-[10px] font-medium text-slate-400">
+                                    {input.length}/100
+                                </div>
+                                <button
+                                    onClick={() => handleSend()}
+                                    disabled={!input.trim() || isLoading}
+                                    className="absolute right-2 top-1/2 -translate-y-1/2 p-2.5 bg-brand-600 text-white rounded-xl hover:bg-brand-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-md shadow-brand-100 active:scale-95"
+                                >
+                                    <Send size={20} />
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>

@@ -98,6 +98,7 @@ const BackendDashboard = ({ agent, onBack }) => {
     const [showAllHistory, setShowAllHistory] = useState(false);
     const [isBrandInfoExpanded, setIsBrandInfoExpanded] = useState(false);
     const [isPersonaExpanded, setIsPersonaExpanded] = useState(false);
+    const faqsEndRef = React.useRef(null);
 
     // AI Health Check states
     const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -345,6 +346,23 @@ const BackendDashboard = ({ agent, onBack }) => {
             return;
         }
 
+        const hasIncomplete = editingFaqs.some(f => !f.question?.trim() || !f.answer?.trim());
+        if (hasIncomplete) {
+            alert('請填寫所有 FAQ 的問題與回答，再進行健檢');
+            return;
+        }
+
+        if (editingFaqs.length > 20) {
+            alert('FAQ 組數上限為 20 組');
+            return;
+        }
+
+        const tooLong = editingFaqs.some(f => (f.question?.length || 0) > 50 || (f.answer?.length || 0) > 200);
+        if (tooLong) {
+            alert('部分內容超過字數限制 (問題 50 字，回答 200 字)');
+            return;
+        }
+
         setIsAnalyzing(true);
         try {
             const line_user_id = Cookies.get('line_user_id');
@@ -388,8 +406,12 @@ const BackendDashboard = ({ agent, onBack }) => {
 
     const handleOptimizeFaq = async (idx) => {
         const faq = editingFaqs[idx];
-        if (!faq.question.trim() && !faq.answer.trim()) {
-            alert('請先輸入問題或回答內容');
+        if (!faq.question?.trim() || !faq.answer?.trim()) {
+            alert('請先輸入完整的問題與回答內容才能進行優化');
+            return;
+        }
+        if ((faq.question?.length || 0) > 50 || (faq.answer?.length || 0) > 200) {
+            alert('內容超過字數限制 (問題 50 字，回答 200 字)');
             return;
         }
 
@@ -426,11 +448,36 @@ const BackendDashboard = ({ agent, onBack }) => {
     };
 
     const handleSaveFaqs = async () => {
+        // 過濾掉全空的組別
+        const cleanedFaqs = editingFaqs.filter(f => f.question?.trim() !== '' || f.answer?.trim() !== '');
+
+        if (cleanedFaqs.length === 0) {
+            alert('請至少新增一組 FAQ 並填寫內容');
+            return;
+        }
+
+        const hasIncomplete = cleanedFaqs.some(f => !f.question?.trim() || !f.answer?.trim());
+        if (hasIncomplete) {
+            alert('請填寫所有 FAQ 的問題與回答，或是刪除未填寫完整的組別');
+            return;
+        }
+
+        if (cleanedFaqs.length > 20) {
+            alert('FAQ 組數上限為 20 組');
+            return;
+        }
+
+        const tooLong = cleanedFaqs.some(f => (f.question?.length || 0) > 50 || (f.answer?.length || 0) > 200);
+        if (tooLong) {
+            alert('部分內容超過字數限制 (問題 50 字，回答 200 字)');
+            return;
+        }
+
         try {
             setIsSaving(true);
             const res = await axios.post(`${config.API_URL}/api/admin/agent/${currentAgent._id}/update_faqs`, {
                 userId: currentAgent.admin_id,
-                faqs: editingFaqs
+                faqs: cleanedFaqs
             });
             if (res.data.status === 'ok') {
                 alert('FAQ 更新成功！');
@@ -846,7 +893,16 @@ const BackendDashboard = ({ agent, onBack }) => {
                                                             AI 智能健檢
                                                         </button>
                                                         <button
-                                                            onClick={() => setEditingFaqs([...editingFaqs, { question: '', answer: '' }])}
+                                                            onClick={() => {
+                                                                if (editingFaqs.length >= 20) {
+                                                                    alert('最多只能新增 20 組 FAQ');
+                                                                    return;
+                                                                }
+                                                                setEditingFaqs([...editingFaqs, { question: '', answer: '' }]);
+                                                                setTimeout(() => {
+                                                                    faqsEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                                                }, 100);
+                                                            }}
                                                             className="flex items-center gap-2 px-5 py-2.5 bg-brand-600 text-white rounded-xl text-sm font-bold hover:bg-brand-700 transition-all shadow-md shadow-brand-100"
                                                         >
                                                             <Plus size={18} />
@@ -909,17 +965,23 @@ const BackendDashboard = ({ agent, onBack }) => {
                                                                     <div className="flex items-center gap-2 text-slate-400">
                                                                         <span className="text-[10px] font-black uppercase tracking-widest">Question</span>
                                                                     </div>
-                                                                    <input
-                                                                        type="text"
-                                                                        value={faq.question}
-                                                                        onChange={(e) => {
-                                                                            const newFaqs = [...editingFaqs];
-                                                                            newFaqs[idx].question = e.target.value;
-                                                                            setEditingFaqs(newFaqs);
-                                                                        }}
-                                                                        placeholder="輸入常見問題..."
-                                                                        className="w-full bg-transparent text-lg font-bold text-slate-800 placeholder:text-slate-300 outline-none p-0"
-                                                                    />
+                                                                    <div className="flex-1">
+                                                                        <div className="relative">
+                                                                            <input
+                                                                                type="text"
+                                                                                value={faq.question}
+                                                                                maxLength={50}
+                                                                                onChange={(e) => {
+                                                                                    const newFaqs = [...editingFaqs];
+                                                                                    newFaqs[idx].question = e.target.value;
+                                                                                    setEditingFaqs(newFaqs);
+                                                                                }}
+                                                                                placeholder="輸入常見問題..."
+                                                                                className="w-full bg-transparent text-lg font-bold text-slate-800 placeholder:text-slate-300 outline-none p-0"
+                                                                            />
+                                                                        </div>
+                                                                        <div className="text-[10px] text-slate-300 text-right pr-2 mt-1">{faq.question?.length || 0}/50</div>
+                                                                    </div>
                                                                 </div>
 
                                                                 {analysisReport && analysisReport.suggestions.find(s => s.id.toString() === (faq.id || idx.toString()).toString()) && (
@@ -956,20 +1018,25 @@ const BackendDashboard = ({ agent, onBack }) => {
                                                                     <div className="flex items-center gap-2 text-slate-400">
                                                                         <span className="text-[10px] font-black uppercase tracking-widest">Answer</span>
                                                                     </div>
-                                                                    <textarea
-                                                                        value={faq.answer}
-                                                                        onChange={(e) => {
-                                                                            const newFaqs = [...editingFaqs];
-                                                                            newFaqs[idx].answer = e.target.value;
-                                                                            setEditingFaqs(newFaqs);
-                                                                        }}
-                                                                        placeholder="輸入預設回覆回答內容..."
-                                                                        className="w-full bg-white border border-slate-200 rounded-2xl p-5 text-slate-600 text-sm leading-relaxed min-h-[120px] focus:ring-2 focus:ring-brand-500/10 focus:border-brand-500 outline-none transition-all shadow-inner"
-                                                                    />
+                                                                    <div className="relative">
+                                                                        <textarea
+                                                                            value={faq.answer}
+                                                                            maxLength={200}
+                                                                            onChange={(e) => {
+                                                                                const newFaqs = [...editingFaqs];
+                                                                                newFaqs[idx].answer = e.target.value;
+                                                                                setEditingFaqs(newFaqs);
+                                                                            }}
+                                                                            placeholder="輸入預設回覆回答內容..."
+                                                                            className="w-full bg-white border border-slate-200 rounded-2xl p-5 text-slate-600 text-sm leading-relaxed min-h-[120px] focus:ring-2 focus:ring-brand-500/10 focus:border-brand-500 outline-none transition-all shadow-inner"
+                                                                        />
+                                                                        <div className="text-[10px] text-slate-300 text-right pr-2 mt-1">{faq.answer?.length || 0}/200</div>
+                                                                    </div>
                                                                 </div>
                                                             </div>
                                                         </div>
                                                     ))}
+                                                    <div ref={faqsEndRef} />
 
                                                     {editingFaqs.length === 0 && (
                                                         <div className="text-center py-20 bg-slate-50/50 rounded-3xl border border-dashed border-slate-200">
@@ -1072,13 +1139,17 @@ const BackendDashboard = ({ agent, onBack }) => {
 
                                                     <div>
                                                         <label className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4 block">其他自訂關鍵字 (例如：發票、匯款)...</label>
-                                                        <input
-                                                            type="text"
-                                                            value={handoffConfig.custom}
-                                                            onChange={(e) => setHandoffConfig({ ...handoffConfig, custom: e.target.value })}
-                                                            placeholder="手動輸入關鍵字，以「、」或逗號隔開"
-                                                            className="w-full bg-slate-900 text-white rounded-2xl p-5 text-sm outline-none placeholder:text-slate-600 border border-slate-800 focus:border-brand-500 transition-all shadow-2xl"
-                                                        />
+                                                        <div className="relative">
+                                                            <input
+                                                                type="text"
+                                                                value={handoffConfig.custom}
+                                                                maxLength={50}
+                                                                onChange={(e) => setHandoffConfig({ ...handoffConfig, custom: e.target.value })}
+                                                                placeholder="手動輸入關鍵字，以「、」或逗號隔開"
+                                                                className="w-full bg-slate-900 text-white rounded-2xl p-5 text-sm outline-none placeholder:text-slate-600 border border-slate-800 focus:border-brand-500 transition-all shadow-2xl"
+                                                            />
+                                                            <div className="text-[10px] text-slate-500 text-right pr-4 mt-1">{(handoffConfig.custom || '').length}/50</div>
+                                                        </div>
                                                     </div>
                                                 </div>
 
@@ -1242,38 +1313,61 @@ const BackendDashboard = ({ agent, onBack }) => {
                                                             <div>
                                                                 <label className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3 block">商家名稱 / 管理員暱稱</label>
                                                                 <div className="relative">
-                                                                    <User className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300" size={18} />
-                                                                    <input
-                                                                        type="text"
-                                                                        value={rootConfig.merchant_name}
-                                                                        onChange={(e) => setRootConfig({ ...rootConfig, merchant_name: e.target.value })}
-                                                                        className="w-full pl-12 pr-4 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-brand-500/10 focus:border-brand-500 outline-none transition-all font-medium text-slate-700"
-                                                                    />
+                                                                    <div className="relative">
+                                                                        <User className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300" size={18} />
+                                                                        <input
+                                                                            type="text"
+                                                                            value={rootConfig.merchant_name}
+                                                                            maxLength={20}
+                                                                            onChange={(e) => setRootConfig({ ...rootConfig, merchant_name: e.target.value })}
+                                                                            className="w-full pl-12 pr-4 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-brand-500/10 focus:border-brand-500 outline-none transition-all font-medium text-slate-700"
+                                                                        />
+                                                                    </div>
+                                                                    <div className="text-[10px] text-slate-300 text-right pr-4 mt-1">{(rootConfig.merchant_name || '').length}/20</div>
                                                                 </div>
                                                             </div>
                                                             <div>
                                                                 <label className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3 block">品牌/服務描述 (最高指令)</label>
-                                                                <textarea
-                                                                    rows={4}
-                                                                    value={rootConfig.services}
-                                                                    onChange={(e) => setRootConfig({ ...rootConfig, services: e.target.value })}
-                                                                    className="w-full p-6 bg-slate-50 border border-slate-200 rounded-3xl focus:ring-2 focus:ring-brand-500/10 focus:border-brand-500 outline-none transition-all text-sm leading-relaxed text-slate-600"
-                                                                    placeholder="描述您所提供的服務內容..."
-                                                                />
+                                                                <div className="relative">
+                                                                    <textarea
+                                                                        rows={4}
+                                                                        value={rootConfig.services}
+                                                                        maxLength={200}
+                                                                        onChange={(e) => setRootConfig({ ...rootConfig, services: e.target.value })}
+                                                                        className="w-full p-6 bg-slate-50 border border-slate-200 rounded-3xl focus:ring-2 focus:ring-brand-500/10 focus:border-brand-500 outline-none transition-all text-sm leading-relaxed text-slate-600"
+                                                                        placeholder="描述您所提供的服務內容..."
+                                                                    />
+                                                                    <div className="text-[10px] text-slate-300 text-right pr-4 mt-1">{(rootConfig.services || '').length}/200</div>
+                                                                </div>
                                                                 <p className="text-[10px] text-slate-400 mt-2 ml-2">這會是所有 Agent 理解你業務的核心依據。</p>
                                                             </div>
                                                             <div>
                                                                 <label className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3 block">網站連結 (選填)</label>
                                                                 <div className="relative">
-                                                                    <Globe className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300" size={18} />
-                                                                    <input
-                                                                        type="text"
-                                                                        value={rootConfig.website_url}
-                                                                        onChange={(e) => setRootConfig({ ...rootConfig, website_url: e.target.value })}
-                                                                        className="w-full pl-12 pr-4 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-brand-500/10 focus:border-brand-500 outline-none transition-all font-medium text-slate-500"
-                                                                        placeholder="https://..."
-                                                                    />
+                                                                    <div className="relative">
+                                                                        <Globe className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300" size={18} />
+                                                                        <input
+                                                                            type="text"
+                                                                            value={rootConfig.website_url}
+                                                                            maxLength={100}
+                                                                            onChange={(e) => setRootConfig({ ...rootConfig, website_url: e.target.value })}
+                                                                            className="w-full pl-12 pr-4 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-brand-500/10 focus:border-brand-500 outline-none transition-all font-medium text-slate-500"
+                                                                            placeholder="https://..."
+                                                                        />
+                                                                    </div>
+                                                                    <div className="text-[10px] text-slate-300 text-right pr-4 mt-1">{(rootConfig.website_url || '').length}/100</div>
                                                                 </div>
+                                                            </div>
+
+                                                            <div className="pt-8 border-t border-slate-100 flex justify-end">
+                                                                <button
+                                                                    disabled={isSaving}
+                                                                    onClick={handleSaveRootConfig}
+                                                                    className="bg-brand-600 hover:bg-brand-700 disabled:opacity-50 text-white font-bold px-10 py-3.5 rounded-2xl shadow-lg shadow-brand-200 transition-all active:scale-95 flex items-center gap-2"
+                                                                >
+                                                                    {isSaving ? <Loader2 className="animate-spin" size={20} /> : <Check size={20} />}
+                                                                    儲存設定
+                                                                </button>
                                                             </div>
                                                         </div>
                                                     )}
@@ -1311,13 +1405,17 @@ const BackendDashboard = ({ agent, onBack }) => {
                                                                 </div>
                                                                 <div>
                                                                     <label className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3 block">避免用詞 (Negative Prompt)</label>
-                                                                    <input
-                                                                        type="text"
-                                                                        value={rootConfig.tone_avoid}
-                                                                        onChange={(e) => setRootConfig({ ...rootConfig, tone_avoid: e.target.value })}
-                                                                        className="w-full px-6 py-5 bg-slate-900 text-white rounded-2xl outline-none placeholder:text-slate-600 border border-slate-800 focus:border-brand-500 transition-all text-sm"
-                                                                        placeholder="例如：不要太油條、禁止使用簡體字..."
-                                                                    />
+                                                                    <div className="relative">
+                                                                        <input
+                                                                            type="text"
+                                                                            value={rootConfig.tone_avoid}
+                                                                            maxLength={50}
+                                                                            onChange={(e) => setRootConfig({ ...rootConfig, tone_avoid: e.target.value })}
+                                                                            className="w-full px-6 py-5 bg-slate-900 text-white rounded-2xl outline-none placeholder:text-slate-600 border border-slate-800 focus:border-brand-500 transition-all text-sm"
+                                                                            placeholder="例如：不要太油條、禁止使用簡體字..."
+                                                                        />
+                                                                        <div className="text-[10px] text-slate-500 text-right pr-4 mt-1">{(rootConfig.tone_avoid || '').length}/50</div>
+                                                                    </div>
                                                                 </div>
                                                             </div>
 
@@ -1627,22 +1725,28 @@ const BackendDashboard = ({ agent, onBack }) => {
 
                                                 <div className="p-6 bg-white border-t border-slate-100">
                                                     <div className="flex items-center gap-3 relative">
-                                                        <input
-                                                            type="text"
-                                                            value={playgroundInput}
-                                                            onChange={(e) => setPlaygroundInput(e.target.value)}
-                                                            onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && handlePlaygroundSend()}
-                                                            placeholder="輸入測試訊息內容..."
-                                                            className="w-full pl-5 pr-14 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-all text-sm"
-                                                            disabled={isPlaygroundLoading}
-                                                        />
-                                                        <button
-                                                            onClick={() => handlePlaygroundSend()}
-                                                            disabled={!playgroundInput.trim() || isPlaygroundLoading}
-                                                            className="absolute right-2 p-2.5 bg-brand-600 text-white rounded-xl hover:bg-brand-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-md shadow-brand-100 active:scale-95"
-                                                        >
-                                                            <Send size={20} />
-                                                        </button>
+                                                        <div className="flex-1 relative">
+                                                            <input
+                                                                type="text"
+                                                                value={playgroundInput}
+                                                                onChange={(e) => setPlaygroundInput(e.target.value.slice(0, 100))}
+                                                                onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && handlePlaygroundSend()}
+                                                                placeholder="輸入測試訊息內容..."
+                                                                maxLength={100}
+                                                                className="w-full pl-5 pr-28 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-all text-sm"
+                                                                disabled={isPlaygroundLoading}
+                                                            />
+                                                            <div className="absolute right-14 top-1/2 -translate-y-1/2 text-[10px] font-medium text-slate-400">
+                                                                {playgroundInput.length}/100
+                                                            </div>
+                                                            <button
+                                                                onClick={() => handlePlaygroundSend()}
+                                                                disabled={!playgroundInput.trim() || isPlaygroundLoading}
+                                                                className="absolute right-2 top-1/2 -translate-y-1/2 p-2.5 bg-brand-600 text-white rounded-xl hover:bg-brand-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-md shadow-brand-100 active:scale-95"
+                                                            >
+                                                                <Send size={20} />
+                                                            </button>
+                                                        </div>
                                                     </div>
                                                 </div>
                                             </div>
