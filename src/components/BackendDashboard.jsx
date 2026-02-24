@@ -303,11 +303,11 @@ const BackendDashboard = ({ agent, onBack }) => {
             const line_user_name = Cookies.get('line_user_name');
             const response = await axios.post(`${config.API_URL}/api/chat`, {
                 message: msgText,
-                history: playgroundMessages,
                 line_user_id: line_user_id,
                 user_name: line_user_name,
                 agent_id: currentAgent._id,
-                session_id: playgroundSessionId
+                session_id: playgroundSessionId,
+                source: 'test'
             });
 
             const { response_text, related_faq_list, handoff_result } = response.data;

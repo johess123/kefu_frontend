@@ -37,11 +37,11 @@ const StepDemo = ({ formData, sessionId, setSessionId, agentId, onNext, setCurre
             const line_user_name = Cookies.get('line_user_name');
             const response = await axios.post(`${config.API_URL}/api/chat`, {
                 message: msgText,
-                history: messages,
                 line_user_id: line_user_id,
                 user_name: line_user_name,
                 agent_id: agentId,
-                session_id: sessionId
+                session_id: sessionId,
+                source: 'test'
             });
 
             const { response_text, related_faq_list, handoff_result } = response.data;

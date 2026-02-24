@@ -6,6 +6,6 @@ export default defineConfig({
     plugins: [react()],
     server: {
         allowedHosts: ['kefu-frontend.vercel.app']
-        // allowedHosts: ['31d6-122-100-97-97.ngrok-free.app']
+        // allowedHosts: ['d4a2-122-100-97-97.ngrok-free.app']
     }
 })
