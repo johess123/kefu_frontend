@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Layout, Plus, Edit2, Bot, Calendar, ArrowRight, Loader2, MessageCircle, ExternalLink, LayoutGrid } from 'lucide-react';
+import { Layout, Plus, Edit2, Bot, Calendar, ArrowRight, Loader2, MessageCircle, ExternalLink, LayoutGrid, BarChart2 } from 'lucide-react';
 import axios from 'axios';
 import config from '../config';
 
-const AgentHome = ({ userId, userName, onStartNew, onEditAgent, onEnterDashboard }) => {
+const AgentHome = ({ userId, userName, onStartNew, onEditAgent, onEnterDashboard, onEnterMonitor }) => {
     const [agents, setAgents] = useState([]);
     const [loading, setLoading] = useState(true);
 
@@ -42,13 +42,24 @@ const AgentHome = ({ userId, userName, onStartNew, onEditAgent, onEnterDashboard
                         </h1>
                         <p className="text-slate-500">管理您的 AI 客服代理</p>
                     </div>
-                    <button
-                        onClick={onStartNew}
-                        className="flex items-center justify-center gap-2 bg-brand-600 hover:bg-brand-700 text-white font-bold py-3 px-6 rounded-xl transition-all shadow-lg shadow-brand-200 active:scale-95"
-                    >
-                        <Plus size={20} />
-                        建立新 Agent
-                    </button>
+                    <div className="flex items-center gap-3">
+                        {onEnterMonitor && (
+                            <button
+                                onClick={onEnterMonitor}
+                                className="flex items-center justify-center gap-2 bg-slate-700 hover:bg-slate-800 text-white font-bold py-3 px-5 rounded-xl transition-all active:scale-95"
+                            >
+                                <BarChart2 size={18} />
+                                Monitor
+                            </button>
+                        )}
+                        <button
+                            onClick={onStartNew}
+                            className="flex items-center justify-center gap-2 bg-brand-600 hover:bg-brand-700 text-white font-bold py-3 px-6 rounded-xl transition-all shadow-lg shadow-brand-200 active:scale-95"
+                        >
+                            <Plus size={20} />
+                            建立新 Agent
+                        </button>
+                    </div>
                 </div>
 
                 {/* Agent List */}

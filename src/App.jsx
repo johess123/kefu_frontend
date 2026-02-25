@@ -12,6 +12,7 @@ import liff from '@line/liff';
 import axios from 'axios';
 import Cookies from 'js-cookie';
 import FoundingPartnerLanding from './components/FoundingPartnerLanding';
+import MonitorApp from './components/monitor/MonitorApp';
 
 const StepTab = ({ active, icon, label, disabled, onClick }) => (
     <button
@@ -28,7 +29,13 @@ const StepTab = ({ active, icon, label, disabled, onClick }) => (
     </button>
 );
 
+const MONITOR_ALLOWED_IDS = [
+    'U00ac77d7d29585c10076afda487638c0',
+    'U5b48e0b7312c9106beaf208d8862885f'
+];
+
 const App = () => {
+    const isMonitorPath = window.location.pathname.startsWith('/monitor');
     const [currentStep, setCurrentStep] = useState(AppStep.WIZARD);
     const [formData, setFormData] = useState(DEFAULT_FORM_DATA);
     const [reviewData, setReviewData] = useState(null);
@@ -40,17 +47,33 @@ const App = () => {
     const [lineUserId, setLineUserId] = useState(null);
     const [lineUserName, setLineUserName] = useState(null);
     const [showDashboard, setShowDashboard] = useState(false);
+    const [showMonitor, setShowMonitor] = useState(false);
     const [selectedAgent, setSelectedAgent] = useState(null);
-    const [showFoundingLanding, setShowFoundingLanding] = useState(true);
+    const [showFoundingLanding, setShowFoundingLanding] = useState(!isMonitorPath);
 
     useEffect(() => {
         const initLIFF = async () => {
             try {
                 await liff.init({ liffId: import.meta.env.VITE_LIFF_ID });
                 if (!liff.isLoggedIn()) {
+                    // 儲存目前路徑，LIFF 登入後回來再還原
+                    sessionStorage.setItem('intended_path', window.location.pathname);
                     liff.login();
                     return;
                 }
+
+                // LIFF 登入後還原路徑（若有儲存）
+                const intendedPath = sessionStorage.getItem('intended_path');
+                if (intendedPath) {
+                    sessionStorage.removeItem('intended_path');
+                    if (intendedPath !== window.location.pathname) {
+                        window.history.replaceState({}, '', intendedPath);
+                    }
+                    if (intendedPath.startsWith('/monitor')) {
+                        setShowFoundingLanding(false);
+                    }
+                }
+
                 const profile = await liff.getProfile();
                 const userId = profile.userId;
 
@@ -233,6 +256,9 @@ const App = () => {
     };
 
     const renderLanding = () => {
+        if (showMonitor && MONITOR_ALLOWED_IDS.includes(lineUserId)) {
+            return <MonitorApp lineUserId={lineUserId} lineUserName={lineUserName} onBack={() => setShowMonitor(false)} />;
+        }
         if (showDashboard) {
             return (
                 <BackendDashboard
@@ -248,6 +274,7 @@ const App = () => {
                 onStartNew={() => handleStartFilling()}
                 onEditAgent={handleEditAgent}
                 onEnterDashboard={handleEnterDashboard}
+                onEnterMonitor={MONITOR_ALLOWED_IDS.includes(lineUserId) ? () => setShowMonitor(true) : undefined}
             />
         );
     };
@@ -287,6 +314,11 @@ const App = () => {
                 </div>
             </div>
         );
+    }
+
+    // 通過驗證後，若為 /monitor 路徑則顯示監控儀表板
+    if (isMonitorPath) {
+        return <MonitorApp lineUserId={lineUserId} lineUserName={lineUserName} />;
     }
 
     if (showLanding) return renderLanding();
