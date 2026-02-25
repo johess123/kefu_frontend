@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useParams, useLocation, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import config from '../config';
 import {
@@ -49,11 +50,28 @@ import {
 import Cookies from 'js-cookie';
 import { DEFAULT_HANDOFF_OPTIONS } from '../types';
 
-const BackendDashboard = ({ agent, onBack }) => {
+const SUB_SECTION_MAP = {
+    'knowledge-base': 'Knowledge Base',
+    'escalation-manager': 'Escalation Manager',
+    'root-admin': 'Root Admin',
+};
+const EDITING_TO_SUB = {
+    'Knowledge Base': 'knowledge-base',
+    'Escalation Manager': 'escalation-manager',
+    'Root Admin': 'root-admin',
+};
+
+const BackendDashboard = () => {
+    const { agentId: routeAgentId, '*': remainingPath } = useParams();
+    const pathParts = (remainingPath || '').split('/').filter(Boolean);
+    const section = pathParts[0] || undefined;
+    const subSection = pathParts[1] || undefined;
+    const location = useLocation();
+    const navigate = useNavigate();
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-    const [activeMenu, setActiveMenu] = useState('agents');
+    const activeMenu = section || 'agents';
     const [isModalOpen, setIsModalOpen] = useState(false);
-    const [currentAgent, setCurrentAgent] = useState(agent);
+    const [currentAgent, setCurrentAgent] = useState(location.state?.agent || null);
     const [availableSubagents, setAvailableSubagents] = useState([]);
     const [loading, setLoading] = useState(false);
 
@@ -76,7 +94,7 @@ const BackendDashboard = ({ agent, onBack }) => {
     const playgroundMessagesEndRef = React.useRef(null);
 
     // Edit Subagent states
-    const [editingSubagent, setEditingSubagent] = useState(null); // 'Knowledge Base' | 'Escalation Manager'
+    const editingSubagent = subSection ? (SUB_SECTION_MAP[subSection] ?? null) : null;
     const [editingFaqs, setEditingFaqs] = useState([]);
     const [handoffConfig, setHandoffConfig] = useState({
         triggers: [],
@@ -111,6 +129,18 @@ const BackendDashboard = ({ agent, onBack }) => {
         return val.toLocaleString();
     };
 
+    // Fetch agent by id when navigated directly (no location state)
+    useEffect(() => {
+        if (!currentAgent && routeAgentId) {
+            axios.get(`${config.API_URL}/api/admin/agents`)
+                .then(res => {
+                    const agent = res.data.find(a => a._id === routeAgentId);
+                    if (agent) setCurrentAgent(agent);
+                })
+                .catch(err => console.error('Failed to fetch agent:', err));
+        }
+    }, []);
+
     useEffect(() => {
         if (currentAgent) {
             const rawConfig = currentAgent.config?.raw_config || {};
@@ -137,6 +167,12 @@ const BackendDashboard = ({ agent, onBack }) => {
                 tone: rawConfig.tone || '親切有溫度',
                 tone_avoid: rawConfig.tone_avoid || ''
             });
+
+            // Sync LINE config
+            setLineConfig({
+                accessToken: currentAgent.deploy_config?.access_token || '',
+                channelSecret: currentAgent.deploy_config?.channel_secret || ''
+            });
         }
     }, [currentAgent]);
 
@@ -159,7 +195,7 @@ const BackendDashboard = ({ agent, onBack }) => {
         if (editingSubagent === 'Root Admin' || (activeMenu === 'agents' && !editingSubagent)) {
             fetchTokenStats();
         }
-    }, [editingSubagent, activeMenu]);
+    }, [editingSubagent, activeMenu, currentAgent?._id]);
 
     const fetchAgentData = async () => {
         if (!currentAgent?._id) return;
@@ -180,11 +216,17 @@ const BackendDashboard = ({ agent, onBack }) => {
 
     useEffect(() => {
         fetchAgentData();
-    }, [agent?._id]);
+    }, [currentAgent?._id]);
 
     useEffect(() => {
         if (editingSubagent === 'Root Admin') {
             fetchAgentData();
+        }
+    }, [editingSubagent]);
+
+    useEffect(() => {
+        if (editingSubagent !== 'Knowledge Base') {
+            setAnalysisReport(null);
         }
     }, [editingSubagent]);
 
@@ -481,12 +523,11 @@ const BackendDashboard = ({ agent, onBack }) => {
             });
             if (res.data.status === 'ok') {
                 alert('FAQ 更新成功！');
-                setEditingSubagent(null);
-                // Refresh agent data
                 const agentRes = await axios.get(`${config.API_URL}/api/admin/agent/${currentAgent._id}`, {
                     params: { userId: currentAgent.admin_id }
                 });
                 setCurrentAgent(agentRes.data);
+                navigate('/agent/' + routeAgentId + '/agents');
             }
         } catch (error) {
             console.error('Failed to save FAQs:', error);
@@ -506,12 +547,11 @@ const BackendDashboard = ({ agent, onBack }) => {
             });
             if (res.data.status === 'ok') {
                 alert('轉接設定更新成功！');
-                setEditingSubagent(null);
-                // Refresh agent data
                 const agentRes = await axios.get(`${config.API_URL}/api/admin/agent/${currentAgent._id}`, {
                     params: { userId: currentAgent.admin_id }
                 });
                 setCurrentAgent(agentRes.data);
+                navigate('/agent/' + routeAgentId + '/agents');
             }
         } catch (error) {
             console.error('Failed to save Handoff:', error);
@@ -530,12 +570,11 @@ const BackendDashboard = ({ agent, onBack }) => {
             });
             if (res.data.status === 'ok') {
                 alert('基本設定更新成功！');
-                setEditingSubagent(null);
-                // Refresh agent data
                 const agentRes = await axios.get(`${config.API_URL}/api/admin/agent/${currentAgent._id}`, {
                     params: { userId: currentAgent.admin_id }
                 });
                 setCurrentAgent(agentRes.data);
+                navigate('/agent/' + routeAgentId + '/agents');
             }
         } catch (error) {
             console.error('Failed to save root config:', error);
@@ -667,7 +706,7 @@ const BackendDashboard = ({ agent, onBack }) => {
                                             key={item.id}
                                             onClick={() => {
                                                 if (item.isLocked) return;
-                                                setActiveMenu(item.id);
+                                                navigate('/agent/' + routeAgentId + '/' + item.id);
                                                 setIsSidebarOpen(false);
                                             }}
                                             className={`
@@ -707,7 +746,7 @@ const BackendDashboard = ({ agent, onBack }) => {
                                     <h6 className="text-sm font-bold text-slate-900">商家管理員</h6>
                                     <p className="text-[10px] text-slate-500">Pro Plan</p>
                                 </div>
-                                <button onClick={onBack} className="text-slate-400 hover:text-slate-600">
+                                <button onClick={() => navigate('/')} className="text-slate-400 hover:text-slate-600">
                                     <ExternalLink size={16} />
                                 </button>
                             </div>
@@ -742,7 +781,7 @@ const BackendDashboard = ({ agent, onBack }) => {
                         <div className="flex items-center gap-3">
                             {editingSubagent && (
                                 <button
-                                    onClick={() => setEditingSubagent(null)}
+                                    onClick={() => navigate('/agent/' + routeAgentId + '/agents')}
                                     className="w-8 h-8 flex items-center justify-center bg-slate-50 text-slate-400 hover:text-slate-600 rounded-lg transition-colors border border-slate-100"
                                 >
                                     <ChevronLeft size={18} />
@@ -1484,7 +1523,7 @@ const BackendDashboard = ({ agent, onBack }) => {
                                                     </div>
 
                                                     <button
-                                                        onClick={() => setEditingSubagent('Root Admin')}
+                                                        onClick={() => navigate('/agent/' + routeAgentId + '/agents/root-admin')}
                                                         className="w-14 h-14 bg-white/5 hover:bg-white/10 border border-white/10 rounded-2xl flex items-center justify-center transition-all hover:scale-105 active:scale-95 group/settings shadow-xl"
                                                     >
                                                         <Settings size={22} className="text-slate-300 group-hover:rotate-90 transition-transform duration-500" />
@@ -1503,7 +1542,10 @@ const BackendDashboard = ({ agent, onBack }) => {
                                                 {teamSubagents.map((sub, idx) => (
                                                     <div
                                                         key={idx}
-                                                        onClick={() => setEditingSubagent(sub.name)}
+                                                        onClick={() => {
+                                                        const sub_path = EDITING_TO_SUB[sub.name];
+                                                        if (sub_path) navigate('/agent/' + routeAgentId + '/agents/' + sub_path);
+                                                    }}
                                                         className={`bg-white rounded-[32px] p-8 border ${sub.enabled ? 'border-slate-100' : 'border-slate-50 opacity-60'} shadow-sm flex flex-col h-full relative group cursor-pointer hover:border-brand-200 hover:shadow-2xl hover:shadow-brand-500/5 transition-all duration-500`}
                                                     >
                                                         <div className="flex items-start justify-between mb-8">
