@@ -1,0 +1,304 @@
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import axios from 'axios';
+import config from '../config';
+import { RefreshCw, Send, MessageSquare } from 'lucide-react';
+
+const API = config.API_URL;
+
+export default function InboxView({ currentAgent }) {
+    const [sessions, setSessions] = useState([]);
+    const [selectedSession, setSelectedSession] = useState(null);
+    const [messages, setMessages] = useState([]);
+    const [replyText, setReplyText] = useState('');
+    const [isSending, setIsSending] = useState(false);
+    const [isLoadingSessions, setIsLoadingSessions] = useState(false);
+    const [isLoadingMessages, setIsLoadingMessages] = useState(false);
+    const [activeTab, setActiveTab] = useState('open');
+    const [isClosing, setIsClosing] = useState(false);
+    const messagesEndRef = useRef(null);
+
+    const agentId = currentAgent?._id;
+    const adminId = currentAgent?.admin_id;
+
+    const fetchSessions = useCallback(async () => {
+        if (!agentId || !adminId) return;
+        setIsLoadingSessions(true);
+        try {
+            const res = await axios.get(
+                `${API}/api/inbox/agents/${agentId}/sessions?userId=${adminId}&tab=${activeTab}`
+            );
+            setSessions(res.data.sessions || []);
+        } catch (err) {
+            console.error('Failed to fetch sessions', err);
+        } finally {
+            setIsLoadingSessions(false);
+        }
+    }, [agentId, adminId, activeTab]);
+
+    const fetchMessages = useCallback(async (sessionId) => {
+        if (!sessionId || !agentId || !adminId) return;
+        setIsLoadingMessages(true);
+        try {
+            const res = await axios.get(
+                `${API}/api/inbox/sessions/${sessionId}/messages?userId=${adminId}&agent_id=${agentId}`
+            );
+            setMessages(res.data.messages || []);
+        } catch (err) {
+            console.error('Failed to fetch messages', err);
+        } finally {
+            setIsLoadingMessages(false);
+        }
+    }, [agentId, adminId]);
+
+    useEffect(() => {
+        fetchSessions();
+    }, [fetchSessions]);
+
+    useEffect(() => {
+        if (messagesEndRef.current) {
+            messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+        }
+    }, [messages]);
+
+    const handleSelectSession = (sess) => {
+        setSelectedSession(sess);
+        setMessages([]);
+        fetchMessages(sess.session_id);
+    };
+
+    const handleSend = async () => {
+        if (!replyText.trim() || !selectedSession || isSending) return;
+        setIsSending(true);
+        try {
+            await axios.post(
+                `${API}/api/inbox/sessions/${selectedSession.session_id}/reply?userId=${adminId}`,
+                { agent_id: agentId, message: replyText.trim() }
+            );
+            setReplyText('');
+            await fetchMessages(selectedSession.session_id);
+            await fetchSessions();
+        } catch (err) {
+            console.error('Failed to send reply', err);
+            alert('發送失敗，請確認 LINE 部署設定是否正確。');
+        } finally {
+            setIsSending(false);
+        }
+    };
+
+    const handleKeyDown = (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            handleSend();
+        }
+    };
+
+    const handleClose = async () => {
+        if (!selectedSession || isClosing) return;
+        setIsClosing(true);
+        try {
+            await axios.post(
+                `${API}/api/inbox/sessions/${selectedSession.session_id}/close?userId=${adminId}`,
+                { agent_id: agentId }
+            );
+            setSelectedSession(null);
+            setActiveTab('done');
+        } finally {
+            setIsClosing(false);
+        }
+    };
+
+    const formatTime = (timeStr) => {
+        if (!timeStr) return '';
+        return timeStr;
+    };
+
+    const senderLabel = (sender) => {
+        if (sender === 'user') return '用戶';
+        if (sender === 'ai') return 'AI';
+        if (sender === 'human_agent') return '客服';
+        return sender;
+    };
+
+    const bubbleStyle = (sender) => {
+        if (sender === 'user') {
+            return {
+                wrapper: 'justify-start',
+                bubble: 'bg-slate-100 text-slate-800',
+                label: 'text-slate-500',
+            };
+        }
+        if (sender === 'ai') {
+            return {
+                wrapper: 'justify-end',
+                bubble: 'bg-brand-500 text-white',
+                label: 'text-brand-400',
+            };
+        }
+        // human_agent
+        return {
+            wrapper: 'justify-end',
+            bubble: 'bg-orange-500 text-white',
+            label: 'text-orange-400',
+        };
+    };
+
+    if (currentAgent?.deploy_type !== 'line') {
+        return (
+            <div className="flex flex-col items-center justify-center h-64 text-center text-slate-500 gap-4">
+                <MessageSquare size={48} className="text-slate-300" />
+                <div>
+                    <p className="text-lg font-semibold text-slate-700">尚未串接 LINE</p>
+                    <p className="text-sm mt-1">請先至「渠道串接」完成 LINE Bot 部署，才能使用對話收件匣。</p>
+                </div>
+            </div>
+        );
+    }
+
+    return (
+        <div className="flex flex-col h-full" style={{ height: 'calc(100vh - 120px)' }}>
+            {/* Header */}
+            <div className="flex items-center justify-between mb-4">
+                <div>
+                    <h1 className="text-2xl font-bold text-slate-900">對話收件匣</h1>
+                    <p className="text-slate-500 text-sm">查看並回覆 LINE 用戶訊息</p>
+                </div>
+                <button
+                    onClick={fetchSessions}
+                    disabled={isLoadingSessions}
+                    className="flex items-center gap-2 px-4 py-2 rounded-xl border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 text-sm font-medium transition-colors"
+                >
+                    <RefreshCw size={16} className={isLoadingSessions ? 'animate-spin' : ''} />
+                    重新整理
+                </button>
+            </div>
+
+            {/* Main grid */}
+            <div className="flex flex-1 gap-4 overflow-hidden">
+                {/* Left: session list */}
+                <div className="w-80 flex-shrink-0 bg-white rounded-2xl border border-slate-200 flex flex-col overflow-hidden">
+                    {/* Tab buttons */}
+                    <div className="flex border-b border-slate-100">
+                        <button
+                            onClick={() => { setActiveTab('open'); setSelectedSession(null); }}
+                            className={`flex-1 py-2.5 text-sm font-semibold transition-colors ${activeTab === 'open' ? 'text-brand-600 border-b-2 border-brand-500' : 'text-slate-400 hover:text-slate-600'}`}
+                        >
+                            待處理 (OPEN)
+                        </button>
+                        <button
+                            onClick={() => { setActiveTab('done'); setSelectedSession(null); }}
+                            className={`flex-1 py-2.5 text-sm font-semibold transition-colors ${activeTab === 'done' ? 'text-brand-600 border-b-2 border-brand-500' : 'text-slate-400 hover:text-slate-600'}`}
+                        >
+                            已結案 (DONE)
+                        </button>
+                    </div>
+                    <div className="px-4 py-2 border-b border-slate-100 text-xs text-slate-400">
+                        共 {sessions.length} 筆
+                    </div>
+                    <div className="flex-1 overflow-y-auto">
+                        {isLoadingSessions ? (
+                            <div className="flex items-center justify-center h-24 text-slate-400 text-sm">載入中...</div>
+                        ) : sessions.length === 0 ? (
+                            <div className="flex items-center justify-center h-24 text-slate-400 text-sm">尚無對話紀錄</div>
+                        ) : (
+                            sessions.map((sess) => {
+                                const isSelected = selectedSession?.session_id === sess.session_id;
+                                return (
+                                    <button
+                                        key={sess.session_id}
+                                        onClick={() => handleSelectSession(sess)}
+                                        className={`w-full text-left px-4 py-3 border-b border-slate-50 hover:bg-slate-50 transition-colors ${isSelected ? 'bg-brand-50 border-l-2 border-l-brand-500' : ''}`}
+                                    >
+                                        <div className="flex items-start justify-between gap-2">
+                                            <span className="font-medium text-slate-800 text-sm truncate">{sess.user_name}</span>
+                                            <span className={`text-xs px-1.5 py-0.5 rounded-full flex-shrink-0 ${sess.mode === 'human' ? 'bg-orange-100 text-orange-600' : 'bg-blue-100 text-blue-600'}`}>
+                                                {sess.mode === 'human' ? '人工' : 'AI'}
+                                            </span>
+                                        </div>
+                                        <p className="text-xs text-slate-400 mt-0.5 truncate">{sess.last_message || '（無訊息）'}</p>
+                                        <p className="text-xs text-slate-300 mt-0.5">{formatTime(sess.last_time)}</p>
+                                    </button>
+                                );
+                            })
+                        )}
+                    </div>
+                </div>
+
+                {/* Right: message area */}
+                <div className="flex-1 bg-white rounded-2xl border border-slate-200 flex flex-col overflow-hidden">
+                    {!selectedSession ? (
+                        <div className="flex-1 flex items-center justify-center text-slate-400 text-sm">
+                            請選取左側對話
+                        </div>
+                    ) : (
+                        <>
+                            {/* Chat header */}
+                            <div className="px-5 py-3 border-b border-slate-100 flex items-center gap-3">
+                                <div>
+                                    <p className="font-semibold text-slate-800">{selectedSession.user_name}</p>
+                                    <p className="text-xs text-slate-400">{selectedSession.session_id}</p>
+                                </div>
+                                <span className={`ml-auto text-xs px-2 py-1 rounded-full ${selectedSession.mode === 'human' ? 'bg-orange-100 text-orange-600' : 'bg-blue-100 text-blue-600'}`}>
+                                    {selectedSession.mode === 'human' ? '人工客服模式' : 'AI 模式'}
+                                </span>
+                                {activeTab === 'open' && (
+                                    <button
+                                        onClick={handleClose}
+                                        disabled={isClosing}
+                                        className="text-xs px-3 py-1.5 rounded-lg bg-slate-100 text-slate-600 hover:bg-red-50 hover:text-red-600 border border-slate-200 hover:border-red-200 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                                    >
+                                        {isClosing ? '結案中...' : '標記結案'}
+                                    </button>
+                                )}
+                            </div>
+
+                            {/* Messages */}
+                            <div className="flex-1 overflow-y-auto p-4 space-y-3">
+                                {isLoadingMessages ? (
+                                    <div className="flex items-center justify-center h-16 text-slate-400 text-sm">載入訊息中...</div>
+                                ) : messages.length === 0 ? (
+                                    <div className="flex items-center justify-center h-16 text-slate-400 text-sm">尚無訊息</div>
+                                ) : (
+                                    messages.map((msg, idx) => {
+                                        const style = bubbleStyle(msg.sender);
+                                        return (
+                                            <div key={idx} className={`flex ${style.wrapper}`}>
+                                                <div className="max-w-[70%]">
+                                                    <p className={`text-xs mb-1 ${style.label} ${msg.sender !== 'user' ? 'text-right' : ''}`}>
+                                                        {senderLabel(msg.sender)} · {msg.time}
+                                                    </p>
+                                                    <div className={`px-3 py-2 rounded-2xl text-sm whitespace-pre-wrap ${style.bubble}`}>
+                                                        {msg.content}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        );
+                                    })
+                                )}
+                                <div ref={messagesEndRef} />
+                            </div>
+
+                            {/* Reply box */}
+                            <div className="px-4 py-3 border-t border-slate-100 flex gap-2 items-end">
+                                <textarea
+                                    value={replyText}
+                                    onChange={(e) => setReplyText(e.target.value)}
+                                    onKeyDown={handleKeyDown}
+                                    placeholder="輸入回覆訊息（Enter 發送，Shift+Enter 換行）"
+                                    rows={2}
+                                    className="flex-1 resize-none rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-300"
+                                />
+                                <button
+                                    onClick={handleSend}
+                                    disabled={isSending || !replyText.trim()}
+                                    className="flex-shrink-0 w-10 h-10 rounded-xl bg-brand-500 text-white flex items-center justify-center hover:bg-brand-600 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                                >
+                                    <Send size={16} />
+                                </button>
+                            </div>
+                        </>
+                    )}
+                </div>
+            </div>
+        </div>
+    );
+}
