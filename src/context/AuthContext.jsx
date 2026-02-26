@@ -4,21 +4,15 @@ import axios from 'axios';
 import Cookies from 'js-cookie';
 import config from '../config';
 
-export const MONITOR_ALLOWED_IDS = [
-    'U00ac77d7d29585c10076afda487638c0',
-    'U5b48e0b7312c9106beaf208d8862885f'
-];
-
 const AuthContext = createContext(null);
 
 export const AuthProvider = ({ children }) => {
     const [isVerifying, setIsVerifying] = useState(true);
     const [isAuthorized, setIsAuthorized] = useState(false);
+    const [isMonitorAllowed, setIsMonitorAllowed] = useState(false);
     const [lineUserId, setLineUserId] = useState(null);
     const [lineUserName, setLineUserName] = useState(null);
     const [postLoginRedirect, setPostLoginRedirect] = useState(null);
-
-    const isMonitorAllowed = MONITOR_ALLOWED_IDS.includes(lineUserId);
 
     useEffect(() => {
         const initLIFF = async () => {
@@ -53,6 +47,7 @@ export const AuthProvider = ({ children }) => {
                     setIsAuthorized(true);
                     setLineUserId(userId);
                     setLineUserName(profile.displayName);
+                    setIsMonitorAllowed(response.data.isMonitor === true);
                 } else {
                     setIsAuthorized(false);
                 }

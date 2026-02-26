@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Chart, registerables } from 'chart.js';
 import config from '../../config';
+import { useAuth } from '../../context/AuthContext';
 
 Chart.register(...registerables);
 
@@ -47,6 +48,7 @@ const commonOptions = () => ({
 });
 
 const MonitorDashboard = () => {
+    const { lineUserId } = useAuth();
     const [days, setDays] = useState('7');
     const [usageType, setUsageType] = useState('全部');
     const [summary, setSummary] = useState({ total_requests: 0, total_tokens: 0, total_cost: 0 });
@@ -65,7 +67,7 @@ const MonitorDashboard = () => {
 
     const fetchData = async () => {
         try {
-            const res = await fetch(`${API}/stats?days=${days}&usage_type=${encodeURIComponent(usageType)}`);
+            const res = await fetch(`${API}/stats?days=${days}&usage_type=${encodeURIComponent(usageType)}&userId=${lineUserId}`);
             const data = await res.json();
             setGlobalData(data);
             setSummary(data.summary);

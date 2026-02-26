@@ -1,12 +1,14 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Chart, registerables } from 'chart.js';
 import config from '../../config';
+import { useAuth } from '../../context/AuthContext';
 
 Chart.register(...registerables);
 
 const API = `${config.API_URL}/api/monitor`;
 
 const MonitorUsers = () => {
+    const { lineUserId } = useAuth();
     const [users, setUsers] = useState([]);
     const [search, setSearch] = useState('');
     const [selectedAdmin, setSelectedAdmin] = useState(null);
@@ -22,7 +24,7 @@ const MonitorUsers = () => {
 
     const fetchAdmins = async () => {
         try {
-            const res = await fetch(`${API}/users?search=${encodeURIComponent(search)}`);
+            const res = await fetch(`${API}/users?search=${encodeURIComponent(search)}&userId=${lineUserId}`);
             if (!res.ok) return;
             const data = await res.json();
             setUsers(data.users || []);
@@ -43,7 +45,7 @@ const MonitorUsers = () => {
         setAdminDetails(null);
 
         try {
-            const res = await fetch(`${API}/users/${user.id}/details`);
+            const res = await fetch(`${API}/users/${user.id}/details?userId=${lineUserId}`);
             const data = await res.json();
             setAdminDetails(data);
         } catch (err) {
@@ -96,7 +98,7 @@ const MonitorUsers = () => {
         setMessages(null);
         setSessions(null);
         try {
-            const res = await fetch(`${API}/agents/${agentId}/chats`);
+            const res = await fetch(`${API}/agents/${agentId}/chats?userId=${lineUserId}`);
             const data = await res.json();
             setSessions(data.sessions || []);
         } catch (err) {
@@ -106,7 +108,7 @@ const MonitorUsers = () => {
 
     const selectSession = async (sessionId) => {
         try {
-            const res = await fetch(`${API}/sessions/${sessionId}/messages`);
+            const res = await fetch(`${API}/sessions/${sessionId}/messages?userId=${lineUserId}`);
             const data = await res.json();
             setMessages(data.messages || []);
         } catch (err) {
