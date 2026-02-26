@@ -1,9 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { Layout, Plus, Edit2, Bot, Calendar, ArrowRight, Loader2, MessageCircle, ExternalLink, LayoutGrid } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Plus, Edit2, Bot, Calendar, ArrowRight, Loader2, MessageCircle, ExternalLink, LayoutGrid, BarChart2 } from 'lucide-react';
 import axios from 'axios';
 import config from '../config';
+import { useAuth } from '../context/AuthContext';
 
-const AgentHome = ({ userId, userName, onStartNew, onEditAgent, onEnterDashboard }) => {
+const AgentHome = () => {
+    const navigate = useNavigate();
+    const { lineUserId, lineUserName, isMonitorAllowed } = useAuth();
     const [agents, setAgents] = useState([]);
     const [loading, setLoading] = useState(true);
 
@@ -11,7 +15,7 @@ const AgentHome = ({ userId, userName, onStartNew, onEditAgent, onEnterDashboard
         const fetchAgents = async () => {
             try {
                 const response = await axios.get(`${config.API_URL}/api/admin/agents`, {
-                    params: { userId }
+                    params: { userId: lineUserId }
                 });
                 setAgents(response.data);
             } catch (error) {
@@ -21,7 +25,7 @@ const AgentHome = ({ userId, userName, onStartNew, onEditAgent, onEnterDashboard
             }
         };
         fetchAgents();
-    }, [userId]);
+    }, [lineUserId]);
 
     if (loading) {
         return (
@@ -38,17 +42,28 @@ const AgentHome = ({ userId, userName, onStartNew, onEditAgent, onEnterDashboard
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
                     <div>
                         <h1 className="text-3xl font-bold text-slate-900 mb-2">
-                            歡迎回來, {userName || '管理者'}
+                            歡迎回來, {lineUserName || '管理者'}
                         </h1>
                         <p className="text-slate-500">管理您的 AI 客服代理</p>
                     </div>
-                    <button
-                        onClick={onStartNew}
-                        className="flex items-center justify-center gap-2 bg-brand-600 hover:bg-brand-700 text-white font-bold py-3 px-6 rounded-xl transition-all shadow-lg shadow-brand-200 active:scale-95"
-                    >
-                        <Plus size={20} />
-                        建立新 Agent
-                    </button>
+                    <div className="flex items-center gap-3">
+                        {isMonitorAllowed && (
+                            <button
+                                onClick={() => navigate('/monitor')}
+                                className="flex items-center justify-center gap-2 bg-slate-700 hover:bg-slate-800 text-white font-bold py-3 px-5 rounded-xl transition-all active:scale-95"
+                            >
+                                <BarChart2 size={18} />
+                                Monitor
+                            </button>
+                        )}
+                        <button
+                            onClick={() => navigate('/wizard/new')}
+                            className="flex items-center justify-center gap-2 bg-brand-600 hover:bg-brand-700 text-white font-bold py-3 px-6 rounded-xl transition-all shadow-lg shadow-brand-200 active:scale-95"
+                        >
+                            <Plus size={20} />
+                            建立新 Agent
+                        </button>
+                    </div>
                 </div>
 
                 {/* Agent List */}
@@ -62,7 +77,7 @@ const AgentHome = ({ userId, userName, onStartNew, onEditAgent, onEnterDashboard
                             立刻建立您的第一個 AI 客服，為您的顧客提供 24/7 的即時服務。
                         </p>
                         <button
-                            onClick={onStartNew}
+                            onClick={() => navigate('/wizard/new')}
                             className="inline-flex items-center gap-2 text-brand-600 font-bold hover:text-brand-700"
                         >
                             開始填寫問卷 <ArrowRight size={18} />
@@ -107,14 +122,14 @@ const AgentHome = ({ userId, userName, onStartNew, onEditAgent, onEnterDashboard
 
                                     <div className="flex gap-3">
                                         <button
-                                            onClick={() => onEnterDashboard(agent)}
+                                            onClick={() => navigate('/agent/' + agent._id, { state: { agent } })}
                                             className="flex-1 bg-brand-600 hover:bg-brand-700 text-white text-sm font-bold py-3 px-4 rounded-xl transition-all flex items-center justify-center gap-2 active:scale-95 shadow-lg shadow-brand-100"
                                         >
                                             <LayoutGrid size={18} />
                                             進入公司後台
                                         </button>
                                         <button
-                                            onClick={() => onEditAgent(agent)}
+                                            onClick={() => navigate('/wizard/' + agent._id, { state: { agentData: agent } })}
                                             className="w-12 h-12 flex items-center justify-center border border-slate-200 rounded-xl text-slate-400 hover:text-brand-600 hover:border-brand-200 hover:bg-brand-50 transition-all active:scale-95"
                                             title="填表流程"
                                         >
@@ -126,17 +141,6 @@ const AgentHome = ({ userId, userName, onStartNew, onEditAgent, onEnterDashboard
                         ))}
                     </div>
                 )}
-
-                {/* Stats / Help Section */}
-                {/* <div className="mt-12 grid grid-cols-1 md:grid-cols-3 gap-6">
-                    <div className="bg-gradient-to-br from-brand-600 to-indigo-700 rounded-2xl p-6 text-white shadow-lg">
-                        <h4 className="font-bold mb-1">提示：如何優化 Agent</h4>
-                        <p className="text-brand-100 text-sm mb-4">
-                            提供越詳細的 FAQ，AI 就越能精準回答顧客問題。
-                        </p>
-                        <a href="#" className="text-xs font-bold underline">查看教學影片</a>
-                    </div>
-                </div> */}
             </div>
         </div>
     );
