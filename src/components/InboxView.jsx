@@ -15,6 +15,7 @@ export default function InboxView({ currentAgent }) {
     const [isLoadingMessages, setIsLoadingMessages] = useState(false);
     const [activeTab, setActiveTab] = useState('open');
     const [isClosing, setIsClosing] = useState(false);
+    const [lineQuota, setLineQuota] = useState(null);
     const messagesEndRef = useRef(null);
 
     const agentId = currentAgent?._id;
@@ -35,6 +36,16 @@ export default function InboxView({ currentAgent }) {
         }
     }, [agentId, adminId, activeTab]);
 
+    const fetchLineQuota = useCallback(async () => {
+        if (!agentId || !adminId) return;
+        try {
+            const res = await axios.get(`${API}/api/inbox/agents/${agentId}/line-quota?userId=${adminId}`);
+            setLineQuota(res.data);
+        } catch (err) {
+            console.error('Failed to fetch LINE quota', err);
+        }
+    }, [agentId, adminId]);
+
     const fetchMessages = useCallback(async (sessionId) => {
         if (!sessionId || !agentId || !adminId) return;
         setIsLoadingMessages(true);
@@ -52,7 +63,8 @@ export default function InboxView({ currentAgent }) {
 
     useEffect(() => {
         fetchSessions();
-    }, [fetchSessions]);
+        fetchLineQuota();
+    }, [fetchSessions, fetchLineQuota]);
 
     useEffect(() => {
         if (messagesEndRef.current) {
@@ -68,17 +80,39 @@ export default function InboxView({ currentAgent }) {
 
     const handleSend = async () => {
         if (!replyText.trim() || !selectedSession || isSending) return;
+
+        const text = replyText.trim();
+        const pad = n => String(n).padStart(2, '0');
+        const now = new Date();
+        const timeStr = `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+        const optimisticMsg = { sender: 'human_agent', content: text, time: timeStr };
+
+        // 立即更新 UI（清空輸入框、插入訊息、鎖住發送、額度 -1）
+        setReplyText('');
         setIsSending(true);
+        setMessages(prev => [...prev, optimisticMsg]);
+        setLineQuota(prev =>
+            prev && prev.type !== 'none'
+                ? { ...prev, used: prev.used + 1, remaining: prev.remaining - 1 }
+                : prev
+        );
         try {
             await axios.post(
                 `${API}/api/inbox/sessions/${selectedSession.session_id}/reply?userId=${adminId}`,
-                { agent_id: agentId, message: replyText.trim() }
+                { agent_id: agentId, message: text }
             );
-            setReplyText('');
-            await fetchMessages(selectedSession.session_id);
-            await fetchSessions();
+            fetchSessions();
+            fetchLineQuota(); // 背景確認實際額度
         } catch (err) {
             console.error('Failed to send reply', err);
+            // 回滾所有樂觀更新
+            setMessages(prev => prev.filter(m => m !== optimisticMsg));
+            setReplyText(text);
+            setLineQuota(prev =>
+                prev && prev.type !== 'none'
+                    ? { ...prev, used: prev.used - 1, remaining: prev.remaining + 1 }
+                    : prev
+            );
             alert('發送失敗，請確認 LINE 部署設定是否正確。');
         } finally {
             setIsSending(false);
@@ -86,7 +120,7 @@ export default function InboxView({ currentAgent }) {
     };
 
     const handleKeyDown = (e) => {
-        if (e.key === 'Enter' && !e.shiftKey) {
+        if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
             e.preventDefault();
             handleSend();
         }
@@ -163,7 +197,7 @@ export default function InboxView({ currentAgent }) {
                     <p className="text-slate-500 text-sm">查看並回覆 LINE 用戶訊息</p>
                 </div>
                 <button
-                    onClick={fetchSessions}
+                    onClick={() => { fetchSessions(); fetchLineQuota(); }}
                     disabled={isLoadingSessions}
                     className="flex items-center gap-2 px-4 py-2 rounded-xl border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 text-sm font-medium transition-colors"
                 >
@@ -171,6 +205,42 @@ export default function InboxView({ currentAgent }) {
                     重新整理
                 </button>
             </div>
+
+            {/* LINE Quota Bar */}
+            {lineQuota && (
+                <div className="mb-4 px-4 py-3 bg-white rounded-2xl border border-slate-200">
+                    {lineQuota.type === 'none' ? (
+                        <p className="text-sm text-slate-400">方案：不限推播則數 ✓</p>
+                    ) : (() => {
+                        const pct = lineQuota.limit > 0 ? Math.round((lineQuota.used / lineQuota.limit) * 100) : 0;
+                        const isWarn = pct >= 75;
+                        const isCaution = pct >= 50 && pct < 75;
+                        const barColor = isWarn ? 'bg-red-500' : isCaution ? 'bg-orange-400' : 'bg-green-500';
+                        const textColor = isWarn ? 'text-red-600' : isCaution ? 'text-orange-600' : 'text-slate-500';
+                        return (
+                            <div>
+                                <div className="flex items-center justify-between mb-1.5">
+                                    <span className={`text-sm font-medium ${textColor}`}>
+                                        本月推播：已用 {lineQuota.used} / {lineQuota.limit} 則（剩餘 {lineQuota.remaining}）
+                                    </span>
+                                    <span className={`text-xs font-semibold ${textColor}`}>{pct}%</span>
+                                </div>
+                                <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
+                                    <div
+                                        className={`h-full rounded-full transition-all ${barColor}`}
+                                        style={{ width: `${Math.min(pct, 100)}%` }}
+                                    />
+                                </div>
+                                {isWarn && (
+                                    <p className="mt-1.5 text-xs text-red-600">
+                                        ⚠️ 額度即將用罄，請盡快升級 LINE 方案以免無法回覆客人。
+                                    </p>
+                                )}
+                            </div>
+                        );
+                    })()}
+                </div>
+            )}
 
             {/* Main grid */}
             <div className="flex flex-1 gap-4 overflow-hidden">
@@ -283,9 +353,10 @@ export default function InboxView({ currentAgent }) {
                                     value={replyText}
                                     onChange={(e) => setReplyText(e.target.value)}
                                     onKeyDown={handleKeyDown}
-                                    placeholder="輸入回覆訊息（Enter 發送，Shift+Enter 換行）"
+                                    disabled={isSending}
+                                    placeholder="輸入回覆訊息（Enter 換行，Ctrl+Enter 發送）"
                                     rows={2}
-                                    className="flex-1 resize-none rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-300"
+                                    className="flex-1 resize-none rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-300 disabled:opacity-50 disabled:cursor-not-allowed"
                                 />
                                 <button
                                     onClick={handleSend}
