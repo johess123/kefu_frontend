@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useLocation, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import config from '../config';
@@ -49,6 +49,7 @@ import {
 } from 'lucide-react';
 import Cookies from 'js-cookie';
 import { DEFAULT_HANDOFF_OPTIONS } from '../types';
+import InboxView from './InboxView';
 
 const SUB_SECTION_MAP = {
     'knowledge-base': 'Knowledge Base',
@@ -122,6 +123,12 @@ const BackendDashboard = () => {
     const [isAnalyzing, setIsAnalyzing] = useState(false);
     const [analysisReport, setAnalysisReport] = useState(null);
 
+    // CRM states
+    const [crmUsers, setCrmUsers] = useState([]);
+    const [isLoadingCrm, setIsLoadingCrm] = useState(false);
+    const [settingNotifyId, setSettingNotifyId] = useState(null);
+    const [selectedCrmUser, setSelectedCrmUser] = useState(null);
+
     const formatToken = (val) => {
         if (val === undefined || val === null) return '0';
         if (val >= 1000000) return (val / 1000000).toFixed(1) + 'M';
@@ -129,13 +136,52 @@ const BackendDashboard = () => {
         return val.toLocaleString();
     };
 
+    const fetchCrmUsers = useCallback(async () => {
+        if (!currentAgent?._id || !currentAgent?.admin_id) return;
+        setIsLoadingCrm(true);
+        try {
+            const res = await axios.get(
+                `${config.API_URL}/api/inbox/agents/${currentAgent._id}/users?userId=${currentAgent.admin_id}`
+            );
+            setCrmUsers(res.data.users || []);
+        } catch (err) {
+            console.error('Failed to fetch CRM users:', err);
+        } finally {
+            setIsLoadingCrm(false);
+        }
+    }, [currentAgent]);
+
+    useEffect(() => {
+        if (activeMenu === 'crm') fetchCrmUsers();
+    }, [activeMenu, fetchCrmUsers]);
+
+    // lineId = 卡片的 line_id（用於 loading state），newValue = 實際要寫入的值（'' = 清除）
+    const handleSetNotifyUser = async (lineId, newValue) => {
+        setSettingNotifyId(lineId);
+        try {
+            await axios.post(
+                `${config.API_URL}/api/inbox/agents/${currentAgent._id}/notify-user?userId=${currentAgent.admin_id}`,
+                { agent_id: currentAgent._id, line_user_id: newValue }
+            );
+            await fetchCrmUsers();
+            // 同步更新抽屜中的 is_notify_target
+            setSelectedCrmUser(prev =>
+                prev ? { ...prev, is_notify_target: prev.line_id === newValue } : null
+            );
+        } finally {
+            setSettingNotifyId(null);
+        }
+    };
+
     // Fetch agent by id when navigated directly (no location state)
     useEffect(() => {
         if (!currentAgent && routeAgentId) {
-            axios.get(`${config.API_URL}/api/admin/agents`)
+            const userId = Cookies.get('line_user_id');
+            axios.get(`${config.API_URL}/api/admin/agent/${routeAgentId}`, {
+                params: { userId }
+            })
                 .then(res => {
-                    const agent = res.data.find(a => a._id === routeAgentId);
-                    if (agent) setCurrentAgent(agent);
+                    if (res.data && res.data._id) setCurrentAgent(res.data);
                 })
                 .catch(err => console.error('Failed to fetch agent:', err));
         }
@@ -272,6 +318,10 @@ const BackendDashboard = () => {
     };
 
     const handleDeployLine = async () => {
+        if (!currentAgent?._id) {
+            alert('Agent 資料尚未載入，請重新整理頁面後再試。');
+            return;
+        }
         if (!lineConfig.accessToken || !lineConfig.channelSecret) {
             alert('請輸入 Channel Access Token 與 Channel Secret');
             return;
@@ -298,7 +348,8 @@ const BackendDashboard = () => {
             }
         } catch (error) {
             console.error('Failed to deploy LINE:', error);
-            alert('部署過程中發生錯誤');
+            const detail = error?.response?.data?.detail || error?.response?.data?.message || error?.message || '未知錯誤';
+            alert('部署過程中發生錯誤: ' + detail);
         } finally {
             setIsDeploying(false);
         }
@@ -649,8 +700,8 @@ const BackendDashboard = () => {
         },
         {
             group: '客戶互動', items: [
-                { id: 'inbox', label: '對話收件匣', icon: <MessageSquare size={20} />, isLocked: true },
-                { id: 'crm', label: '客戶管理 (CRM)', icon: <UserCircle size={20} />, isLocked: true },
+                { id: 'inbox', label: '對話收件匣', icon: <MessageSquare size={20} /> },
+                { id: 'crm', label: '客戶管理 (CRM)', icon: <UserCircle size={20} /> },
                 { id: 'channels', label: '渠道串接', icon: <Globe size={20} /> }
             ]
         },
@@ -1604,6 +1655,173 @@ const BackendDashboard = () => {
                                         </div>
                                     </div>
                                 );
+                            case 'crm':
+                                return (
+                                    <>
+                                        {/* CRM 主列表 */}
+                                        <div className="max-w-4xl animate-in fade-in duration-500">
+                                            <div className="mb-8">
+                                                <h1 className="text-3xl font-bold text-slate-900 mb-2">客戶管理 (CRM)</h1>
+                                                <p className="text-slate-500">管理與此 LINE Bot 互動過的所有會員</p>
+                                            </div>
+                                            {isLoadingCrm ? (
+                                                <div className="flex items-center justify-center py-20 text-slate-400">
+                                                    <Loader2 size={28} className="animate-spin mr-3" />
+                                                    載入中...
+                                                </div>
+                                            ) : crmUsers.length === 0 ? (
+                                                <div className="bg-white rounded-3xl border border-slate-200 p-16 flex flex-col items-center text-center">
+                                                    <UserCircle size={48} className="text-slate-300 mb-4" />
+                                                    <p className="text-slate-500 font-medium">尚無會員紀錄</p>
+                                                    <p className="text-slate-400 text-sm mt-1">有人傳訊給 LINE Bot 後就會出現在這裡</p>
+                                                </div>
+                                            ) : (
+                                                <div className="space-y-2">
+                                                    {crmUsers.map((user) => (
+                                                        <button
+                                                            key={user.line_id}
+                                                            onClick={() => setSelectedCrmUser(user)}
+                                                            className="w-full bg-white rounded-2xl border border-slate-200 shadow-sm px-5 py-4 flex items-center justify-between hover:border-brand-300 hover:shadow-md transition-all group"
+                                                        >
+                                                            <div className="flex items-center gap-4">
+                                                                <div className="w-11 h-11 bg-brand-50 rounded-full flex items-center justify-center flex-shrink-0 group-hover:bg-brand-100 transition-colors">
+                                                                    <span className="text-brand-600 font-bold text-base">
+                                                                        {user.user_name.charAt(0).toUpperCase()}
+                                                                    </span>
+                                                                </div>
+                                                                <div className="text-left">
+                                                                    <div className="flex items-center gap-2 flex-wrap">
+                                                                        <span className="font-semibold text-slate-800">{user.user_name}</span>
+                                                                        {user.is_notify_target && (
+                                                                            <span className="flex items-center gap-1 bg-orange-100 text-orange-600 text-[10px] font-bold px-2 py-0.5 rounded-full border border-orange-200">
+                                                                                <Bell size={10} />
+                                                                                通知接收者
+                                                                            </span>
+                                                                        )}
+                                                                    </div>
+                                                                    <div className="text-xs text-slate-400 mt-0.5">
+                                                                        {user.last_time ? `上次互動：${user.last_time}` : '無互動紀錄'}
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                            <ChevronRight size={18} className="text-slate-300 group-hover:text-brand-400 transition-colors flex-shrink-0" />
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        {/* 會員詳情 Drawer */}
+                                        {selectedCrmUser && (
+                                            <>
+                                                {/* 背景遮罩 */}
+                                                <div
+                                                    className="fixed inset-0 bg-slate-900/40 z-[100] backdrop-blur-sm"
+                                                    onClick={() => setSelectedCrmUser(null)}
+                                                />
+                                                {/* 抽屜面板 */}
+                                                <div className="fixed top-0 right-0 h-full w-full max-w-md bg-white z-[101] shadow-2xl flex flex-col animate-in slide-in-from-right duration-300">
+                                                    {/* Drawer Header */}
+                                                    <div className="p-6 border-b border-slate-100 flex items-center gap-4">
+                                                        <div className="w-12 h-12 bg-brand-50 rounded-full flex items-center justify-center flex-shrink-0">
+                                                            <span className="text-brand-600 font-bold text-lg">
+                                                                {selectedCrmUser.user_name.charAt(0).toUpperCase()}
+                                                            </span>
+                                                        </div>
+                                                        <div className="flex-1 min-w-0">
+                                                            <h2 className="text-lg font-bold text-slate-900 truncate">{selectedCrmUser.user_name}</h2>
+                                                            <p className="text-xs text-slate-400 font-mono truncate">{selectedCrmUser.line_id}</p>
+                                                        </div>
+                                                        <button
+                                                            onClick={() => setSelectedCrmUser(null)}
+                                                            className="w-9 h-9 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center transition-colors flex-shrink-0"
+                                                        >
+                                                            <X size={18} className="text-slate-500" />
+                                                        </button>
+                                                    </div>
+
+                                                    {/* Drawer Content */}
+                                                    <div className="flex-1 overflow-y-auto p-6 space-y-6">
+                                                        {/* 基本資料 */}
+                                                        <div>
+                                                            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">基本資料</h3>
+                                                            <div className="bg-slate-50 rounded-2xl p-4 space-y-3">
+                                                                <div className="flex justify-between items-center text-sm">
+                                                                    <span className="text-slate-500">上次互動</span>
+                                                                    <span className="font-medium text-slate-700">{selectedCrmUser.last_time || '無紀錄'}</span>
+                                                                </div>
+                                                                <div className="flex justify-between items-center text-sm gap-4">
+                                                                    <span className="text-slate-500 shrink-0">LINE ID</span>
+                                                                    <span className="font-mono text-xs text-slate-500 truncate">{selectedCrmUser.line_id}</span>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+
+                                                        {/* 通知設定 */}
+                                                        <div>
+                                                            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">🔔 通知設定</h3>
+                                                            <div className="bg-white border border-slate-200 rounded-2xl p-5 space-y-4">
+                                                                <div className="bg-amber-50 border border-amber-100 rounded-xl p-3 flex items-start gap-2">
+                                                                    <Info size={14} className="text-amber-500 mt-0.5 shrink-0" />
+                                                                    <p className="text-xs text-amber-700 leading-relaxed">
+                                                                        指派通知接收者後，當顧客轉人工客服，系統會透過 LINE 通知該成員。曾與 LINE Bot 互動過的所有用戶（含歷史紀錄）都會顯示於此；尚未傳過訊息的員工，需先向 Bot 發送一則訊息才會出現。
+                                                                    </p>
+                                                                </div>
+                                                                {selectedCrmUser.is_notify_target ? (
+                                                                    <div className="space-y-3">
+                                                                        <div className="flex items-center gap-2 text-orange-600 text-sm font-semibold">
+                                                                            <Bell size={15} />
+                                                                            目前為通知接收者
+                                                                        </div>
+                                                                        <button
+                                                                            onClick={() => handleSetNotifyUser(selectedCrmUser.line_id, '')}
+                                                                            disabled={settingNotifyId !== null}
+                                                                            className="w-full py-2.5 rounded-xl text-sm font-semibold bg-slate-100 text-slate-500 hover:bg-red-50 hover:text-red-600 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                                                                        >
+                                                                            {settingNotifyId === selectedCrmUser.line_id ? (
+                                                                                <span className="flex items-center justify-center gap-2"><Loader2 size={14} className="animate-spin" />取消中...</span>
+                                                                            ) : '取消指派'}
+                                                                        </button>
+                                                                    </div>
+                                                                ) : (
+                                                                    <button
+                                                                        onClick={() => handleSetNotifyUser(selectedCrmUser.line_id, selectedCrmUser.line_id)}
+                                                                        disabled={settingNotifyId !== null}
+                                                                        className="w-full py-2.5 rounded-xl text-sm font-semibold bg-brand-600 text-white hover:bg-brand-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                                                                    >
+                                                                        {settingNotifyId === selectedCrmUser.line_id ? (
+                                                                            <span className="flex items-center justify-center gap-2"><Loader2 size={14} className="animate-spin" />設定中...</span>
+                                                                        ) : '設為通知接收者'}
+                                                                    </button>
+                                                                )}
+                                                            </div>
+                                                        </div>
+
+                                                        {/* 標籤（即將推出） */}
+                                                        <div>
+                                                            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">🏷️ 標籤</h3>
+                                                            <div className="bg-slate-50 border border-dashed border-slate-200 rounded-2xl p-5 flex flex-col items-center text-center gap-1">
+                                                                <p className="text-sm font-medium text-slate-400">即將推出</p>
+                                                                <p className="text-xs text-slate-300">貼上標籤後可進行精準行銷</p>
+                                                            </div>
+                                                        </div>
+
+                                                        {/* 備註（即將推出） */}
+                                                        <div>
+                                                            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">📝 備註</h3>
+                                                            <div className="bg-slate-50 border border-dashed border-slate-200 rounded-2xl p-5 flex flex-col items-center text-center gap-1">
+                                                                <p className="text-sm font-medium text-slate-400">即將推出</p>
+                                                                <p className="text-xs text-slate-300">紀錄會員特殊需求或偏好</p>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </>
+                                        )}
+                                    </>
+                                );
+                            case 'inbox':
+                                return <InboxView currentAgent={currentAgent} />;
                             case 'channels':
                                 return (
                                     <div className="max-w-6xl animate-in fade-in duration-500">
