@@ -45,7 +45,8 @@ import {
     Sparkles,
     Stethoscope,
     Crown,
-    Power
+    Power,
+    Search
 } from 'lucide-react';
 import Cookies from 'js-cookie';
 import { DEFAULT_HANDOFF_OPTIONS } from '../types';
@@ -130,6 +131,7 @@ const BackendDashboard = () => {
     const [isLoadingCrm, setIsLoadingCrm] = useState(false);
     const [settingNotifyId, setSettingNotifyId] = useState(null);
     const [selectedCrmUser, setSelectedCrmUser] = useState(null);
+    const [notifySearch, setNotifySearch] = useState('');
 
     const formatToken = (val) => {
         if (val === undefined || val === null) return '0';
@@ -154,8 +156,8 @@ const BackendDashboard = () => {
     }, [currentAgent]);
 
     useEffect(() => {
-        if (activeMenu === 'crm') fetchCrmUsers();
-    }, [activeMenu, fetchCrmUsers]);
+        if (activeMenu === 'crm' || editingSubagent === 'Escalation Manager') fetchCrmUsers();
+    }, [activeMenu, editingSubagent, fetchCrmUsers]);
 
     // lineId = 卡片的 line_id（用於 loading state），newValue = 實際要寫入的值（'' = 清除）
     const handleSetNotifyUser = async (lineId, newValue) => {
@@ -1266,6 +1268,83 @@ const BackendDashboard = () => {
                                                     </button>
                                                 </div>
                                             </div>
+                                            {/* 通知設定 Card */}
+                                            <div className="bg-white rounded-[32px] border border-slate-200 shadow-xl shadow-slate-200/50 overflow-hidden mt-6">
+                                                <div className="p-8 border-b border-slate-100 bg-slate-50/30">
+                                                    <h3 className="font-bold text-slate-700 flex items-center gap-3">
+                                                        <Bell size={18} className="text-brand-600" />
+                                                        2. 通知設定 (Who to Notify)
+                                                    </h3>
+                                                </div>
+                                                <div className="p-8">
+                                                    <div className="bg-amber-50 border border-amber-100 rounded-xl p-3 flex items-start gap-2 mb-6">
+                                                        <Info size={14} className="text-amber-500 mt-0.5 shrink-0" />
+                                                        <p className="text-xs text-amber-700 leading-relaxed">
+                                                            指派通知接收者後，當顧客轉人工客服，系統會透過 LINE 通知該成員。曾與 LINE Bot 互動過的所有用戶（含歷史紀錄）都會顯示於此；尚未傳過訊息的員工，需先向 Bot 發送一則訊息才會出現。
+                                                        </p>
+                                                    </div>
+                                                    <div className="relative mb-4">
+                                                        <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                                                        <input
+                                                            type="text"
+                                                            value={notifySearch}
+                                                            onChange={(e) => setNotifySearch(e.target.value)}
+                                                            placeholder="搜尋成員名稱..."
+                                                            className="w-full pl-9 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-700 placeholder:text-slate-400 outline-none focus:border-brand-400 transition-all"
+                                                        />
+                                                    </div>
+                                                    {isLoadingCrm ? (
+                                                        <div className="flex items-center justify-center py-10 text-slate-400">
+                                                            <Loader2 size={20} className="animate-spin mr-2" />
+                                                            載入中...
+                                                        </div>
+                                                    ) : crmUsers.filter(u => u.user_name.toLowerCase().includes(notifySearch.toLowerCase())).length === 0 ? (
+                                                        <div className="py-8 text-center text-slate-400 text-sm">
+                                                            {notifySearch ? '找不到符合的成員' : '尚無用戶紀錄，請先向 LINE Bot 發送訊息'}
+                                                        </div>
+                                                    ) : (
+                                                        <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
+                                                            {crmUsers
+                                                                .filter(u => u.user_name.toLowerCase().includes(notifySearch.toLowerCase()))
+                                                                .map((user) => (
+                                                                    <div key={user.line_id} className="flex items-center justify-between px-4 py-3 rounded-xl border border-slate-100 bg-slate-50 hover:border-slate-200 transition-all">
+                                                                        <div className="flex items-center gap-3 min-w-0">
+                                                                            <div className="w-9 h-9 bg-brand-50 rounded-full flex items-center justify-center flex-shrink-0">
+                                                                                <span className="text-brand-600 font-bold text-sm">{user.user_name.charAt(0).toUpperCase()}</span>
+                                                                            </div>
+                                                                            <div className="min-w-0">
+                                                                                <p className="text-sm font-semibold text-slate-800 truncate">{user.user_name}</p>
+                                                                                <p className="text-xs text-slate-400 font-mono truncate">{user.line_id}</p>
+                                                                            </div>
+                                                                        </div>
+                                                                        {user.is_notify_target ? (
+                                                                            <div className="flex items-center gap-2 flex-shrink-0 ml-3">
+                                                                                <span className="flex items-center gap-1 bg-orange-100 text-orange-600 text-[10px] font-bold px-2 py-1 rounded-full border border-orange-200">
+                                                                                    <Bell size={10} /> 目前接收者
+                                                                                </span>
+                                                                                <button
+                                                                                    onClick={() => handleSetNotifyUser(user.line_id, '')}
+                                                                                    disabled={settingNotifyId !== null}
+                                                                                    className="text-xs text-slate-400 hover:text-red-500 transition-colors disabled:opacity-50 px-2 py-1 rounded-lg hover:bg-red-50"
+                                                                                >
+                                                                                    {settingNotifyId === user.line_id ? <Loader2 size={12} className="animate-spin" /> : '取消'}
+                                                                                </button>
+                                                                            </div>
+                                                                        ) : (
+                                                                            <button
+                                                                                onClick={() => handleSetNotifyUser(user.line_id, user.line_id)}
+                                                                                disabled={settingNotifyId !== null}
+                                                                                className="flex-shrink-0 ml-3 text-xs font-semibold bg-brand-600 text-white px-3 py-1.5 rounded-xl hover:bg-brand-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                                                                            >
+                                                                                {settingNotifyId === user.line_id ? <Loader2 size={12} className="animate-spin" /> : '設為接收者'}
+                                                                            </button>
+                                                                        )}
+                                                                    </div>
+                                                                ))}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
                                         </div>
                                     );
                                 }
@@ -1704,12 +1783,6 @@ const BackendDashboard = () => {
                                                                 <div className="text-left">
                                                                     <div className="flex items-center gap-2 flex-wrap">
                                                                         <span className="font-semibold text-slate-800">{user.user_name}</span>
-                                                                        {user.is_notify_target && (
-                                                                            <span className="flex items-center gap-1 bg-orange-100 text-orange-600 text-[10px] font-bold px-2 py-0.5 rounded-full border border-orange-200">
-                                                                                <Bell size={10} />
-                                                                                通知接收者
-                                                                            </span>
-                                                                        )}
                                                                     </div>
                                                                     <div className="text-xs text-slate-400 mt-0.5">
                                                                         {user.last_time ? `上次互動：${user.last_time}` : '無互動紀錄'}
@@ -1766,46 +1839,6 @@ const BackendDashboard = () => {
                                                                     <span className="text-slate-500 shrink-0">LINE ID</span>
                                                                     <span className="font-mono text-xs text-slate-500 truncate">{selectedCrmUser.line_id}</span>
                                                                 </div>
-                                                            </div>
-                                                        </div>
-
-                                                        {/* 通知設定 */}
-                                                        <div>
-                                                            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">🔔 通知設定</h3>
-                                                            <div className="bg-white border border-slate-200 rounded-2xl p-5 space-y-4">
-                                                                <div className="bg-amber-50 border border-amber-100 rounded-xl p-3 flex items-start gap-2">
-                                                                    <Info size={14} className="text-amber-500 mt-0.5 shrink-0" />
-                                                                    <p className="text-xs text-amber-700 leading-relaxed">
-                                                                        指派通知接收者後，當顧客轉人工客服，系統會透過 LINE 通知該成員。曾與 LINE Bot 互動過的所有用戶（含歷史紀錄）都會顯示於此；尚未傳過訊息的員工，需先向 Bot 發送一則訊息才會出現。
-                                                                    </p>
-                                                                </div>
-                                                                {selectedCrmUser.is_notify_target ? (
-                                                                    <div className="space-y-3">
-                                                                        <div className="flex items-center gap-2 text-orange-600 text-sm font-semibold">
-                                                                            <Bell size={15} />
-                                                                            目前為通知接收者
-                                                                        </div>
-                                                                        <button
-                                                                            onClick={() => handleSetNotifyUser(selectedCrmUser.line_id, '')}
-                                                                            disabled={settingNotifyId !== null}
-                                                                            className="w-full py-2.5 rounded-xl text-sm font-semibold bg-slate-100 text-slate-500 hover:bg-red-50 hover:text-red-600 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                                                                        >
-                                                                            {settingNotifyId === selectedCrmUser.line_id ? (
-                                                                                <span className="flex items-center justify-center gap-2"><Loader2 size={14} className="animate-spin" />取消中...</span>
-                                                                            ) : '取消指派'}
-                                                                        </button>
-                                                                    </div>
-                                                                ) : (
-                                                                    <button
-                                                                        onClick={() => handleSetNotifyUser(selectedCrmUser.line_id, selectedCrmUser.line_id)}
-                                                                        disabled={settingNotifyId !== null}
-                                                                        className="w-full py-2.5 rounded-xl text-sm font-semibold bg-brand-600 text-white hover:bg-brand-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                                                                    >
-                                                                        {settingNotifyId === selectedCrmUser.line_id ? (
-                                                                            <span className="flex items-center justify-center gap-2"><Loader2 size={14} className="animate-spin" />設定中...</span>
-                                                                        ) : '設為通知接收者'}
-                                                                    </button>
-                                                                )}
                                                             </div>
                                                         </div>
 
