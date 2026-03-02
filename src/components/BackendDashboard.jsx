@@ -50,6 +50,7 @@ import {
 import Cookies from 'js-cookie';
 import { DEFAULT_HANDOFF_OPTIONS } from '../types';
 import InboxView from './InboxView';
+import { useAuth } from '../context/AuthContext';
 
 const SUB_SECTION_MAP = {
     'knowledge-base': 'Knowledge Base',
@@ -63,6 +64,7 @@ const EDITING_TO_SUB = {
 };
 
 const BackendDashboard = () => {
+    const { userName, userEmail, userPicture } = useAuth();
     const { agentId: routeAgentId, '*': remainingPath } = useParams();
     const pathParts = (remainingPath || '').split('/').filter(Boolean);
     const section = pathParts[0] || undefined;
@@ -790,12 +792,16 @@ const BackendDashboard = () => {
                     <div className="pt-4 border-t border-slate-100">
                         <div className="bg-slate-50 rounded-2xl p-4">
                             <div className="flex items-center gap-3 mb-3">
-                                <div className="w-10 h-10 bg-slate-800 rounded-full flex items-center justify-center text-white font-bold text-sm">
-                                    商
-                                </div>
-                                <div className="flex-1">
-                                    <h6 className="text-sm font-bold text-slate-900">商家管理員</h6>
-                                    <p className="text-[10px] text-slate-500">Pro Plan</p>
+                                {userPicture ? (
+                                    <img src={userPicture} alt="avatar" className="w-10 h-10 rounded-full object-cover" />
+                                ) : (
+                                    <div className="w-10 h-10 bg-slate-800 rounded-full flex items-center justify-center text-white font-bold text-sm">
+                                        {(userName || userEmail || '?')[0].toUpperCase()}
+                                    </div>
+                                )}
+                                <div className="flex-1 min-w-0">
+                                    <h6 className="text-sm font-bold text-slate-900 truncate">{userName || '管理員'}</h6>
+                                    <p className="text-[10px] text-slate-500 truncate">{userEmail || ''}</p>
                                 </div>
                                 <button onClick={() => navigate('/')} className="text-slate-400 hover:text-slate-600">
                                     <ExternalLink size={16} />
@@ -851,10 +857,16 @@ const BackendDashboard = () => {
                         </button> */}
                         <div className="hidden sm:flex items-center gap-4 border-l border-slate-100 pl-4 ml-4">
                             <div className="text-right">
-                                <div className="text-xs font-bold text-slate-900">商家管理員</div>
-                                <div className="text-[10px] text-slate-400">ID: 8820412</div>
+                                <div className="text-xs font-bold text-slate-900">{userName || '管理員'}</div>
+                                <div className="text-[10px] text-slate-400">{userEmail || ''}</div>
                             </div>
-                            <div className="w-10 h-10 bg-slate-200 rounded-xl"></div>
+                            {userPicture ? (
+                                <img src={userPicture} alt="avatar" className="w-10 h-10 rounded-xl object-cover" />
+                            ) : (
+                                <div className="w-10 h-10 bg-slate-700 rounded-xl flex items-center justify-center text-white font-bold text-sm">
+                                    {(userName || userEmail || '?')[0].toUpperCase()}
+                                </div>
+                            )}
                         </div>
                         {/* Menu icon in top right as per Image 3/4 */}
                         <button onClick={() => setIsSidebarOpen(true)} className="lg:hidden text-slate-600">
