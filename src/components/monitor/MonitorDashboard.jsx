@@ -48,7 +48,7 @@ const commonOptions = () => ({
 });
 
 const MonitorDashboard = () => {
-    const { lineUserId } = useAuth();
+    const { userId } = useAuth();
     const [days, setDays] = useState('7');
     const [usageType, setUsageType] = useState('全部');
     const [summary, setSummary] = useState({ total_requests: 0, total_tokens: 0, total_cost: 0 });
@@ -67,7 +67,7 @@ const MonitorDashboard = () => {
 
     const fetchData = async () => {
         try {
-            const res = await fetch(`${API}/stats?days=${days}&usage_type=${encodeURIComponent(usageType)}&userId=${lineUserId}`);
+            const res = await fetch(`${API}/stats?days=${days}&usage_type=${encodeURIComponent(usageType)}&userId=${userId}`);
             const data = await res.json();
             setGlobalData(data);
             setSummary(data.summary);

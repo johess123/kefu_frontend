@@ -8,7 +8,7 @@ Chart.register(...registerables);
 const API = `${config.API_URL}/api/monitor`;
 
 const MonitorUsers = () => {
-    const { lineUserId } = useAuth();
+    const { userId } = useAuth();
     const [users, setUsers] = useState([]);
     const [search, setSearch] = useState('');
     const [selectedAdmin, setSelectedAdmin] = useState(null);
@@ -24,7 +24,7 @@ const MonitorUsers = () => {
 
     const fetchAdmins = async () => {
         try {
-            const res = await fetch(`${API}/users?search=${encodeURIComponent(search)}&userId=${lineUserId}`);
+            const res = await fetch(`${API}/users?search=${encodeURIComponent(search)}&userId=${userId}`);
             if (!res.ok) return;
             const data = await res.json();
             setUsers(data.users || []);
@@ -45,7 +45,7 @@ const MonitorUsers = () => {
         setAdminDetails(null);
 
         try {
-            const res = await fetch(`${API}/users/${user.id}/details?userId=${lineUserId}`);
+            const res = await fetch(`${API}/users/${user.id}/details?userId=${userId}`);
             const data = await res.json();
             setAdminDetails(data);
         } catch (err) {
@@ -98,7 +98,7 @@ const MonitorUsers = () => {
         setMessages(null);
         setSessions(null);
         try {
-            const res = await fetch(`${API}/agents/${agentId}/chats?userId=${lineUserId}`);
+            const res = await fetch(`${API}/agents/${agentId}/chats?userId=${userId}`);
             const data = await res.json();
             setSessions(data.sessions || []);
         } catch (err) {
@@ -108,7 +108,7 @@ const MonitorUsers = () => {
 
     const selectSession = async (sessionId) => {
         try {
-            const res = await fetch(`${API}/sessions/${sessionId}/messages?userId=${lineUserId}`);
+            const res = await fetch(`${API}/sessions/${sessionId}/messages?userId=${userId}`);
             const data = await res.json();
             setMessages(data.messages || []);
         } catch (err) {
@@ -171,7 +171,7 @@ const MonitorUsers = () => {
                                         style={{ background: selectedAdmin?.id === u.id ? 'var(--hover-bg)' : undefined }}
                                     >
                                         <td>{u.name}</td>
-                                        <td><code style={{ fontSize: '0.8rem' }}>{u.line_id || 'N/A'}</code></td>
+                                        <td><code style={{ fontSize: '0.8rem' }}>{u.google_id || 'N/A'}</code></td>
                                         <td>{u.created_at}</td>
                                         <td>{u.agent_count}</td>
                                         <td style={{ color: 'var(--accent-purple)', fontWeight: 600 }}>

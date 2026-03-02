@@ -1,5 +1,4 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import liff from '@line/liff';
 import axios from 'axios';
 import Cookies from 'js-cookie';
 import config from '../config';
@@ -10,66 +9,66 @@ export const AuthProvider = ({ children }) => {
     const [isVerifying, setIsVerifying] = useState(true);
     const [isAuthorized, setIsAuthorized] = useState(false);
     const [isMonitorAllowed, setIsMonitorAllowed] = useState(false);
-    const [lineUserId, setLineUserId] = useState(null);
-    const [lineUserName, setLineUserName] = useState(null);
+    const [userId, setUserId] = useState(null);
+    const [userName, setUserName] = useState(null);
     const [postLoginRedirect, setPostLoginRedirect] = useState(null);
 
     useEffect(() => {
-        const initLIFF = async () => {
-            try {
-                await liff.init({ liffId: import.meta.env.VITE_LIFF_ID });
-                if (!liff.isLoggedIn()) {
-                    sessionStorage.setItem('intended_path', window.location.pathname);
-                    liff.login();
-                    return;
-                }
-
-                const intendedPath = sessionStorage.getItem('intended_path');
-                if (intendedPath) {
-                    sessionStorage.removeItem('intended_path');
-                    if (intendedPath !== window.location.pathname) {
-                        setPostLoginRedirect(intendedPath);
-                    }
-                }
-
-                const profile = await liff.getProfile();
-                const userId = profile.userId;
-
-                Cookies.set('line_user_id', userId, { expires: 7 });
-                Cookies.set('line_user_name', profile.displayName, { expires: 7 });
-
-                const response = await axios.post(`${config.API_URL}/api/admin/login`, {
-                    userId: profile.userId,
-                    name: profile.displayName
-                });
-
-                if (response.data.isAdmin) {
-                    setIsAuthorized(true);
-                    setLineUserId(userId);
-                    setLineUserName(profile.displayName);
-                    setIsMonitorAllowed(response.data.isMonitor === true);
-                } else {
-                    setIsAuthorized(false);
-                }
-            } catch (error) {
-                console.error('LIFF 初始化失敗:', error);
-                setIsAuthorized(false);
-            } finally {
-                setIsVerifying(false);
-            }
-        };
-        initLIFF();
+        const savedUserId = Cookies.get('google_user_id');
+        const savedUserName = Cookies.get('google_user_name');
+        if (savedUserId) {
+            setUserId(savedUserId);
+            setUserName(savedUserName || '');
+            setIsAuthorized(true);
+            setIsMonitorAllowed(Cookies.get('is_monitor') === 'true');
+        }
+        setIsVerifying(false);
     }, []);
+
+    const logout = () => {
+        Cookies.remove('google_user_id');
+        Cookies.remove('google_user_name');
+        Cookies.remove('is_monitor');
+        setIsAuthorized(false);
+        setUserId(null);
+        setUserName(null);
+        setIsMonitorAllowed(false);
+    };
+
+    const handleGoogleSuccess = async (credentialResponse) => {
+        try {
+            const response = await axios.post(`${config.API_URL}/api/admin/login`, {
+                credential: credentialResponse.credential
+            });
+
+            const { isAdmin, isMonitor, googleId, name } = response.data;
+
+            if (isAdmin) {
+                setIsAuthorized(true);
+                setUserId(googleId);
+                setUserName(name);
+                setIsMonitorAllowed(isMonitor === true);
+
+                Cookies.set('google_user_id', googleId, { expires: 7 });
+                Cookies.set('google_user_name', name, { expires: 7 });
+                Cookies.set('is_monitor', String(isMonitor === true), { expires: 7 });
+            }
+        } catch (error) {
+            console.error('Google login failed:', error);
+        }
+    };
 
     return (
         <AuthContext.Provider value={{
             isVerifying,
             isAuthorized,
-            lineUserId,
-            lineUserName,
+            userId,
+            userName,
             isMonitorAllowed,
             postLoginRedirect,
-            setPostLoginRedirect
+            setPostLoginRedirect,
+            handleGoogleSuccess,
+            logout
         }}>
             {children}
         </AuthContext.Provider>
