@@ -176,7 +176,7 @@ const BackendDashboard = () => {
     // Fetch agent by id when navigated directly (no location state)
     useEffect(() => {
         if (!currentAgent && routeAgentId) {
-            const userId = Cookies.get('line_user_id');
+            const userId = Cookies.get('google_user_id');
             axios.get(`${config.API_URL}/api/admin/agent/${routeAgentId}`, {
                 params: { userId }
             })
@@ -392,8 +392,8 @@ const BackendDashboard = () => {
         setLastResponseInfo(null);
 
         try {
-            const line_user_id = Cookies.get('line_user_id');
-            const line_user_name = Cookies.get('line_user_name');
+            const line_user_id = Cookies.get('google_user_id');
+            const line_user_name = Cookies.get('google_user_name');
             const response = await axios.post(`${config.API_URL}/api/chat`, {
                 message: msgText,
                 line_user_id: line_user_id,
@@ -458,7 +458,7 @@ const BackendDashboard = () => {
 
         setIsAnalyzing(true);
         try {
-            const line_user_id = Cookies.get('line_user_id');
+            const line_user_id = Cookies.get('google_user_id');
             const response = await axios.post(`${config.API_URL}/api/analyze_faqs`, {
                 brandDescription: currentAgent?.config?.raw_config?.services || currentAgent?.name || '',
                 faqs: editingFaqs.map((f, i) => ({ ...f, id: f.id || i.toString() })),
@@ -510,7 +510,7 @@ const BackendDashboard = () => {
 
         setOptimizingIndices(prev => new Set(prev).add(idx));
         try {
-            const line_user_id = Cookies.get('line_user_id');
+            const line_user_id = Cookies.get('google_user_id');
             const response = await axios.post(`${config.API_URL}/api/optimize_faq`, {
                 question: faq.question,
                 answer: faq.answer,

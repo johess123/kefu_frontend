@@ -183,7 +183,7 @@ const StepWizard = ({ formData, setFormData, onComplete }) => {
 
             setIsGeneratingFaqs(true);
             try {
-                const line_user_id = Cookies.get('line_user_id');
+                const line_user_id = Cookies.get('google_user_id');
                 const response = await axios.post(`${config.API_URL}/api/generate_faqs`, {
                     brandDescription: formData.brandDescription,
                     websiteUrl: formData.websiteUrl || '',
@@ -219,7 +219,7 @@ const StepWizard = ({ formData, setFormData, onComplete }) => {
 
             setOptimizingFaqIds(prev => new Set(prev).add(faqId));
             try {
-                const line_user_id = Cookies.get('line_user_id');
+                const line_user_id = Cookies.get('google_user_id');
                 const response = await axios.post(`${config.API_URL}/api/optimize_faq`, {
                     question: faq.question,
                     answer: faq.answer,
@@ -277,7 +277,7 @@ const StepWizard = ({ formData, setFormData, onComplete }) => {
 
             setIsAnalyzing(true);
             try {
-                const line_user_id = Cookies.get('line_user_id');
+                const line_user_id = Cookies.get('google_user_id');
                 const response = await axios.post(`${config.API_URL}/api/analyze_faqs`, {
                     brandDescription: formData.brandDescription,
                     faqs: formData.faqs,

@@ -15,7 +15,7 @@ const StepReview = ({ onNext, onEdit, formData, setFormData, sessionId, agentId,
     const handleGenerate = async () => {
         setIsLoading(true);
         try {
-            const line_user_id = Cookies.get('line_user_id');
+            const line_user_id = Cookies.get('google_user_id');
             const response = await axios.post(`${config.API_URL}/api/generate_prompt`, {
                 ...formData,
                 line_user_id
@@ -43,7 +43,7 @@ const StepReview = ({ onNext, onEdit, formData, setFormData, sessionId, agentId,
     const handleConfirm = async () => {
         setIsLoading(true);
         try {
-            const line_user_id = Cookies.get('line_user_id');
+            const line_user_id = Cookies.get('google_user_id');
             const res = await axios.post(`${config.API_URL}/api/confirm_setup`, {
                 config_id: reviewData.config_id,
                 session_id: sessionId,

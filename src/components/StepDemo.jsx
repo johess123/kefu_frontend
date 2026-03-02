@@ -33,8 +33,8 @@ const StepDemo = ({ formData, sessionId, setSessionId, agentId, onNext, setCurre
         setLastResponseInfo(null);
 
         try {
-            const line_user_id = Cookies.get('line_user_id');
-            const line_user_name = Cookies.get('line_user_name');
+            const line_user_id = Cookies.get('google_user_id');
+            const line_user_name = Cookies.get('google_user_name');
             const response = await axios.post(`${config.API_URL}/api/chat`, {
                 message: msgText,
                 line_user_id: line_user_id,
