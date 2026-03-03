@@ -1,21 +1,51 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Edit2, Bot, Calendar, ArrowRight, Loader2, MessageCircle, ExternalLink, LayoutGrid, BarChart2 } from 'lucide-react';
+import { Plus, Bot, Calendar, ArrowRight, Loader2, MessageCircle, ExternalLink, LayoutGrid, BarChart2, LogOut, AlertTriangle } from 'lucide-react';
 import axios from 'axios';
 import config from '../config';
 import { useAuth } from '../context/AuthContext';
 
+const LogoutModal = ({ onConfirm, onCancel }) => (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
+        style={{ background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)' }}>
+        <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-sm border border-slate-100 animate-[fade-up_0.2s_ease]">
+            <div className="w-12 h-12 bg-amber-50 rounded-xl flex items-center justify-center mx-auto mb-4">
+                <AlertTriangle size={24} className="text-amber-500" />
+            </div>
+            <h3 className="text-lg font-bold text-slate-800 text-center mb-1">確認登出？</h3>
+            <p className="text-slate-500 text-sm text-center mb-6">
+                登出後需要重新使用 Google 帳號登入才能進入系統。
+            </p>
+            <div className="flex gap-3">
+                <button
+                    onClick={onCancel}
+                    className="flex-1 py-2.5 px-4 rounded-xl border border-slate-200 text-slate-600 font-semibold text-sm hover:bg-slate-50 transition-colors cursor-pointer"
+                >
+                    取消
+                </button>
+                <button
+                    onClick={onConfirm}
+                    className="flex-1 py-2.5 px-4 rounded-xl bg-red-500 hover:bg-red-600 text-white font-semibold text-sm transition-colors cursor-pointer"
+                >
+                    確認登出
+                </button>
+            </div>
+        </div>
+    </div>
+);
+
 const AgentHome = () => {
     const navigate = useNavigate();
-    const { lineUserId, lineUserName, isMonitorAllowed } = useAuth();
+    const { userId, userName, isMonitorAllowed, logout } = useAuth();
     const [agents, setAgents] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [showLogoutModal, setShowLogoutModal] = useState(false);
 
     useEffect(() => {
         const fetchAgents = async () => {
             try {
                 const response = await axios.get(`${config.API_URL}/api/admin/agents`, {
-                    params: { userId: lineUserId }
+                    params: { userId: userId }
                 });
                 setAgents(response.data);
             } catch (error) {
@@ -25,7 +55,7 @@ const AgentHome = () => {
             }
         };
         fetchAgents();
-    }, [lineUserId]);
+    }, [userId]);
 
     if (loading) {
         return (
@@ -36,13 +66,14 @@ const AgentHome = () => {
     }
 
     return (
+        <>
         <div className="min-h-screen bg-slate-50 p-4 md:p-8">
             <div className="max-w-5xl mx-auto">
                 {/* Header */}
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
                     <div>
                         <h1 className="text-3xl font-bold text-slate-900 mb-2">
-                            歡迎回來, {lineUserName || '管理者'}
+                            歡迎回來, {userName || '管理者'}
                         </h1>
                         <p className="text-slate-500">管理您的 AI 客服代理</p>
                     </div>
@@ -62,6 +93,13 @@ const AgentHome = () => {
                         >
                             <Plus size={20} />
                             建立新 Agent
+                        </button>
+                        <button
+                            onClick={() => setShowLogoutModal(true)}
+                            className="flex items-center justify-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold py-3 px-4 rounded-xl transition-all active:scale-95 cursor-pointer"
+                            title="登出"
+                        >
+                            <LogOut size={18} />
                         </button>
                     </div>
                 </div>
@@ -143,6 +181,14 @@ const AgentHome = () => {
                 )}
             </div>
         </div>
+
+        {showLogoutModal && (
+            <LogoutModal
+                onConfirm={() => { setShowLogoutModal(false); logout(); }}
+                onCancel={() => setShowLogoutModal(false)}
+            />
+        )}
+        </>
     );
 };
 

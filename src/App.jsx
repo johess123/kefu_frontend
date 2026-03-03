@@ -1,6 +1,5 @@
-import React, { useEffect } from 'react';
-import { Routes, Route, useNavigate } from 'react-router-dom';
-import { useAuth } from './context/AuthContext';
+import React from 'react';
+import { Routes, Route } from 'react-router-dom';
 import { ProtectedRoute, MonitorRoute } from './components/ProtectedRoute';
 import AgentHome from './components/AgentHome';
 import BackendDashboard from './components/BackendDashboard';
@@ -11,16 +10,6 @@ import MonitorRecords from './components/monitor/MonitorRecords';
 import MonitorUsers from './components/monitor/MonitorUsers';
 
 const App = () => {
-    const { postLoginRedirect, setPostLoginRedirect } = useAuth();
-    const navigate = useNavigate();
-
-    useEffect(() => {
-        if (postLoginRedirect) {
-            setPostLoginRedirect(null);
-            navigate(postLoginRedirect, { replace: true });
-        }
-    }, [postLoginRedirect]);
-
     return (
         <Routes>
             <Route element={<ProtectedRoute />}>

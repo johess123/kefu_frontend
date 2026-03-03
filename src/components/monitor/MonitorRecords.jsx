@@ -6,7 +6,7 @@ const API = `${config.API_URL}/api/monitor`;
 const LIMIT = 10;
 
 const MonitorRecords = () => {
-    const { lineUserId } = useAuth();
+    const { userId } = useAuth();
     const [records, setRecords] = useState([]);
     const [currentPage, setCurrentPage] = useState(1);
     const [usageType, setUsageType] = useState('全部');
@@ -18,7 +18,7 @@ const MonitorRecords = () => {
         setLoading(true);
         try {
             const res = await fetch(
-                `${API}/records?page=${page}&limit=${LIMIT}&usage_type=${encodeURIComponent(usageType)}&admin_query=${encodeURIComponent(adminQuery)}&userId=${lineUserId}`
+                `${API}/records?page=${page}&limit=${LIMIT}&usage_type=${encodeURIComponent(usageType)}&admin_query=${encodeURIComponent(adminQuery)}&userId=${userId}`
             );
             const data = await res.json();
             setRecords(data.records || []);
