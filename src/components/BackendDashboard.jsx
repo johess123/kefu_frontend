@@ -81,9 +81,14 @@ const BackendDashboard = () => {
 
     // LINE Integration states
     const [isLineModalOpen, setIsLineModalOpen] = useState(false);
+
+    // Telegram Integration states
+    const [isTelegramModalOpen, setIsTelegramModalOpen] = useState(false);
+    const [telegramBotToken, setTelegramBotToken] = useState('');
+    const [isTelegramDeploying, setIsTelegramDeploying] = useState(false);
     const [lineConfig, setLineConfig] = useState({
-        accessToken: currentAgent?.deploy_config?.access_token || '',
-        channelSecret: currentAgent?.deploy_config?.channel_secret || ''
+        accessToken: currentAgent?.deploy_config?.line?.access_token || currentAgent?.deploy_config?.access_token || '',
+        channelSecret: currentAgent?.deploy_config?.line?.channel_secret || currentAgent?.deploy_config?.channel_secret || ''
     });
     const [isDeploying, setIsDeploying] = useState(false);
 
@@ -268,6 +273,18 @@ const BackendDashboard = () => {
         fetchAgentData();
     }, [currentAgent?._id]);
 
+    // 當 currentAgent 更新時，同步串接設定欄位的預填值
+    useEffect(() => {
+        if (currentAgent) {
+            const dc = currentAgent.deploy_config || {};
+            setLineConfig({
+                accessToken: dc.line?.access_token || dc.access_token || '',
+                channelSecret: dc.line?.channel_secret || dc.channel_secret || '',
+            });
+            setTelegramBotToken(dc.telegram?.bot_token || dc.bot_token || '');
+        }
+    }, [currentAgent]);
+
     useEffect(() => {
         if (editingSubagent === 'Root Admin') {
             fetchAgentData();
@@ -356,6 +373,43 @@ const BackendDashboard = () => {
             alert('部署過程中發生錯誤: ' + detail);
         } finally {
             setIsDeploying(false);
+        }
+    };
+
+    const handleDeployTelegram = async () => {
+        if (!currentAgent?._id) {
+            alert('Agent 資料尚未載入，請重新整理頁面後再試。');
+            return;
+        }
+        if (!telegramBotToken) {
+            alert('請輸入 Bot Token');
+            return;
+        }
+
+        try {
+            setIsTelegramDeploying(true);
+            const response = await axios.post(`${config.API_URL}/api/deploy_telegram`, {
+                agent_id: currentAgent._id,
+                bot_token: telegramBotToken
+            });
+
+            if (response.data.status === 'ok') {
+                alert('Telegram 部署成功！');
+                setIsTelegramModalOpen(false);
+                setTelegramBotToken('');
+                const agentRes = await axios.get(`${config.API_URL}/api/admin/agent/${currentAgent._id}`, {
+                    params: { userId: currentAgent.admin_id }
+                });
+                setCurrentAgent(agentRes.data);
+            } else {
+                alert('部署失敗: ' + (response.data.message || '未知錯誤'));
+            }
+        } catch (error) {
+            console.error('Failed to deploy Telegram:', error);
+            const detail = error?.response?.data?.detail || error?.response?.data?.message || error?.message || '未知錯誤';
+            alert('部署過程中發生錯誤: ' + detail);
+        } finally {
+            setIsTelegramDeploying(false);
         }
     };
 
@@ -1753,7 +1807,7 @@ const BackendDashboard = () => {
                                         <div className="max-w-4xl animate-in fade-in duration-500">
                                             <div className="mb-8">
                                                 <h1 className="text-3xl font-bold text-slate-900 mb-2">客戶管理 (CRM)</h1>
-                                                <p className="text-slate-500">管理與此 LINE Bot 互動過的所有會員</p>
+                                                <p className="text-slate-500">管理所有渠道互動過的會員</p>
                                             </div>
                                             {isLoadingCrm ? (
                                                 <div className="flex items-center justify-center py-20 text-slate-400">
@@ -1764,11 +1818,13 @@ const BackendDashboard = () => {
                                                 <div className="bg-white rounded-3xl border border-slate-200 p-16 flex flex-col items-center text-center">
                                                     <UserCircle size={48} className="text-slate-300 mb-4" />
                                                     <p className="text-slate-500 font-medium">尚無會員紀錄</p>
-                                                    <p className="text-slate-400 text-sm mt-1">有人傳訊給 LINE Bot 後就會出現在這裡</p>
+                                                    <p className="text-slate-400 text-sm mt-1">有人傳訊給 Bot 後就會出現在這裡</p>
                                                 </div>
                                             ) : (
                                                 <div className="space-y-2">
-                                                    {crmUsers.map((user) => (
+                                                    {crmUsers.map((user) => {
+                                                        const ch = user.channel || 'line';
+                                                        return (
                                                         <button
                                                             key={user.line_id}
                                                             onClick={() => setSelectedCrmUser(user)}
@@ -1783,6 +1839,9 @@ const BackendDashboard = () => {
                                                                 <div className="text-left">
                                                                     <div className="flex items-center gap-2 flex-wrap">
                                                                         <span className="font-semibold text-slate-800">{user.user_name}</span>
+                                                                        <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${ch === 'telegram' ? 'bg-sky-100 text-sky-600' : 'bg-green-100 text-green-600'}`}>
+                                                                            {ch === 'telegram' ? 'TG' : 'LINE'}
+                                                                        </span>
                                                                     </div>
                                                                     <div className="text-xs text-slate-400 mt-0.5">
                                                                         {user.last_time ? `上次互動：${user.last_time}` : '無互動紀錄'}
@@ -1791,7 +1850,8 @@ const BackendDashboard = () => {
                                                             </div>
                                                             <ChevronRight size={18} className="text-slate-300 group-hover:text-brand-400 transition-colors flex-shrink-0" />
                                                         </button>
-                                                    ))}
+                                                        );
+                                                    })}
                                                 </div>
                                             )}
                                         </div>
@@ -1814,7 +1874,17 @@ const BackendDashboard = () => {
                                                             </span>
                                                         </div>
                                                         <div className="flex-1 min-w-0">
-                                                            <h2 className="text-lg font-bold text-slate-900 truncate">{selectedCrmUser.user_name}</h2>
+                                                            <div className="flex items-center gap-2">
+                                                                <h2 className="text-lg font-bold text-slate-900 truncate">{selectedCrmUser.user_name}</h2>
+                                                                {(() => {
+                                                                    const ch = selectedCrmUser.channel || 'line';
+                                                                    return (
+                                                                        <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold flex-shrink-0 ${ch === 'telegram' ? 'bg-sky-100 text-sky-600' : 'bg-green-100 text-green-600'}`}>
+                                                                            {ch === 'telegram' ? 'TG' : 'LINE'}
+                                                                        </span>
+                                                                    );
+                                                                })()}
+                                                            </div>
                                                             <p className="text-xs text-slate-400 font-mono truncate">{selectedCrmUser.line_id}</p>
                                                         </div>
                                                         <button
@@ -1836,7 +1906,9 @@ const BackendDashboard = () => {
                                                                     <span className="font-medium text-slate-700">{selectedCrmUser.last_time || '無紀錄'}</span>
                                                                 </div>
                                                                 <div className="flex justify-between items-center text-sm gap-4">
-                                                                    <span className="text-slate-500 shrink-0">LINE ID</span>
+                                                                    <span className="text-slate-500 shrink-0">
+                                                                        {selectedCrmUser.channel === 'telegram' ? 'Telegram ID' : 'LINE ID'}
+                                                                    </span>
                                                                     <span className="font-mono text-xs text-slate-500 truncate">{selectedCrmUser.line_id}</span>
                                                                 </div>
                                                             </div>
@@ -1891,10 +1963,22 @@ const BackendDashboard = () => {
                                                 <p className="text-slate-500 text-sm mb-8 leading-relaxed max-w-[280px]">
                                                     Enable users to chat with your AI Agent via LINE.
                                                 </p>
-                                                <div className="bg-green-50 text-green-600 px-5 py-2 rounded-full text-[13px] font-bold border border-green-100 flex items-center gap-2 group-hover:bg-green-100 transition-colors">
-                                                    <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
-                                                    可串接
-                                                </div>
+                                                {(currentAgent?.deploy_config?.line || currentAgent?.deploy_type === 'line') ? (
+                                                    <div className="flex flex-col items-center gap-2">
+                                                        <div className="bg-blue-50 text-blue-600 px-5 py-2 rounded-full text-[13px] font-bold border border-blue-100 flex items-center gap-2">
+                                                            <span className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></span>
+                                                            已連接
+                                                        </div>
+                                                        {(currentAgent?.deploy_config?.line?.display_name || currentAgent?.deploy_config?.display_name) && (
+                                                            <span className="text-xs text-slate-400">{currentAgent?.deploy_config?.line?.display_name || currentAgent?.deploy_config?.display_name}</span>
+                                                        )}
+                                                    </div>
+                                                ) : (
+                                                    <div className="bg-green-50 text-green-600 px-5 py-2 rounded-full text-[13px] font-bold border border-green-100 flex items-center gap-2 group-hover:bg-green-100 transition-colors">
+                                                        <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
+                                                        可串接
+                                                    </div>
+                                                )}
                                             </div>
 
                                             {/* Messenger */}
@@ -1930,19 +2014,36 @@ const BackendDashboard = () => {
                                             </div>
 
                                             {/* Telegram */}
-                                            <div className="bg-white rounded-[32px] p-10 border border-slate-100 opacity-60 flex flex-col items-center text-center grayscale">
-                                                <div className="w-20 h-20 bg-sky-50 rounded-3xl flex items-center justify-center mb-6">
+                                            <div
+                                                onClick={() => setIsTelegramModalOpen(true)}
+                                                className="bg-white rounded-[32px] p-10 border border-slate-200 shadow-sm hover:shadow-xl hover:border-sky-200 transition-all cursor-pointer group flex flex-col items-center text-center relative overflow-hidden"
+                                            >
+                                                <div className="absolute top-0 right-0 w-32 h-32 bg-[#0088cc]/5 rounded-full -mr-16 -mt-16 blur-2xl group-hover:bg-[#0088cc]/10 transition-colors"></div>
+                                                <div className="relative w-20 h-20 bg-sky-50 rounded-3xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform duration-300">
                                                     <svg width="48" height="48" viewBox="0 0 24 24" fill="#0088cc">
                                                         <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.562 8.161l-1.87 8.818c-.141.621-.51.772-1.033.479l-2.85-2.099-1.375 1.322c-.153.153-.281.281-.575.281l.204-2.895 5.272-4.762c.229-.204-.05-.316-.356-.113l-6.516 4.103-2.801-.875c-.61-.19-.621-.61.127-.905l10.94-4.217c.507-.187.951.116.833.103v.203z" />
                                                     </svg>
                                                 </div>
-                                                <h3 className="text-2xl font-bold text-slate-400 mb-3">Telegram</h3>
-                                                <p className="text-slate-400 text-sm mb-8 leading-relaxed max-w-[280px]">
+                                                <h3 className="text-2xl font-bold text-slate-900 mb-3">Telegram</h3>
+                                                <p className="text-slate-500 text-sm mb-8 leading-relaxed max-w-[280px]">
                                                     Connect your bot to Telegram chats and groups.
                                                 </p>
-                                                <div className="bg-slate-50 text-slate-400 px-5 py-2 rounded-full text-[13px] font-bold border border-slate-100">
-                                                    即將推出
-                                                </div>
+                                                {(currentAgent?.deploy_config?.telegram || currentAgent?.deploy_type === 'telegram') ? (
+                                                    <div className="flex flex-col items-center gap-2">
+                                                        <div className="bg-blue-50 text-blue-600 px-5 py-2 rounded-full text-[13px] font-bold border border-blue-100 flex items-center gap-2">
+                                                            <span className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></span>
+                                                            已連接
+                                                        </div>
+                                                        {(currentAgent?.deploy_config?.telegram?.bot_username || currentAgent?.deploy_config?.bot_username) && (
+                                                            <span className="text-xs text-slate-400">@{currentAgent?.deploy_config?.telegram?.bot_username || currentAgent?.deploy_config?.bot_username}</span>
+                                                        )}
+                                                    </div>
+                                                ) : (
+                                                    <div className="bg-green-50 text-green-600 px-5 py-2 rounded-full text-[13px] font-bold border border-green-100 flex items-center gap-2 group-hover:bg-green-100 transition-colors">
+                                                        <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
+                                                        可串接
+                                                    </div>
+                                                )}
                                             </div>
                                         </div>
                                     </div>
@@ -2224,8 +2325,71 @@ const BackendDashboard = () => {
                         </div>
                     </div>
                 )}
-                {/* LINE Integration Modal ... (existing code) */}
-                {/* Pre-existing LINE Modal code ends around 1293 */}
+                {/* Telegram Integration Modal */}
+                {isTelegramModalOpen && (
+                    <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
+                        <div
+                            className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm shadow-2xl"
+                            onClick={() => setIsTelegramModalOpen(false)}
+                        />
+                        <div className="relative bg-white w-full max-w-xl rounded-[32px] overflow-hidden shadow-2xl animate-in fade-in zoom-in duration-300">
+                            {/* Modal Header */}
+                            <div className="p-8 border-b border-slate-100 flex items-center justify-between">
+                                <div className="flex items-center gap-4">
+                                    <div className="w-10 h-10 bg-[#0088cc] rounded-xl flex items-center justify-center text-white">
+                                        <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                                            <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.562 8.161l-1.87 8.818c-.141.621-.51.772-1.033.479l-2.85-2.099-1.375 1.322c-.153.153-.281.281-.575.281l.204-2.895 5.272-4.762c.229-.204-.05-.316-.356-.113l-6.516 4.103-2.801-.875c-.61-.19-.621-.61.127-.905l10.94-4.217c.507-.187.951.116.833.103v.203z" />
+                                        </svg>
+                                    </div>
+                                    <h2 className="text-xl font-bold text-slate-800">串接 Telegram Bot</h2>
+                                </div>
+                                <button
+                                    onClick={() => setIsTelegramModalOpen(false)}
+                                    className="w-10 h-10 flex items-center justify-center text-slate-400 hover:text-slate-600 hover:bg-slate-50 rounded-full transition-all"
+                                >
+                                    <X size={24} />
+                                </button>
+                            </div>
+
+                            {/* Modal Body */}
+                            <div className="p-10 space-y-8">
+                                <div>
+                                    <label className="text-[11px] font-bold text-slate-400 uppercase tracking-[0.1em] mb-2 block">Bot Token</label>
+                                    <input
+                                        type="text"
+                                        value={telegramBotToken}
+                                        onChange={(e) => setTelegramBotToken(e.target.value)}
+                                        placeholder="123456:ABC-DEF..."
+                                        className="w-full px-5 py-4 bg-white border border-slate-200 rounded-2xl focus:ring-2 focus:ring-[#0088cc]/20 focus:border-[#0088cc] outline-none transition-all text-slate-700 font-medium placeholder:text-slate-300"
+                                    />
+                                    <p className="text-xs text-slate-400 mt-2">從 @BotFather 取得，格式如 123456:ABC-DEF...</p>
+                                </div>
+                            </div>
+
+                            {/* Modal Footer */}
+                            <div className="px-10 py-8 bg-slate-50/50 border-t border-slate-100 flex justify-end items-center gap-4">
+                                <button
+                                    onClick={() => setIsTelegramModalOpen(false)}
+                                    className="text-slate-500 hover:text-slate-700 font-bold px-6 py-4 rounded-2xl transition-all"
+                                >
+                                    取消
+                                </button>
+                                <button
+                                    disabled={isTelegramDeploying}
+                                    onClick={handleDeployTelegram}
+                                    className="bg-[#0088cc] hover:bg-[#0077b5] disabled:opacity-50 text-white font-bold px-10 py-4 rounded-2xl shadow-lg shadow-[#0088cc]/20 transition-all active:scale-95 flex items-center gap-2"
+                                >
+                                    {isTelegramDeploying ? (
+                                        <Loader2 className="animate-spin" size={20} />
+                                    ) : (
+                                        <Check size={20} />
+                                    )}
+                                    確認部署
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
 
                 {/* Subagent Market Modal */}
                 {isModalOpen && (
