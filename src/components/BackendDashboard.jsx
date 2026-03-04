@@ -137,6 +137,7 @@ const BackendDashboard = () => {
     const [settingNotifyId, setSettingNotifyId] = useState(null);
     const [selectedCrmUser, setSelectedCrmUser] = useState(null);
     const [notifySearch, setNotifySearch] = useState('');
+    const [notifyChannel, setNotifyChannel] = useState('line');
 
     const formatToken = (val) => {
         if (val === undefined || val === null) return '0';
@@ -170,7 +171,7 @@ const BackendDashboard = () => {
         try {
             await axios.post(
                 `${config.API_URL}/api/inbox/agents/${currentAgent._id}/notify-user?userId=${currentAgent.admin_id}`,
-                { agent_id: currentAgent._id, line_user_id: newValue }
+                { agent_id: currentAgent._id, line_user_id: newValue, channel: notifyChannel }
             );
             await fetchCrmUsers();
             // 同步更新抽屜中的 is_notify_target
@@ -1334,8 +1335,19 @@ const BackendDashboard = () => {
                                                     <div className="bg-amber-50 border border-amber-100 rounded-xl p-3 flex items-start gap-2 mb-6">
                                                         <Info size={14} className="text-amber-500 mt-0.5 shrink-0" />
                                                         <p className="text-xs text-amber-700 leading-relaxed">
-                                                            指派通知接收者後，當顧客轉人工客服，系統會透過 LINE 通知該成員。曾與 LINE Bot 互動過的所有用戶（含歷史紀錄）都會顯示於此；尚未傳過訊息的員工，需先向 Bot 發送一則訊息才會出現。
+                                                            指派通知接收者後，當顧客轉人工客服，系統會透過 LINE 或 Telegram 通知該成員。請先選擇通知管道，再指定接收者。曾與 Bot 互動過的成員才會顯示於此。
                                                         </p>
+                                                    </div>
+                                                    <div className="flex gap-2 mb-4">
+                                                        {['line', 'telegram'].map(ch => (
+                                                            <button
+                                                                key={ch}
+                                                                onClick={() => setNotifyChannel(ch)}
+                                                                className={`px-4 py-1.5 rounded-xl text-xs font-semibold transition-all ${notifyChannel === ch ? 'bg-brand-600 text-white shadow-sm' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}
+                                                            >
+                                                                {ch === 'telegram' ? 'Telegram' : 'LINE'}
+                                                            </button>
+                                                        ))}
                                                     </div>
                                                     <div className="relative mb-4">
                                                         <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -1352,14 +1364,14 @@ const BackendDashboard = () => {
                                                             <Loader2 size={20} className="animate-spin mr-2" />
                                                             載入中...
                                                         </div>
-                                                    ) : crmUsers.filter(u => u.user_name.toLowerCase().includes(notifySearch.toLowerCase())).length === 0 ? (
+                                                    ) : crmUsers.filter(u => (u.channel || 'line') === notifyChannel && u.user_name.toLowerCase().includes(notifySearch.toLowerCase())).length === 0 ? (
                                                         <div className="py-8 text-center text-slate-400 text-sm">
-                                                            {notifySearch ? '找不到符合的成員' : '尚無用戶紀錄，請先向 LINE Bot 發送訊息'}
+                                                            {notifySearch ? '找不到符合的成員' : `尚無 ${notifyChannel === 'telegram' ? 'Telegram' : 'LINE'} 用戶紀錄，請先向 Bot 發送訊息`}
                                                         </div>
                                                     ) : (
                                                         <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
                                                             {crmUsers
-                                                                .filter(u => u.user_name.toLowerCase().includes(notifySearch.toLowerCase()))
+                                                                .filter(u => (u.channel || 'line') === notifyChannel && u.user_name.toLowerCase().includes(notifySearch.toLowerCase()))
                                                                 .map((user) => (
                                                                     <div key={user.line_id} className="flex items-center justify-between px-4 py-3 rounded-xl border border-slate-100 bg-slate-50 hover:border-slate-200 transition-all">
                                                                         <div className="flex items-center gap-3 min-w-0">
@@ -1367,7 +1379,12 @@ const BackendDashboard = () => {
                                                                                 <span className="text-brand-600 font-bold text-sm">{user.user_name.charAt(0).toUpperCase()}</span>
                                                                             </div>
                                                                             <div className="min-w-0">
-                                                                                <p className="text-sm font-semibold text-slate-800 truncate">{user.user_name}</p>
+                                                                                <div className="flex items-center gap-1.5">
+                                                                                    <p className="text-sm font-semibold text-slate-800 truncate">{user.user_name}</p>
+                                                                                    <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold flex-shrink-0 ${(user.channel || 'line') === 'telegram' ? 'bg-sky-100 text-sky-600' : 'bg-green-100 text-green-600'}`}>
+                                                                                        {(user.channel || 'line') === 'telegram' ? 'TG' : 'LINE'}
+                                                                                    </span>
+                                                                                </div>
                                                                                 <p className="text-xs text-slate-400 font-mono truncate">{user.line_id}</p>
                                                                             </div>
                                                                         </div>
