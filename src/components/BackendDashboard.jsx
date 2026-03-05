@@ -55,11 +55,13 @@ import { useAuth } from '../context/AuthContext';
 
 const SUB_SECTION_MAP = {
     'knowledge-base': 'Knowledge Base',
+    'product-catalog': 'Product Catalog',
     'escalation-manager': 'Escalation Manager',
     'root-admin': 'Root Admin',
 };
 const EDITING_TO_SUB = {
     'Knowledge Base': 'knowledge-base',
+    'Product Catalog': 'product-catalog',
     'Escalation Manager': 'escalation-manager',
     'Root Admin': 'root-admin',
 };
@@ -100,6 +102,8 @@ const BackendDashboard = () => {
     // Edit Subagent states
     const editingSubagent = subSection ? (SUB_SECTION_MAP[subSection] ?? null) : null;
     const [editingFaqs, setEditingFaqs] = useState([]);
+    const [editingProducts, setEditingProducts] = useState([]);
+    const [knowledgeTab, setKnowledgeTab] = useState('faq');
     const [handoffConfig, setHandoffConfig] = useState({
         triggers: [],
         custom: ''
@@ -195,6 +199,7 @@ const BackendDashboard = () => {
         if (currentAgent) {
             const rawConfig = currentAgent.config?.raw_config || {};
             setEditingFaqs(rawConfig.faqs || []);
+            setEditingProducts(rawConfig.products || []);
 
             // Parse handoff_logic
             let triggers = [];
@@ -275,8 +280,13 @@ const BackendDashboard = () => {
     }, [editingSubagent]);
 
     useEffect(() => {
-        if (editingSubagent !== 'Knowledge Base') {
+        if (editingSubagent !== 'Knowledge Base' && editingSubagent !== 'Product Catalog') {
             setAnalysisReport(null);
+        }
+        if (editingSubagent === 'Product Catalog') {
+            setKnowledgeTab('product');
+        } else if (editingSubagent === 'Knowledge Base') {
+            setKnowledgeTab('faq');
         }
     }, [editingSubagent]);
 
@@ -407,11 +417,12 @@ const BackendDashboard = () => {
                 source: 'test'
             });
 
-            const { response_text, related_faq_list, handoff_result } = response.data;
+            const { response_text, related_faq_list, related_product_list, handoff_result } = response.data;
             const newMessage = {
                 role: 'model',
                 text: response_text,
                 related_faqs: related_faq_list || [],
+                related_products: related_product_list || [],
                 handoff: handoff_result
             };
 
@@ -592,6 +603,51 @@ const BackendDashboard = () => {
         }
     };
 
+    const handleSaveProducts = async () => {
+        // 過濾掉全空的組別
+        const cleanedProducts = editingProducts.filter(p => p.name?.trim() !== '' || p.description?.trim() !== '');
+
+        // 允許空列表（清空商品庫）
+
+        const hasIncomplete = cleanedProducts.some(p => !p.name?.trim() || !p.description?.trim());
+        if (hasIncomplete) {
+            alert('請填寫所有商品的名稱與說明，或是刪除未填寫完整的項目');
+            return;
+        }
+
+        if (cleanedProducts.length > 50) {
+            alert('商品數量上限為 50 個');
+            return;
+        }
+
+        const tooLong = cleanedProducts.some(p => (p.name?.length || 0) > 50 || (p.description?.length || 0) > 400 || (p.keywords?.length || 0) > 100);
+        if (tooLong) {
+            alert('部分內容超過字數限制 (名稱 50 字，說明 400 字，關鍵字 100 字)');
+            return;
+        }
+
+        try {
+            setIsSaving(true);
+            const res = await axios.post(`${config.API_URL}/api/admin/agent/${currentAgent._id}/update_products`, {
+                userId: currentAgent.admin_id,
+                products: cleanedProducts
+            });
+            if (res.data.status === 'ok') {
+                alert('商品庫更新成功！');
+                const agentRes = await axios.get(`${config.API_URL}/api/admin/agent/${currentAgent._id}`, {
+                    params: { userId: currentAgent.admin_id }
+                });
+                setCurrentAgent(agentRes.data);
+                navigate('/agent/' + routeAgentId + '/agents');
+            }
+        } catch (error) {
+            console.error('Failed to save products:', error);
+            alert('儲存失敗');
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
     const handleSaveHandoff = async () => {
         try {
             setIsSaving(true);
@@ -641,6 +697,7 @@ const BackendDashboard = () => {
 
     const iconMap = {
         "Knowledge Base": <BookOpen size={24} className="text-blue-600" />,
+        "Product Catalog": <Package size={24} className="text-green-600" />,
         "Escalation Manager": <Shield size={24} className="text-orange-600" />,
         "Order Agent": <Package size={24} className="text-slate-400" />,
         "Sales Agent": <LineChart size={24} className="text-slate-400" />
@@ -648,6 +705,7 @@ const BackendDashboard = () => {
 
     const bgColorMap = {
         "Knowledge Base": 'bg-blue-50',
+        "Product Catalog": 'bg-green-50',
         "Escalation Manager": 'bg-orange-50',
         "Order Agent": 'bg-slate-50',
         "Sales Agent": 'bg-slate-50'
@@ -954,7 +1012,7 @@ const BackendDashboard = () => {
                                     </>
                                 );
                             case 'agents':
-                                if (editingSubagent === 'Knowledge Base') {
+                                if (editingSubagent === 'Knowledge Base' || editingSubagent === 'Product Catalog') {
                                     return (
                                         <div className="max-w-5xl animate-in fade-in slide-in-from-bottom-4 duration-500">
                                             {/* Header Section */}
@@ -964,18 +1022,30 @@ const BackendDashboard = () => {
                                                         <BookOpen size={24} />
                                                     </div>
                                                     <div>
-                                                        <h1 className="text-2xl font-bold text-slate-900">客服部專員 (FAQ Agent)</h1>
+                                                        <h1 className="text-2xl font-bold text-slate-900">客服部專員 (Knowledge Base)</h1>
                                                         <p className="text-slate-500 text-sm">這是「客服部專員」的大腦。AI 會優先檢索這裡的內容來回答客戶。</p>
                                                     </div>
                                                 </div>
-                                                {/* <div className="flex items-center gap-4">
-                                                    <div className="bg-red-50 text-red-500 px-4 py-2 rounded-2xl flex items-center gap-2 border border-red-100 shadow-sm">
-                                                        <Bell size={18} className="animate-pulse" />
-                                                        <span className="text-sm font-bold">待處理 (1)</span>
-                                                    </div>
-                                                </div> */}
                                             </div>
 
+                                            {/* Tab Bar */}
+                                            <div className="flex gap-2 mb-6">
+                                                <button
+                                                    onClick={() => { setKnowledgeTab('faq'); navigate(`/agent/${routeAgentId}/agents/knowledge-base`); }}
+                                                    className={`px-5 py-2.5 rounded-xl text-sm font-bold transition-all ${knowledgeTab === 'faq' ? 'bg-blue-600 text-white shadow-md shadow-blue-200' : 'bg-white border border-slate-200 text-slate-500 hover:bg-slate-50'}`}
+                                                >
+                                                    <span className="flex items-center gap-2"><BookOpen size={16} /> FAQ (店規/流程)</span>
+                                                </button>
+                                                <button
+                                                    onClick={() => { setKnowledgeTab('product'); navigate(`/agent/${routeAgentId}/agents/product-catalog`); }}
+                                                    className={`px-5 py-2.5 rounded-xl text-sm font-bold transition-all ${knowledgeTab === 'product' ? 'bg-green-600 text-white shadow-md shadow-green-200' : 'bg-white border border-slate-200 text-slate-500 hover:bg-slate-50'}`}
+                                                >
+                                                    <span className="flex items-center gap-2"><Package size={16} /> 商品庫 (菜單/規格)</span>
+                                                </button>
+                                            </div>
+
+                                            {knowledgeTab === 'faq' ? (
+                                            <>
                                             {/* FAQ Content Area */}
                                             <div className="bg-white rounded-[32px] border border-slate-200 shadow-xl shadow-slate-200/50 overflow-hidden">
                                                 <div className="p-8 border-b border-slate-100 bg-slate-50/30 flex items-center justify-between">
@@ -1164,6 +1234,138 @@ const BackendDashboard = () => {
                                                     </button>
                                                 </div>
                                             </div>
+                                            </>
+                                            ) : (
+                                            <>
+                                            {/* Product Content Area */}
+                                            <div className="bg-white rounded-[32px] border border-slate-200 shadow-xl shadow-slate-200/50 overflow-hidden">
+                                                <div className="p-8 border-b border-slate-100 bg-slate-50/30 flex items-center justify-between">
+                                                    <div>
+                                                        <h3 className="text-lg font-bold text-slate-800">商品庫管理</h3>
+                                                        <p className="text-xs text-slate-400 mt-1 uppercase tracking-widest font-bold">Manage Product Catalog</p>
+                                                    </div>
+                                                    <div className="flex items-center gap-3">
+                                                        <button
+                                                            onClick={() => {
+                                                                if (editingProducts.length >= 50) {
+                                                                    alert('最多只能新增 50 個商品');
+                                                                    return;
+                                                                }
+                                                                setEditingProducts([...editingProducts, { name: '', description: '', keywords: '' }]);
+                                                            }}
+                                                            className="flex items-center gap-2 px-5 py-2.5 bg-green-600 text-white rounded-xl text-sm font-bold hover:bg-green-700 transition-all shadow-md shadow-green-100"
+                                                        >
+                                                            <Plus size={18} />
+                                                            新增商品
+                                                        </button>
+                                                    </div>
+                                                </div>
+
+                                                <div className="p-10 space-y-8">
+                                                    {editingProducts.map((product, idx) => (
+                                                        <div key={idx} className="group relative bg-slate-50/50 rounded-3xl p-8 border border-slate-100 hover:border-green-200 hover:bg-white transition-all duration-300">
+                                                            <div className="absolute -top-3 left-8 bg-white border border-slate-100 px-3 py-1 rounded-full text-[10px] font-black text-green-500 uppercase tracking-widest shadow-sm">
+                                                                P{idx + 1}
+                                                            </div>
+                                                            <div className="absolute top-6 right-8 flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                                <button
+                                                                    onClick={() => setEditingProducts(editingProducts.filter((_, i) => i !== idx))}
+                                                                    className="w-9 h-9 flex items-center justify-center bg-white border border-slate-100 text-slate-400 hover:text-red-500 rounded-xl shadow-sm transition-all hover:scale-105"
+                                                                >
+                                                                    <Trash2 size={16} />
+                                                                </button>
+                                                            </div>
+
+                                                            <div className="space-y-6">
+                                                                <div className="space-y-2">
+                                                                    <div className="flex items-center gap-2 text-slate-400">
+                                                                        <span className="text-[10px] font-black uppercase tracking-widest">商品名稱</span>
+                                                                    </div>
+                                                                    <div className="flex-1">
+                                                                        <input
+                                                                            type="text"
+                                                                            value={product.name}
+                                                                            maxLength={50}
+                                                                            onChange={(e) => {
+                                                                                const newProducts = [...editingProducts];
+                                                                                newProducts[idx].name = e.target.value;
+                                                                                setEditingProducts(newProducts);
+                                                                            }}
+                                                                            placeholder="輸入商品名稱..."
+                                                                            className="w-full bg-transparent text-lg font-bold text-slate-800 placeholder:text-slate-300 outline-none p-0"
+                                                                        />
+                                                                        <div className="text-[10px] text-slate-300 text-right pr-2 mt-1">{product.name?.length || 0}/50</div>
+                                                                    </div>
+                                                                </div>
+
+                                                                <div className="space-y-2">
+                                                                    <div className="flex items-center gap-2 text-slate-400">
+                                                                        <span className="text-[10px] font-black uppercase tracking-widest">菜單/規格說明</span>
+                                                                    </div>
+                                                                    <div className="relative">
+                                                                        <textarea
+                                                                            value={product.description}
+                                                                            maxLength={400}
+                                                                            onChange={(e) => {
+                                                                                const newProducts = [...editingProducts];
+                                                                                newProducts[idx].description = e.target.value;
+                                                                                setEditingProducts(newProducts);
+                                                                            }}
+                                                                            placeholder="輸入商品說明、規格、價格等..."
+                                                                            className="w-full bg-white border border-slate-200 rounded-2xl p-5 text-slate-600 text-sm leading-relaxed min-h-[120px] focus:ring-2 focus:ring-green-500/10 focus:border-green-500 outline-none transition-all shadow-inner"
+                                                                        />
+                                                                        <div className="text-[10px] text-slate-300 text-right pr-2 mt-1">{product.description?.length || 0}/400</div>
+                                                                    </div>
+                                                                </div>
+
+                                                                <div className="space-y-2">
+                                                                    <div className="flex items-center gap-2 text-slate-400">
+                                                                        <span className="text-[10px] font-black uppercase tracking-widest">關鍵字/別名 (選填)</span>
+                                                                    </div>
+                                                                    <div className="flex-1">
+                                                                        <input
+                                                                            type="text"
+                                                                            value={product.keywords || ''}
+                                                                            maxLength={100}
+                                                                            onChange={(e) => {
+                                                                                const newProducts = [...editingProducts];
+                                                                                newProducts[idx].keywords = e.target.value;
+                                                                                setEditingProducts(newProducts);
+                                                                            }}
+                                                                            placeholder="例：珍奶、波霸、大杯紅茶..."
+                                                                            className="w-full bg-white border border-slate-200 rounded-2xl px-5 py-3 text-slate-600 text-sm focus:ring-2 focus:ring-green-500/10 focus:border-green-500 outline-none transition-all shadow-inner"
+                                                                        />
+                                                                        <div className="text-[10px] text-slate-300 text-right pr-2 mt-1">{(product.keywords || '').length}/100</div>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    ))}
+
+                                                    {editingProducts.length === 0 && (
+                                                        <div className="text-center py-20 bg-slate-50/50 rounded-3xl border border-dashed border-slate-200">
+                                                            <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center mx-auto mb-4 border border-slate-100">
+                                                                <Package size={32} className="text-slate-200" />
+                                                            </div>
+                                                            <h4 className="text-slate-800 font-bold mb-1">商品庫目前為空</h4>
+                                                            <p className="text-xs text-slate-400">點擊上方「新增商品」開始建立商品目錄。</p>
+                                                        </div>
+                                                    )}
+                                                </div>
+
+                                                <div className="px-10 py-8 bg-slate-50/50 border-t border-slate-100 flex justify-end">
+                                                    <button
+                                                        disabled={isSaving}
+                                                        onClick={handleSaveProducts}
+                                                        className="bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white font-bold px-10 py-3.5 rounded-2xl shadow-lg shadow-green-200 transition-all active:scale-95 flex items-center gap-2"
+                                                    >
+                                                        {isSaving ? <Loader2 className="animate-spin" size={20} /> : <Check size={20} />}
+                                                        儲存設定
+                                                    </button>
+                                                </div>
+                                            </div>
+                                            </>
+                                            )}
                                         </div>
                                     );
                                 }
@@ -2107,6 +2309,30 @@ const BackendDashboard = () => {
                                                                     ))
                                                                 }
 
+                                                                {lastResponseInfo.related_products && lastResponseInfo.related_products.length > 0 &&
+                                                                    lastResponseInfo.related_products.map((product, i) => (
+                                                                        <div key={`product-${i}`} className="space-y-3">
+                                                                            <div className="flex items-center gap-2 text-green-600">
+                                                                                <CheckCircle2 size={16} />
+                                                                                <span className="text-xs font-bold uppercase tracking-wider">成功命中商品</span>
+                                                                            </div>
+                                                                            <div className="bg-green-50/30 border border-green-100 rounded-2xl p-4">
+                                                                                <div className="text-[10px] font-black text-green-600 uppercase mb-3 tracking-widest opacity-70">商品資訊</div>
+                                                                                <div className="text-xs space-y-3">
+                                                                                    <div className="flex gap-2">
+                                                                                        <span className="font-bold text-slate-700 shrink-0">商品:</span>
+                                                                                        <span className="text-slate-600 leading-relaxed">{product.name}</span>
+                                                                                    </div>
+                                                                                    <div className="flex gap-2">
+                                                                                        <span className="font-bold text-slate-700 shrink-0">說明:</span>
+                                                                                        <span className="text-slate-600 leading-relaxed">{product.description}</span>
+                                                                                    </div>
+                                                                                </div>
+                                                                            </div>
+                                                                        </div>
+                                                                    ))
+                                                                }
+
                                                                 {lastResponseInfo.handoff?.hand_off && (
                                                                     <div className="space-y-3">
                                                                         <div className="flex items-center gap-2 text-red-500">
@@ -2124,7 +2350,7 @@ const BackendDashboard = () => {
                                                                     </div>
                                                                 )}
 
-                                                                {(!lastResponseInfo.related_faqs || lastResponseInfo.related_faqs.length === 0) && !lastResponseInfo.handoff?.hand_off && (
+                                                                {(!lastResponseInfo.related_faqs || lastResponseInfo.related_faqs.length === 0) && (!lastResponseInfo.related_products || lastResponseInfo.related_products.length === 0) && !lastResponseInfo.handoff?.hand_off && (
                                                                     <div className="space-y-4">
                                                                         <div className="flex items-center gap-2 text-slate-400 bg-slate-100/50 px-3 py-1.5 rounded-lg w-fit">
                                                                             <HelpCircle size={14} />
