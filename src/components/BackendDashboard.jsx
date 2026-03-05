@@ -125,10 +125,17 @@ const BackendDashboard = () => {
     const [isBrandInfoExpanded, setIsBrandInfoExpanded] = useState(false);
     const [isPersonaExpanded, setIsPersonaExpanded] = useState(false);
     const faqsEndRef = React.useRef(null);
+    const productsEndRef = React.useRef(null);
 
     // AI Health Check states
     const [isAnalyzing, setIsAnalyzing] = useState(false);
     const [analysisReport, setAnalysisReport] = useState(null);
+
+    // Add FAQ / Product modal states
+    const [showFaqModal, setShowFaqModal] = useState(false);
+    const [newFaq, setNewFaq] = useState({ question: '', answer: '' });
+    const [showProductModal, setShowProductModal] = useState(false);
+    const [newProduct, setNewProduct] = useState({ name: '', description: '', keywords: '' });
 
     // CRM states
     const [crmUsers, setCrmUsers] = useState([]);
@@ -791,8 +798,8 @@ const BackendDashboard = () => {
 
             {/* Sidebar */}
             <aside className={`
-                fixed inset-y-0 left-0 z-50 w-72 bg-white border-r border-slate-200 transform transition-transform duration-300 ease-in-out lg:translate-x-0 lg:static
-                ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}
+                fixed inset-y-0 left-0 z-50 w-72 shrink-0 bg-white border-r border-slate-200 lg:static lg:translate-x-0 lg:transition-none
+                ${isSidebarOpen ? 'translate-x-0 transition-transform duration-300 ease-in-out' : '-translate-x-full transition-transform duration-300 ease-in-out'}
             `}>
                 <div className="h-full flex flex-col p-4">
                     <div className="flex items-center justify-between mb-8 px-2">
@@ -1014,22 +1021,22 @@ const BackendDashboard = () => {
                             case 'agents':
                                 if (editingSubagent === 'Knowledge Base' || editingSubagent === 'Product Catalog') {
                                     return (
-                                        <div className="max-w-5xl animate-in fade-in slide-in-from-bottom-4 duration-500">
+                                        <div className="w-full max-w-5xl">
                                             {/* Header Section */}
-                                            <div className="flex items-center justify-between mb-8">
-                                                <div className="flex items-center gap-4">
-                                                    <div className="w-12 h-12 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center border border-blue-100 shadow-sm">
-                                                        <BookOpen size={24} />
+                                            <div className="flex items-start sm:items-center justify-between mb-6 sm:mb-8 gap-4">
+                                                <div className="flex items-center gap-3 sm:gap-4 min-w-0">
+                                                    <div className="w-10 h-10 sm:w-12 sm:h-12 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center border border-blue-100 shadow-sm shrink-0">
+                                                        <BookOpen size={22} />
                                                     </div>
-                                                    <div>
-                                                        <h1 className="text-2xl font-bold text-slate-900">客服部專員 (Knowledge Base)</h1>
-                                                        <p className="text-slate-500 text-sm">這是「客服部專員」的大腦。AI 會優先檢索這裡的內容來回答客戶。</p>
+                                                    <div className="min-w-0">
+                                                        <h1 className="text-xl sm:text-2xl font-bold text-slate-900">客服部專員 (Knowledge Base)</h1>
+                                                        <p className="text-slate-500 text-xs sm:text-sm">這是「客服部專員」的大腦。AI 會優先檢索這裡的內容來回答客戶。</p>
                                                     </div>
                                                 </div>
                                             </div>
 
                                             {/* Tab Bar */}
-                                            <div className="flex gap-2 mb-6">
+                                            <div className="flex flex-wrap gap-2 mb-6">
                                                 <button
                                                     onClick={() => { setKnowledgeTab('faq'); navigate(`/agent/${routeAgentId}/agents/knowledge-base`); }}
                                                     className={`px-5 py-2.5 rounded-xl text-sm font-bold transition-all ${knowledgeTab === 'faq' ? 'bg-blue-600 text-white shadow-md shadow-blue-200' : 'bg-white border border-slate-200 text-slate-500 hover:bg-slate-50'}`}
@@ -1048,23 +1055,23 @@ const BackendDashboard = () => {
                                             <>
                                             {/* FAQ Content Area */}
                                             <div className="bg-white rounded-[32px] border border-slate-200 shadow-xl shadow-slate-200/50 overflow-hidden">
-                                                <div className="p-8 border-b border-slate-100 bg-slate-50/30 flex items-center justify-between">
+                                                <div className="p-4 sm:p-8 border-b border-slate-100 bg-slate-50/30 flex flex-wrap items-center justify-between gap-3">
                                                     <div>
                                                         <h3 className="text-lg font-bold text-slate-800">FAQ 知識庫管理</h3>
                                                         <p className="text-xs text-slate-400 mt-1 uppercase tracking-widest font-bold">Manage Knowledge Base</p>
                                                     </div>
-                                                    <div className="flex items-center gap-3">
+                                                    <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
                                                         <button
                                                             onClick={handleAnalyzeFaqs}
                                                             disabled={isAnalyzing}
-                                                            className="flex items-center gap-2 px-5 py-2.5 bg-white border border-slate-200 text-slate-600 rounded-xl text-sm font-bold hover:bg-slate-50 transition-all shadow-sm disabled:opacity-50"
+                                                            className="flex items-center gap-2 px-3 sm:px-5 py-2.5 bg-white border border-slate-200 text-slate-600 rounded-xl text-sm font-bold hover:bg-slate-50 transition-all shadow-sm disabled:opacity-50"
                                                         >
                                                             {isAnalyzing ? (
                                                                 <Loader2 size={18} className="text-blue-500 animate-spin" />
                                                             ) : (
                                                                 <Stethoscope size={18} className="text-blue-500" />
                                                             )}
-                                                            AI 智能健檢
+                                                            <span className="hidden sm:inline">AI 智能健檢</span>
                                                         </button>
                                                         <button
                                                             onClick={() => {
@@ -1072,12 +1079,10 @@ const BackendDashboard = () => {
                                                                     alert('最多只能新增 20 組 FAQ');
                                                                     return;
                                                                 }
-                                                                setEditingFaqs([...editingFaqs, { question: '', answer: '' }]);
-                                                                setTimeout(() => {
-                                                                    faqsEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                                                                }, 100);
+                                                                setNewFaq({ question: '', answer: '' });
+                                                                setShowFaqModal(true);
                                                             }}
-                                                            className="flex items-center gap-2 px-5 py-2.5 bg-brand-600 text-white rounded-xl text-sm font-bold hover:bg-brand-700 transition-all shadow-md shadow-brand-100"
+                                                            className="flex items-center gap-2 px-3 sm:px-5 py-2.5 bg-brand-600 text-white rounded-xl text-sm font-bold hover:bg-brand-700 transition-all shadow-md shadow-brand-100"
                                                         >
                                                             <Plus size={18} />
                                                             新增問答
@@ -1085,9 +1090,9 @@ const BackendDashboard = () => {
                                                     </div>
                                                 </div>
 
-                                                <div className="p-10 space-y-8">
+                                                <div className="p-4 sm:p-10 space-y-8">
                                                     {analysisReport && (
-                                                        <div className="p-6 bg-emerald-50 border border-emerald-100 rounded-3xl relative animate-in fade-in slide-in-from-top-4 duration-500">
+                                                        <div className="p-6 bg-emerald-50 border border-emerald-100 rounded-3xl relative">
                                                             <div className="flex items-center gap-3 mb-3">
                                                                 <div className="w-10 h-10 bg-emerald-100 text-emerald-600 rounded-xl flex items-center justify-center">
                                                                     <CheckCircle2 size={24} />
@@ -1110,11 +1115,11 @@ const BackendDashboard = () => {
                                                         </div>
                                                     )}
                                                     {editingFaqs.map((faq, idx) => (
-                                                        <div key={idx} className="group relative bg-slate-50/50 rounded-3xl p-8 border border-slate-100 hover:border-brand-200 hover:bg-white transition-all duration-300">
-                                                            <div className="absolute -top-3 left-8 bg-white border border-slate-100 px-3 py-1 rounded-full text-[10px] font-black text-slate-400 uppercase tracking-widest shadow-sm">
+                                                        <div key={idx} className="group relative bg-slate-50/50 rounded-3xl p-4 sm:p-8 border border-slate-100 hover:border-brand-200 hover:bg-white transition-all duration-300">
+                                                            <div className="absolute -top-3 left-6 sm:left-8 bg-white border border-slate-100 px-3 py-1 rounded-full text-[10px] font-black text-slate-400 uppercase tracking-widest shadow-sm">
                                                                 Q{idx + 1}
                                                             </div>
-                                                            <div className="absolute top-6 right-8 flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                            <div className="absolute top-4 sm:top-6 right-4 sm:right-8 flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                                                                 <button
                                                                     onClick={() => handleOptimizeFaq(idx)}
                                                                     disabled={optimizingIndices.has(idx)}
@@ -1159,7 +1164,7 @@ const BackendDashboard = () => {
                                                                 </div>
 
                                                                 {analysisReport && analysisReport.suggestions.find(s => s.id.toString() === (faq.id || idx.toString()).toString()) && (
-                                                                    <div className="p-4 bg-amber-50 border border-amber-100 rounded-2xl relative animate-in zoom-in duration-300">
+                                                                    <div className="p-4 bg-amber-50 border border-amber-100 rounded-2xl relative">
                                                                         <div className="flex items-start gap-3 mb-3">
                                                                             <AlertCircle size={18} className="text-amber-500 mt-0.5" />
                                                                             <div>
@@ -1223,7 +1228,7 @@ const BackendDashboard = () => {
                                                     )}
                                                 </div>
 
-                                                <div className="px-10 py-8 bg-slate-50/50 border-t border-slate-100 flex justify-end">
+                                                <div className="px-4 sm:px-10 py-6 sm:py-8 bg-slate-50/50 border-t border-slate-100 flex justify-end">
                                                     <button
                                                         disabled={isSaving}
                                                         onClick={handleSaveFaqs}
@@ -1239,7 +1244,7 @@ const BackendDashboard = () => {
                                             <>
                                             {/* Product Content Area */}
                                             <div className="bg-white rounded-[32px] border border-slate-200 shadow-xl shadow-slate-200/50 overflow-hidden">
-                                                <div className="p-8 border-b border-slate-100 bg-slate-50/30 flex items-center justify-between">
+                                                <div className="p-4 sm:p-8 border-b border-slate-100 bg-slate-50/30 flex flex-wrap items-center justify-between gap-3">
                                                     <div>
                                                         <h3 className="text-lg font-bold text-slate-800">商品庫管理</h3>
                                                         <p className="text-xs text-slate-400 mt-1 uppercase tracking-widest font-bold">Manage Product Catalog</p>
@@ -1251,9 +1256,10 @@ const BackendDashboard = () => {
                                                                     alert('最多只能新增 50 個商品');
                                                                     return;
                                                                 }
-                                                                setEditingProducts([...editingProducts, { name: '', description: '', keywords: '' }]);
+                                                                setNewProduct({ name: '', description: '', keywords: '' });
+                                                                setShowProductModal(true);
                                                             }}
-                                                            className="flex items-center gap-2 px-5 py-2.5 bg-green-600 text-white rounded-xl text-sm font-bold hover:bg-green-700 transition-all shadow-md shadow-green-100"
+                                                            className="flex items-center gap-2 px-3 sm:px-5 py-2.5 bg-green-600 text-white rounded-xl text-sm font-bold hover:bg-green-700 transition-all shadow-md shadow-green-100"
                                                         >
                                                             <Plus size={18} />
                                                             新增商品
@@ -1261,13 +1267,13 @@ const BackendDashboard = () => {
                                                     </div>
                                                 </div>
 
-                                                <div className="p-10 space-y-8">
+                                                <div className="p-4 sm:p-10 space-y-8">
                                                     {editingProducts.map((product, idx) => (
-                                                        <div key={idx} className="group relative bg-slate-50/50 rounded-3xl p-8 border border-slate-100 hover:border-green-200 hover:bg-white transition-all duration-300">
-                                                            <div className="absolute -top-3 left-8 bg-white border border-slate-100 px-3 py-1 rounded-full text-[10px] font-black text-green-500 uppercase tracking-widest shadow-sm">
+                                                        <div key={idx} className="group relative bg-slate-50/50 rounded-3xl p-4 sm:p-8 border border-slate-100 hover:border-green-200 hover:bg-white transition-all duration-300">
+                                                            <div className="absolute -top-3 left-6 sm:left-8 bg-white border border-slate-100 px-3 py-1 rounded-full text-[10px] font-black text-green-500 uppercase tracking-widest shadow-sm">
                                                                 P{idx + 1}
                                                             </div>
-                                                            <div className="absolute top-6 right-8 flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                            <div className="absolute top-4 sm:top-6 right-4 sm:right-8 flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                                                                 <button
                                                                     onClick={() => setEditingProducts(editingProducts.filter((_, i) => i !== idx))}
                                                                     className="w-9 h-9 flex items-center justify-center bg-white border border-slate-100 text-slate-400 hover:text-red-500 rounded-xl shadow-sm transition-all hover:scale-105"
@@ -1341,6 +1347,7 @@ const BackendDashboard = () => {
                                                             </div>
                                                         </div>
                                                     ))}
+                                                    <div ref={productsEndRef} />
 
                                                     {editingProducts.length === 0 && (
                                                         <div className="text-center py-20 bg-slate-50/50 rounded-3xl border border-dashed border-slate-200">
@@ -1353,7 +1360,7 @@ const BackendDashboard = () => {
                                                     )}
                                                 </div>
 
-                                                <div className="px-10 py-8 bg-slate-50/50 border-t border-slate-100 flex justify-end">
+                                                <div className="px-4 sm:px-10 py-6 sm:py-8 bg-slate-50/50 border-t border-slate-100 flex justify-end">
                                                     <button
                                                         disabled={isSaving}
                                                         onClick={handleSaveProducts}
@@ -1372,7 +1379,7 @@ const BackendDashboard = () => {
 
                                 if (editingSubagent === 'Escalation Manager') {
                                     return (
-                                        <div className="max-w-5xl animate-in fade-in slide-in-from-bottom-4 duration-500">
+                                        <div className="max-w-5xl">
                                             {/* Header Section */}
                                             <div className="flex items-center justify-between mb-8">
                                                 <div className="flex items-center gap-4">
@@ -1553,7 +1560,7 @@ const BackendDashboard = () => {
 
                                 if (editingSubagent === 'Root Admin') {
                                     return (
-                                        <div className="max-w-5xl animate-in fade-in slide-in-from-bottom-4 duration-500">
+                                        <div className="max-w-5xl">
                                             {/* Header Section */}
                                             <div className="flex items-center justify-between mb-8">
                                                 <div className="flex items-center gap-4">
@@ -1692,7 +1699,7 @@ const BackendDashboard = () => {
                                                         </div>
                                                     </div>
                                                     {isBrandInfoExpanded && (
-                                                        <div className="p-8 space-y-6 animate-in fade-in slide-in-from-top-2 duration-300">
+                                                        <div className="p-8 space-y-6">
                                                             <div>
                                                                 <label className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3 block">商家名稱 / 管理員暱稱</label>
                                                                 <div className="relative">
@@ -1770,7 +1777,7 @@ const BackendDashboard = () => {
                                                         </div>
                                                     </div>
                                                     {isPersonaExpanded && (
-                                                        <div className="animate-in fade-in slide-in-from-top-2 duration-300">
+                                                        <div>
                                                             <div className="p-8 space-y-8">
                                                                 <div>
                                                                     <label className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4 block">選擇語氣</label>
@@ -1820,7 +1827,7 @@ const BackendDashboard = () => {
                                     );
                                 }
                                 return (
-                                    <div className="max-w-7xl animate-in fade-in duration-500">
+                                    <div className="max-w-7xl">
                                         <div className="mb-10 flex justify-between items-start">
                                             <div>
                                                 <h1 className="text-3xl font-bold text-slate-900 mb-2">AI 團隊管理</h1>
@@ -1952,7 +1959,7 @@ const BackendDashboard = () => {
                                 return (
                                     <>
                                         {/* CRM 主列表 */}
-                                        <div className="max-w-4xl animate-in fade-in duration-500">
+                                        <div className="max-w-4xl">
                                             <div className="mb-8">
                                                 <h1 className="text-3xl font-bold text-slate-900 mb-2">客戶管理 (CRM)</h1>
                                                 <p className="text-slate-500">管理與此 LINE Bot 互動過的所有會員</p>
@@ -2007,7 +2014,7 @@ const BackendDashboard = () => {
                                                     onClick={() => setSelectedCrmUser(null)}
                                                 />
                                                 {/* 抽屜面板 */}
-                                                <div className="fixed top-0 right-0 h-full w-full max-w-md bg-white z-[101] shadow-2xl flex flex-col animate-in slide-in-from-right duration-300">
+                                                <div className="fixed top-0 right-0 h-full w-full max-w-md bg-white z-[101] shadow-2xl flex flex-col">
                                                     {/* Drawer Header */}
                                                     <div className="p-6 border-b border-slate-100 flex items-center gap-4">
                                                         <div className="w-12 h-12 bg-brand-50 rounded-full flex items-center justify-center flex-shrink-0">
@@ -2071,7 +2078,7 @@ const BackendDashboard = () => {
                                 return <InboxView currentAgent={currentAgent} />;
                             case 'channels':
                                 return (
-                                    <div className="max-w-6xl animate-in fade-in duration-500">
+                                    <div className="max-w-6xl">
                                         <div className="mb-10">
                                             <h1 className="text-3xl font-bold text-slate-900 mb-2">渠道串接 (Channels)</h1>
                                             <p className="text-slate-500">選擇您要部署 AI 客服的通訊平台。</p>
@@ -2151,7 +2158,7 @@ const BackendDashboard = () => {
                                 );
                             case 'playground':
                                 return (
-                                    <div className="h-[calc(100vh-120px)] flex flex-col animate-in fade-in duration-500">
+                                    <div className="h-[calc(100vh-120px)] flex flex-col">
                                         <div className="mb-6 flex justify-between items-center">
                                             <div>
                                                 <h1 className="text-3xl font-bold text-slate-900 mb-1">Playground 測試</h1>
@@ -2276,7 +2283,7 @@ const BackendDashboard = () => {
                                                                 <p className="text-xs text-slate-400 leading-relaxed font-medium">目前尚無分析數據<br />請先在對話框輸入訊息</p>
                                                             </div>
                                                         ) : (
-                                                            <div className="animate-in fade-in slide-in-from-right-4 duration-500 space-y-6">
+                                                            <div className="space-y-6">
                                                                 {lastResponseInfo.related_faqs && lastResponseInfo.related_faqs.length > 0 &&
                                                                     lastResponseInfo.related_faqs.map((faq, i) => (
                                                                         <div key={`faq-${i}`} className="space-y-3">
@@ -2387,7 +2394,7 @@ const BackendDashboard = () => {
                             className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm shadow-2xl"
                             onClick={() => setIsLineModalOpen(false)}
                         />
-                        <div className="relative bg-white w-full max-w-xl rounded-[32px] overflow-hidden shadow-2xl animate-in fade-in zoom-in duration-300">
+                        <div className="relative bg-white w-full max-w-xl rounded-[32px] overflow-hidden shadow-2xl">
                             {/* Modal Header */}
                             <div className="p-8 border-b border-slate-100 flex items-center justify-between">
                                 <div className="flex items-center gap-4">
@@ -2460,7 +2467,7 @@ const BackendDashboard = () => {
                             className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
                             onClick={() => setIsModalOpen(false)}
                         />
-                        <div className="relative bg-white w-full max-w-4xl rounded-[32px] overflow-hidden shadow-2xl animate-in fade-in zoom-in duration-300 flex flex-col max-h-[90vh]">
+                        <div className="relative bg-white w-full max-w-4xl rounded-[32px] overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
                             {/* Modal Header */}
                             <div className="p-8 border-b border-slate-100 flex items-center justify-between shrink-0">
                                 <div className="flex items-center gap-4">
@@ -2525,6 +2532,172 @@ const BackendDashboard = () => {
                                         </div>
                                     )}
                                 </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* Add FAQ Modal */}
+                {showFaqModal && (
+                    <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
+                        <div
+                            className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
+                            onClick={() => setShowFaqModal(false)}
+                        />
+                        <div className="relative bg-white w-full max-w-xl rounded-[32px] overflow-hidden shadow-2xl">
+                            <div className="p-8 border-b border-slate-100 flex items-center justify-between">
+                                <div className="flex items-center gap-4">
+                                    <div className="w-10 h-10 bg-brand-50 text-brand-600 rounded-xl flex items-center justify-center border border-brand-100">
+                                        <BookOpen size={20} />
+                                    </div>
+                                    <div>
+                                        <h2 className="text-xl font-bold text-slate-800">新增問答</h2>
+                                        <p className="text-slate-400 text-xs mt-0.5">建立一組 FAQ 問答</p>
+                                    </div>
+                                </div>
+                                <button
+                                    onClick={() => setShowFaqModal(false)}
+                                    className="w-10 h-10 flex items-center justify-center text-slate-400 hover:text-slate-600 hover:bg-slate-50 rounded-full transition-all"
+                                >
+                                    <X size={20} />
+                                </button>
+                            </div>
+                            <div className="p-8 space-y-6">
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Question</label>
+                                    <input
+                                        type="text"
+                                        value={newFaq.question}
+                                        maxLength={50}
+                                        onChange={(e) => setNewFaq({ ...newFaq, question: e.target.value })}
+                                        placeholder="輸入常見問題..."
+                                        autoFocus
+                                        className="w-full bg-white border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 font-bold text-base focus:ring-2 focus:ring-brand-500/10 focus:border-brand-500 outline-none transition-all"
+                                    />
+                                    <div className="text-[10px] text-slate-300 text-right">{newFaq.question.length}/50</div>
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Answer</label>
+                                    <textarea
+                                        value={newFaq.answer}
+                                        maxLength={200}
+                                        onChange={(e) => setNewFaq({ ...newFaq, answer: e.target.value })}
+                                        placeholder="輸入預設回覆回答內容..."
+                                        className="w-full bg-white border border-slate-200 rounded-2xl p-5 text-slate-600 text-sm leading-relaxed min-h-[120px] focus:ring-2 focus:ring-brand-500/10 focus:border-brand-500 outline-none transition-all"
+                                    />
+                                    <div className="text-[10px] text-slate-300 text-right">{newFaq.answer.length}/200</div>
+                                </div>
+                            </div>
+                            <div className="px-8 py-6 bg-slate-50/50 border-t border-slate-100 flex justify-end gap-3">
+                                <button
+                                    onClick={() => setShowFaqModal(false)}
+                                    className="px-6 py-2.5 rounded-xl text-sm font-bold text-slate-600 hover:bg-slate-100 transition-all"
+                                >
+                                    取消
+                                </button>
+                                <button
+                                    onClick={() => {
+                                        setEditingFaqs([...editingFaqs, { question: newFaq.question, answer: newFaq.answer }]);
+                                        setShowFaqModal(false);
+                                        setTimeout(() => {
+                                            faqsEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                        }, 100);
+                                    }}
+                                    disabled={!newFaq.question.trim() || !newFaq.answer.trim()}
+                                    className="flex items-center gap-2 px-6 py-2.5 bg-brand-600 text-white rounded-xl text-sm font-bold hover:bg-brand-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                    <Plus size={16} />
+                                    新增
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* Add Product Modal */}
+                {showProductModal && (
+                    <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
+                        <div
+                            className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
+                            onClick={() => setShowProductModal(false)}
+                        />
+                        <div className="relative bg-white w-full max-w-xl rounded-[32px] overflow-hidden shadow-2xl">
+                            <div className="p-8 border-b border-slate-100 flex items-center justify-between">
+                                <div className="flex items-center gap-4">
+                                    <div className="w-10 h-10 bg-green-50 text-green-600 rounded-xl flex items-center justify-center border border-green-100">
+                                        <Package size={20} />
+                                    </div>
+                                    <div>
+                                        <h2 className="text-xl font-bold text-slate-800">新增商品</h2>
+                                        <p className="text-slate-400 text-xs mt-0.5">建立一筆商品資料</p>
+                                    </div>
+                                </div>
+                                <button
+                                    onClick={() => setShowProductModal(false)}
+                                    className="w-10 h-10 flex items-center justify-center text-slate-400 hover:text-slate-600 hover:bg-slate-50 rounded-full transition-all"
+                                >
+                                    <X size={20} />
+                                </button>
+                            </div>
+                            <div className="p-8 space-y-6">
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">商品名稱</label>
+                                    <input
+                                        type="text"
+                                        value={newProduct.name}
+                                        maxLength={50}
+                                        onChange={(e) => setNewProduct({ ...newProduct, name: e.target.value })}
+                                        placeholder="輸入商品名稱..."
+                                        autoFocus
+                                        className="w-full bg-white border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 font-bold text-base focus:ring-2 focus:ring-green-500/10 focus:border-green-500 outline-none transition-all"
+                                    />
+                                    <div className="text-[10px] text-slate-300 text-right">{newProduct.name.length}/50</div>
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">菜單/規格說明</label>
+                                    <textarea
+                                        value={newProduct.description}
+                                        maxLength={400}
+                                        onChange={(e) => setNewProduct({ ...newProduct, description: e.target.value })}
+                                        placeholder="輸入商品說明、規格、價格等..."
+                                        className="w-full bg-white border border-slate-200 rounded-2xl p-5 text-slate-600 text-sm leading-relaxed min-h-[120px] focus:ring-2 focus:ring-green-500/10 focus:border-green-500 outline-none transition-all"
+                                    />
+                                    <div className="text-[10px] text-slate-300 text-right">{newProduct.description.length}/400</div>
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">關鍵字/別名 (選填)</label>
+                                    <input
+                                        type="text"
+                                        value={newProduct.keywords}
+                                        maxLength={100}
+                                        onChange={(e) => setNewProduct({ ...newProduct, keywords: e.target.value })}
+                                        placeholder="例：珍奶、波霸、大杯紅茶..."
+                                        className="w-full bg-white border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-600 text-sm focus:ring-2 focus:ring-green-500/10 focus:border-green-500 outline-none transition-all"
+                                    />
+                                    <div className="text-[10px] text-slate-300 text-right">{(newProduct.keywords || '').length}/100</div>
+                                </div>
+                            </div>
+                            <div className="px-8 py-6 bg-slate-50/50 border-t border-slate-100 flex justify-end gap-3">
+                                <button
+                                    onClick={() => setShowProductModal(false)}
+                                    className="px-6 py-2.5 rounded-xl text-sm font-bold text-slate-600 hover:bg-slate-100 transition-all"
+                                >
+                                    取消
+                                </button>
+                                <button
+                                    onClick={() => {
+                                        setEditingProducts([...editingProducts, { name: newProduct.name, description: newProduct.description, keywords: newProduct.keywords }]);
+                                        setShowProductModal(false);
+                                        setTimeout(() => {
+                                            productsEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                        }, 100);
+                                    }}
+                                    disabled={!newProduct.name.trim() || !newProduct.description.trim()}
+                                    className="flex items-center gap-2 px-6 py-2.5 bg-green-600 text-white rounded-xl text-sm font-bold hover:bg-green-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                    <Plus size={16} />
+                                    新增
+                                </button>
                             </div>
                         </div>
                     </div>
