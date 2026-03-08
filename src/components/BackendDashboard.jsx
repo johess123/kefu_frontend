@@ -46,22 +46,26 @@ import {
     Stethoscope,
     Crown,
     Power,
-    Search
+    Search,
+    BarChart2
 } from 'lucide-react';
 import Cookies from 'js-cookie';
 import { DEFAULT_HANDOFF_OPTIONS } from '../types';
 import InboxView from './InboxView';
+import ConversationAnalystView from './ConversationAnalystView';
 import { useAuth } from '../context/AuthContext';
 
 const SUB_SECTION_MAP = {
     'knowledge-base': 'Knowledge Base',
     'escalation-manager': 'Escalation Manager',
     'root-admin': 'Root Admin',
+    'conversation-analyst': 'Conversation Analyst',
 };
 const EDITING_TO_SUB = {
     'Knowledge Base': 'knowledge-base',
     'Escalation Manager': 'escalation-manager',
     'Root Admin': 'root-admin',
+    'Conversation Analyst': 'conversation-analyst',
 };
 
 const BackendDashboard = () => {
@@ -643,14 +647,16 @@ const BackendDashboard = () => {
         "Knowledge Base": <BookOpen size={24} className="text-blue-600" />,
         "Escalation Manager": <Shield size={24} className="text-orange-600" />,
         "Order Agent": <Package size={24} className="text-slate-400" />,
-        "Sales Agent": <LineChart size={24} className="text-slate-400" />
+        "Sales Agent": <LineChart size={24} className="text-slate-400" />,
+        "Conversation Analyst": <BarChart2 size={24} className="text-purple-600" />
     };
 
     const bgColorMap = {
         "Knowledge Base": 'bg-blue-50',
         "Escalation Manager": 'bg-orange-50',
         "Order Agent": 'bg-slate-50',
-        "Sales Agent": 'bg-slate-50'
+        "Sales Agent": 'bg-slate-50',
+        "Conversation Analyst": 'bg-purple-50'
     };
 
     const teamSubagents = (currentAgent?.used_subagent_details || [])
@@ -1347,6 +1353,10 @@ const BackendDashboard = () => {
                                             </div>
                                         </div>
                                     );
+                                }
+
+                                if (editingSubagent === 'Conversation Analyst') {
+                                    return <ConversationAnalystView agentId={routeAgentId} adminId={currentAgent?.admin_id} onFaqUpdated={fetchAgentData} />;
                                 }
 
                                 if (editingSubagent === 'Root Admin') {
