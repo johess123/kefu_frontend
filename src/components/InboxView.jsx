@@ -38,13 +38,16 @@ export default function InboxView({ currentAgent }) {
 
     const fetchLineQuota = useCallback(async () => {
         if (!agentId || !adminId) return;
+        const hasLine = currentAgent?.deploy_config?.line?.access_token ||
+                        currentAgent?.deploy_config?.access_token;
+        if (!hasLine) return;
         try {
             const res = await axios.get(`${API}/api/inbox/agents/${agentId}/line-quota?userId=${adminId}`);
             setLineQuota(res.data);
         } catch (err) {
             console.error('Failed to fetch LINE quota', err);
         }
-    }, [agentId, adminId]);
+    }, [agentId, adminId, currentAgent]);
 
     const fetchMessages = useCallback(async (sessionId) => {
         if (!sessionId || !agentId || !adminId) return;
@@ -91,11 +94,13 @@ export default function InboxView({ currentAgent }) {
         setReplyText('');
         setIsSending(true);
         setMessages(prev => [...prev, optimisticMsg]);
-        setLineQuota(prev =>
-            prev && prev.type !== 'none'
-                ? { ...prev, used: prev.used + 1, remaining: prev.remaining - 1 }
-                : prev
-        );
+        if (getChannel(selectedSession) === 'line') {
+            setLineQuota(prev =>
+                prev && prev.type !== 'none'
+                    ? { ...prev, used: prev.used + 1, remaining: prev.remaining - 1 }
+                    : prev
+            );
+        }
         try {
             await axios.post(
                 `${API}/api/inbox/sessions/${selectedSession.session_id}/reply?userId=${adminId}`,
@@ -108,12 +113,14 @@ export default function InboxView({ currentAgent }) {
             // 回滾所有樂觀更新
             setMessages(prev => prev.filter(m => m !== optimisticMsg));
             setReplyText(text);
-            setLineQuota(prev =>
-                prev && prev.type !== 'none'
-                    ? { ...prev, used: prev.used - 1, remaining: prev.remaining + 1 }
-                    : prev
-            );
-            alert('發送失敗，請確認 LINE 部署設定是否正確。');
+            if (getChannel(selectedSession) === 'line') {
+                setLineQuota(prev =>
+                    prev && prev.type !== 'none'
+                        ? { ...prev, used: prev.used - 1, remaining: prev.remaining + 1 }
+                        : prev
+                );
+            }
+            alert('發送失敗，請確認渠道部署設定是否正確。');
         } finally {
             setIsSending(false);
         }
@@ -140,6 +147,9 @@ export default function InboxView({ currentAgent }) {
             setIsClosing(false);
         }
     };
+
+    const getChannel = (sess) =>
+        sess?.channel || (sess?.session_id?.startsWith('telegram_') ? 'telegram' : 'line');
 
     const formatTime = (timeStr) => {
         if (!timeStr) return '';
@@ -176,13 +186,17 @@ export default function InboxView({ currentAgent }) {
         };
     };
 
-    if (currentAgent?.deploy_type !== 'line') {
+    const hasChannel = currentAgent?.deploy_config?.line ||
+                       currentAgent?.deploy_config?.telegram ||
+                       currentAgent?.deploy_type === 'line' ||
+                       currentAgent?.deploy_type === 'telegram';
+    if (!hasChannel) {
         return (
             <div className="flex flex-col items-center justify-center h-64 text-center text-slate-500 gap-4">
                 <MessageSquare size={48} className="text-slate-300" />
                 <div>
-                    <p className="text-lg font-semibold text-slate-700">尚未串接 LINE</p>
-                    <p className="text-sm mt-1">請先至「渠道串接」完成 LINE Bot 部署，才能使用對話收件匣。</p>
+                    <p className="text-lg font-semibold text-slate-700">尚未串接渠道</p>
+                    <p className="text-sm mt-1">請先至「渠道串接」完成 LINE 或 Telegram Bot 部署，才能使用對話收件匣。</p>
                 </div>
             </div>
         );
@@ -194,7 +208,7 @@ export default function InboxView({ currentAgent }) {
             <div className="flex items-center justify-between mb-4">
                 <div>
                     <h1 className="text-2xl font-bold text-slate-900">對話收件匣</h1>
-                    <p className="text-slate-500 text-sm">查看並回覆 LINE 用戶訊息</p>
+                    <p className="text-slate-500 text-sm">查看並回覆用戶訊息</p>
                 </div>
                 <button
                     onClick={() => { fetchSessions(); fetchLineQuota(); }}
@@ -272,6 +286,7 @@ export default function InboxView({ currentAgent }) {
                         ) : (
                             sessions.map((sess) => {
                                 const isSelected = selectedSession?.session_id === sess.session_id;
+                                const ch = getChannel(sess);
                                 return (
                                     <button
                                         key={sess.session_id}
@@ -279,7 +294,12 @@ export default function InboxView({ currentAgent }) {
                                         className={`w-full text-left px-4 py-3 border-b border-slate-50 hover:bg-slate-50 transition-colors ${isSelected ? 'bg-brand-50 border-l-2 border-l-brand-500' : ''}`}
                                     >
                                         <div className="flex items-start justify-between gap-2">
-                                            <span className="font-medium text-slate-800 text-sm truncate">{sess.user_name}</span>
+                                            <div className="flex items-center gap-1.5 min-w-0">
+                                                <span className="font-medium text-slate-800 text-sm truncate">{sess.user_name}</span>
+                                                <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold flex-shrink-0 ${ch === 'telegram' ? 'bg-sky-100 text-sky-600' : 'bg-green-100 text-green-600'}`}>
+                                                    {ch === 'telegram' ? 'TG' : 'LINE'}
+                                                </span>
+                                            </div>
                                             <span className={`text-xs px-1.5 py-0.5 rounded-full flex-shrink-0 ${sess.mode === 'human' ? 'bg-orange-100 text-orange-600' : 'bg-blue-100 text-blue-600'}`}>
                                                 {sess.mode === 'human' ? '人工' : 'AI'}
                                             </span>
@@ -304,7 +324,17 @@ export default function InboxView({ currentAgent }) {
                             {/* Chat header */}
                             <div className="px-5 py-3 border-b border-slate-100 flex items-center gap-3">
                                 <div>
-                                    <p className="font-semibold text-slate-800">{selectedSession.user_name}</p>
+                                    <div className="flex items-center gap-2">
+                                        <p className="font-semibold text-slate-800">{selectedSession.user_name}</p>
+                                        {(() => {
+                                            const ch = getChannel(selectedSession);
+                                            return (
+                                                <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${ch === 'telegram' ? 'bg-sky-100 text-sky-600' : 'bg-green-100 text-green-600'}`}>
+                                                    {ch === 'telegram' ? 'TG' : 'LINE'}
+                                                </span>
+                                            );
+                                        })()}
+                                    </div>
                                     <p className="text-xs text-slate-400">{selectedSession.session_id}</p>
                                 </div>
                                 <span className={`ml-auto text-xs px-2 py-1 rounded-full ${selectedSession.mode === 'human' ? 'bg-orange-100 text-orange-600' : 'bg-blue-100 text-blue-600'}`}>
