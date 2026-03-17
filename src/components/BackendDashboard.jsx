@@ -47,12 +47,16 @@ import {
     Crown,
     Power,
     Search,
-    BarChart2
+    BarChart2,
+    Image as ImageIcon,
+    Upload
 } from 'lucide-react';
 import Cookies from 'js-cookie';
 import { DEFAULT_HANDOFF_OPTIONS } from '../types';
 import InboxView from './InboxView';
 import ConversationAnalystView from './ConversationAnalystView';
+import ConfirmDialog from './ConfirmDialog';
+import ImageLightbox from './ImageLightbox';
 import { useAuth } from '../context/AuthContext';
 
 const SUB_SECTION_MAP = {
@@ -142,9 +146,21 @@ const BackendDashboard = () => {
 
     // Add FAQ / Product modal states
     const [showFaqModal, setShowFaqModal] = useState(false);
-    const [newFaq, setNewFaq] = useState({ question: '', answer: '' });
+    const [newFaq, setNewFaq] = useState({ question: '', answer: '', image_id: '' });
+    const [uploadingFaqIdx, setUploadingFaqIdx] = useState(null);
     const [showProductModal, setShowProductModal] = useState(false);
-    const [newProduct, setNewProduct] = useState({ name: '', description: '', keywords: '' });
+    const [newProduct, setNewProduct] = useState({ name: '', description: '', keywords: '', image_id: '' });
+    const [uploadingProductIdx, setUploadingProductIdx] = useState(null);
+
+    // Lightbox state
+    const [lightboxSrc, setLightboxSrc] = useState(null);
+
+    // ConfirmDialog state
+    const [confirmDialog, setConfirmDialog] = useState({ isOpen: false, title: '', message: '', onConfirm: null });
+    const openConfirm = ({ title, message, onConfirm }) =>
+        setConfirmDialog({ isOpen: true, title, message, onConfirm });
+    const closeConfirm = () =>
+        setConfirmDialog(prev => ({ ...prev, isOpen: false }));
 
     // CRM states
     const [crmUsers, setCrmUsers] = useState([]);
@@ -667,6 +683,89 @@ const BackendDashboard = () => {
         } finally {
             setIsSaving(false);
         }
+    };
+
+    const handleFaqImageUpload = async (idx, file) => {
+        if (!file) return;
+        const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
+        if (!allowedTypes.includes(file.type)) {
+            alert('僅支援 jpg/png/webp 格式');
+            return;
+        }
+        if (file.size > 2 * 1024 * 1024) {
+            alert('圖片大小不可超過 2MB');
+            return;
+        }
+        setUploadingFaqIdx(idx);
+        try {
+            const formData = new FormData();
+            formData.append('file', file);
+            const res = await axios.post(`${config.API_URL}/api/admin/upload_image`, formData, {
+                headers: { 'Content-Type': 'multipart/form-data' }
+            });
+            const newFaqs = [...editingFaqs];
+            newFaqs[idx] = { ...newFaqs[idx], image_id: res.data.image_id, _preview_url: res.data.preview_url };
+            setEditingFaqs(newFaqs);
+        } catch (error) {
+            console.error('Failed to upload image:', error);
+            alert('圖片上傳失敗');
+        } finally {
+            setUploadingFaqIdx(null);
+        }
+    };
+
+    const handleFaqImageDelete = async (idx) => {
+        const faq = editingFaqs[idx];
+        if (!faq.image_id) return;
+        try {
+            await axios.post(`${config.API_URL}/api/admin/delete_image`, { image_id: faq.image_id });
+        } catch (e) {
+            console.error('Failed to delete image:', e);
+        }
+        const newFaqs = [...editingFaqs];
+        newFaqs[idx] = { ...newFaqs[idx], image_id: '', _preview_url: '' };
+        setEditingFaqs(newFaqs);
+    };
+
+    const handleProductImageUpload = async (idx, file) => {
+        if (!file) return;
+        if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+            alert('僅支援 jpg/png/webp 格式');
+            return;
+        }
+        if (file.size > 2 * 1024 * 1024) {
+            alert('圖片大小不可超過 2MB');
+            return;
+        }
+        setUploadingProductIdx(idx);
+        try {
+            const formData = new FormData();
+            formData.append('file', file);
+            const res = await axios.post(`${config.API_URL}/api/admin/upload_image`, formData, {
+                headers: { 'Content-Type': 'multipart/form-data' }
+            });
+            const newProducts = [...editingProducts];
+            newProducts[idx] = { ...newProducts[idx], image_id: res.data.image_id, _preview_url: res.data.preview_url };
+            setEditingProducts(newProducts);
+        } catch (error) {
+            console.error('Failed to upload product image:', error);
+            alert('圖片上傳失敗');
+        } finally {
+            setUploadingProductIdx(null);
+        }
+    };
+
+    const handleProductImageDelete = async (idx) => {
+        const product = editingProducts[idx];
+        if (!product.image_id) return;
+        try {
+            await axios.post(`${config.API_URL}/api/admin/delete_image`, { image_id: product.image_id });
+        } catch (e) {
+            console.error('Failed to delete product image:', e);
+        }
+        const newProducts = [...editingProducts];
+        newProducts[idx] = { ...newProducts[idx], image_id: '', _preview_url: '' };
+        setEditingProducts(newProducts);
     };
 
     const handleSaveProducts = async () => {
@@ -1273,6 +1372,54 @@ const BackendDashboard = () => {
                                                                         <div className="text-[10px] text-slate-300 text-right pr-2 mt-1">{faq.answer?.length || 0}/200</div>
                                                                     </div>
                                                                 </div>
+
+                                                                {/* FAQ 附加圖片 */}
+                                                                <div className="space-y-2">
+                                                                    <div className="flex items-center gap-2 text-slate-400">
+                                                                        <span className="text-[10px] font-black uppercase tracking-widest">Image</span>
+                                                                        <span className="text-[10px] text-slate-300">(選填)</span>
+                                                                    </div>
+                                                                    {faq.image_id ? (
+                                                                        <div className="flex items-center gap-3">
+                                                                            <img
+                                                                                src={faq._preview_url || faq.preview_url || ''}
+                                                                                alt="FAQ 附圖"
+                                                                                className="w-20 h-20 object-cover rounded-xl border border-slate-200 cursor-zoom-in hover:opacity-90 transition-opacity"
+                                                                                onClick={() => setLightboxSrc(faq._preview_url || faq.preview_url || '')}
+                                                                                onError={(e) => { e.target.style.display = 'none'; }}
+                                                                            />
+                                                                            <button
+                                                                                onClick={() => openConfirm({
+                                                                                    title: '移除附圖',
+                                                                                    message: '確定要移除這張 FAQ 附圖嗎？此操作無法復原。',
+                                                                                    onConfirm: () => { handleFaqImageDelete(idx); closeConfirm(); },
+                                                                                })}
+                                                                                className="flex items-center gap-1.5 px-3 py-2 bg-white border border-red-200 text-red-500 rounded-xl text-xs font-bold hover:bg-red-50 transition-all"
+                                                                            >
+                                                                                <Trash2 size={14} />
+                                                                                移除圖片
+                                                                            </button>
+                                                                        </div>
+                                                                    ) : (
+                                                                        <label className="flex items-center gap-2 px-4 py-3 bg-white border border-dashed border-slate-200 rounded-xl cursor-pointer hover:border-brand-300 hover:bg-brand-50/50 transition-all">
+                                                                            {uploadingFaqIdx === idx ? (
+                                                                                <Loader2 size={16} className="animate-spin text-brand-500" />
+                                                                            ) : (
+                                                                                <Upload size={16} className="text-slate-400" />
+                                                                            )}
+                                                                            <span className="text-xs text-slate-500">
+                                                                                {uploadingFaqIdx === idx ? '上傳中...' : '上傳附圖 (jpg/png/webp, 2MB)'}
+                                                                            </span>
+                                                                            <input
+                                                                                type="file"
+                                                                                accept="image/jpeg,image/png,image/webp"
+                                                                                className="hidden"
+                                                                                onChange={(e) => handleFaqImageUpload(idx, e.target.files[0])}
+                                                                                disabled={uploadingFaqIdx === idx}
+                                                                            />
+                                                                        </label>
+                                                                    )}
+                                                                </div>
                                                             </div>
                                                         </div>
                                                     ))}
@@ -1404,6 +1551,54 @@ const BackendDashboard = () => {
                                                                         />
                                                                         <div className="text-[10px] text-slate-300 text-right pr-2 mt-1">{(product.keywords || '').length}/100</div>
                                                                     </div>
+                                                                </div>
+
+                                                                {/* 商品附加圖片 */}
+                                                                <div className="space-y-2">
+                                                                    <div className="flex items-center gap-2 text-slate-400">
+                                                                        <span className="text-[10px] font-black uppercase tracking-widest">Image</span>
+                                                                        <span className="text-[10px] text-slate-300">(選填)</span>
+                                                                    </div>
+                                                                    {product.image_id ? (
+                                                                        <div className="flex items-center gap-3">
+                                                                            <img
+                                                                                src={product._preview_url || product.preview_url || ''}
+                                                                                alt="商品附圖"
+                                                                                className="w-20 h-20 object-cover rounded-xl border border-slate-200 cursor-zoom-in hover:opacity-90 transition-opacity"
+                                                                                onClick={() => setLightboxSrc(product._preview_url || product.preview_url || '')}
+                                                                                onError={(e) => { e.target.style.display = 'none'; }}
+                                                                            />
+                                                                            <button
+                                                                                onClick={() => openConfirm({
+                                                                                    title: '移除附圖',
+                                                                                    message: '確定要移除這張商品附圖嗎？此操作無法復原。',
+                                                                                    onConfirm: () => { handleProductImageDelete(idx); closeConfirm(); },
+                                                                                })}
+                                                                                className="flex items-center gap-1.5 px-3 py-2 bg-white border border-red-200 text-red-500 rounded-xl text-xs font-bold hover:bg-red-50 transition-all"
+                                                                            >
+                                                                                <Trash2 size={14} />
+                                                                                移除圖片
+                                                                            </button>
+                                                                        </div>
+                                                                    ) : (
+                                                                        <label className="flex items-center gap-2 px-4 py-3 bg-white border border-dashed border-slate-200 rounded-xl cursor-pointer hover:border-green-300 hover:bg-green-50/50 transition-all">
+                                                                            {uploadingProductIdx === idx ? (
+                                                                                <Loader2 size={16} className="animate-spin text-green-500" />
+                                                                            ) : (
+                                                                                <Upload size={16} className="text-slate-400" />
+                                                                            )}
+                                                                            <span className="text-xs text-slate-500">
+                                                                                {uploadingProductIdx === idx ? '上傳中...' : '上傳附圖 (jpg/png/webp, 2MB)'}
+                                                                            </span>
+                                                                            <input
+                                                                                type="file"
+                                                                                accept="image/jpeg,image/png,image/webp"
+                                                                                className="hidden"
+                                                                                onChange={(e) => handleProductImageUpload(idx, e.target.files[0])}
+                                                                                disabled={uploadingProductIdx === idx}
+                                                                            />
+                                                                        </label>
+                                                                    )}
                                                                 </div>
                                                             </div>
                                                         </div>
@@ -2778,6 +2973,36 @@ const BackendDashboard = () => {
                                     />
                                     <div className="text-[10px] text-slate-300 text-right">{newFaq.answer.length}/200</div>
                                 </div>
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Image <span className="text-slate-300 normal-case">(選填)</span></label>
+                                    {newFaq.image_id ? (
+                                        <div className="flex items-center gap-3">
+                                            <img src={newFaq._preview_url} alt="FAQ 附圖" className="w-16 h-16 object-cover rounded-xl border border-slate-200" />
+                                            <button
+                                                onClick={() => setNewFaq({ ...newFaq, image_id: '', _preview_url: '' })}
+                                                className="flex items-center gap-1 px-3 py-1.5 border border-red-200 text-red-500 rounded-lg text-xs font-bold hover:bg-red-50"
+                                            >
+                                                <Trash2 size={12} /> 移除
+                                            </button>
+                                        </div>
+                                    ) : (
+                                        <label className="flex items-center gap-2 px-4 py-3 bg-white border border-dashed border-slate-200 rounded-xl cursor-pointer hover:border-brand-300 transition-all">
+                                            <Upload size={16} className="text-slate-400" />
+                                            <span className="text-xs text-slate-500">上傳附圖 (jpg/png/webp, 2MB)</span>
+                                            <input type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={async (e) => {
+                                                const file = e.target.files[0];
+                                                if (!file) return;
+                                                if (file.size > 2 * 1024 * 1024) { alert('圖片大小不可超過 2MB'); return; }
+                                                const fd = new FormData();
+                                                fd.append('file', file);
+                                                try {
+                                                    const res = await axios.post(`${config.API_URL}/api/admin/upload_image`, fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+                                                    setNewFaq(prev => ({ ...prev, image_id: res.data.image_id, _preview_url: res.data.preview_url }));
+                                                } catch { alert('圖片上傳失敗'); }
+                                            }} />
+                                        </label>
+                                    )}
+                                </div>
                             </div>
                             <div className="px-8 py-6 bg-slate-50/50 border-t border-slate-100 flex justify-end gap-3">
                                 <button
@@ -2788,7 +3013,7 @@ const BackendDashboard = () => {
                                 </button>
                                 <button
                                     onClick={() => {
-                                        setEditingFaqs([...editingFaqs, { question: newFaq.question, answer: newFaq.answer }]);
+                                        setEditingFaqs([...editingFaqs, { question: newFaq.question, answer: newFaq.answer, image_id: newFaq.image_id || '' }]);
                                         setShowFaqModal(false);
                                         setTimeout(() => {
                                             faqsEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -2908,6 +3133,24 @@ const BackendDashboard = () => {
                     </div>
                 </div> */}
             </main>
+
+            {/* 圖片放大燈箱 */}
+            <ImageLightbox
+                isOpen={!!lightboxSrc}
+                src={lightboxSrc}
+                alt="FAQ 附圖"
+                onClose={() => setLightboxSrc(null)}
+            />
+
+            {/* 共用確認彈窗 */}
+            <ConfirmDialog
+                isOpen={confirmDialog.isOpen}
+                title={confirmDialog.title}
+                message={confirmDialog.message}
+                confirmText="確認移除"
+                onConfirm={confirmDialog.onConfirm}
+                onCancel={closeConfirm}
+            />
         </div>
     );
 };

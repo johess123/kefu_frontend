@@ -8,10 +8,12 @@ import MonitorApp from './components/monitor/MonitorApp';
 import MonitorDashboard from './components/monitor/MonitorDashboard';
 import MonitorRecords from './components/monitor/MonitorRecords';
 import MonitorUsers from './components/monitor/MonitorUsers';
+import CatalogPage from './components/CatalogPage';
 
 const App = () => {
     return (
         <Routes>
+            <Route path="/catalog/:agentId" element={<CatalogPage />} />
             <Route element={<ProtectedRoute />}>
                 <Route path="/" element={<AgentHome />} />
                 <Route path="/agent/:agentId/*" element={<BackendDashboard />} />

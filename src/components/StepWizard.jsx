@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Bot, ArrowLeft, ArrowRight, Trash2, Plus, CheckCircle2, Globe, Sparkles, Loader2, AlertCircle, Stethoscope, RotateCcw } from 'lucide-react';
+import { Bot, ArrowLeft, ArrowRight, Trash2, Plus, CheckCircle2, Globe, Sparkles, Loader2, AlertCircle, Stethoscope, RotateCcw, Upload } from 'lucide-react';
 import axios from 'axios';
 import Cookies from 'js-cookie';
 import config from '../config';
@@ -12,6 +12,7 @@ const StepWizard = ({ formData, setFormData, onComplete }) => {
     const [optimizingFaqIds, setOptimizingFaqIds] = useState(new Set());
     const [isAnalyzing, setIsAnalyzing] = useState(false);
     const [analysisReport, setAnalysisReport] = useState(null);
+    const [uploadingFaqId, setUploadingFaqId] = useState(null);
 
     const totalQuestions = 4;
 
@@ -162,7 +163,7 @@ const StepWizard = ({ formData, setFormData, onComplete }) => {
                 alert('最多只能新增 20 組 FAQ');
                 return;
             }
-            const newFAQ = { id: Date.now().toString(), question: '', answer: '' };
+            const newFAQ = { id: Date.now().toString(), question: '', answer: '', image_id: '' };
             updateField('faqs', [...formData.faqs, newFAQ]);
         };
 
@@ -194,7 +195,8 @@ const StepWizard = ({ formData, setFormData, onComplete }) => {
                     const newFaqs = response.data.faqs.map(f => ({
                         id: Math.random().toString(36).substr(2, 9),
                         question: f.q,
-                        answer: f.a
+                        answer: f.a,
+                        image_id: ''
                     }));
                     updateField('faqs', [...formData.faqs, ...newFaqs]);
                 }
@@ -418,6 +420,45 @@ const StepWizard = ({ formData, setFormData, onComplete }) => {
                                     />
                                 </div>
                                 <div className="text-[10px] text-slate-300 text-right pr-2">{faq.answer.length}/200</div>
+
+                                {/* FAQ 附加圖片 */}
+                                <div className="flex items-start gap-2 mt-1">
+                                    <span className="text-xs font-black text-slate-300 uppercase mt-2">IMG</span>
+                                    {faq.image_id ? (
+                                        <div className="flex items-center gap-2">
+                                            <img src={faq._preview_url} alt="附圖" className="w-14 h-14 object-cover rounded-lg border border-slate-200" onError={(e) => { e.target.style.display = 'none'; }} />
+                                            <button
+                                                onClick={() => updateFAQ(faq.id, 'image_id', '')}
+                                                className="text-xs text-red-400 hover:text-red-600"
+                                            >
+                                                <Trash2 size={14} />
+                                            </button>
+                                        </div>
+                                    ) : (
+                                        <label className="flex items-center gap-1.5 px-3 py-1.5 border border-dashed border-slate-200 rounded-lg cursor-pointer hover:border-brand-300 transition-all">
+                                            {uploadingFaqId === faq.id ? (
+                                                <Loader2 size={14} className="animate-spin text-brand-500" />
+                                            ) : (
+                                                <Upload size={14} className="text-slate-400" />
+                                            )}
+                                            <span className="text-[11px] text-slate-400">{uploadingFaqId === faq.id ? '上傳中...' : '上傳附圖'}</span>
+                                            <input type="file" accept="image/jpeg,image/png,image/webp" className="hidden" disabled={uploadingFaqId === faq.id} onChange={async (e) => {
+                                                const file = e.target.files[0];
+                                                if (!file) return;
+                                                if (file.size > 2 * 1024 * 1024) { alert('圖片不可超過 2MB'); return; }
+                                                setUploadingFaqId(faq.id);
+                                                try {
+                                                    const fd = new FormData();
+                                                    fd.append('file', file);
+                                                    const res = await axios.post(`${config.API_URL}/api/admin/upload_image`, fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+                                                    updateFAQ(faq.id, 'image_id', res.data.image_id);
+                                                    updateField('faqs', formData.faqs.map(f => f.id === faq.id ? { ...f, image_id: res.data.image_id, _preview_url: res.data.preview_url } : f));
+                                                } catch { alert('圖片上傳失敗'); }
+                                                finally { setUploadingFaqId(null); }
+                                            }} />
+                                        </label>
+                                    )}
+                                </div>
                             </div>
                         </div>
                     ))}
