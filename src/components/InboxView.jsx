@@ -366,9 +366,25 @@ export default function InboxView({ currentAgent }) {
                                                     <p className={`text-xs mb-1 ${style.label} ${msg.sender !== 'user' ? 'text-right' : ''}`}>
                                                         {senderLabel(msg.sender)} · {msg.time}
                                                     </p>
-                                                    <div className={`px-3 py-2 rounded-2xl text-sm whitespace-pre-wrap ${style.bubble}`}>
-                                                        {msg.content}
-                                                    </div>
+                                                    {msg.content && (
+                                                        <div className={`px-3 py-2 rounded-2xl text-sm whitespace-pre-wrap ${style.bubble}`}>
+                                                            {msg.content}
+                                                        </div>
+                                                    )}
+                                                    {msg.image_urls && msg.image_urls.length > 0 && (
+                                                        <div className={`flex flex-wrap gap-2 ${msg.content ? 'mt-2' : ''}`}>
+                                                            {msg.image_urls.map((url, imgIdx) => (
+                                                                <a key={imgIdx} href={url} target="_blank" rel="noopener noreferrer">
+                                                                    <img
+                                                                        src={url}
+                                                                        alt=""
+                                                                        className="max-w-[200px] max-h-[200px] rounded-xl object-cover border border-slate-200 cursor-pointer hover:opacity-90 transition-opacity"
+                                                                        onError={(e) => { e.target.style.display = 'none'; }}
+                                                                    />
+                                                                </a>
+                                                            ))}
+                                                        </div>
+                                                    )}
                                                 </div>
                                             </div>
                                         );

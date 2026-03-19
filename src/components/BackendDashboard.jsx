@@ -50,12 +50,14 @@ import {
     BarChart2,
     Image as ImageIcon,
     Upload,
-    FileSpreadsheet
+    FileSpreadsheet,
+    Activity
 } from 'lucide-react';
 import Cookies from 'js-cookie';
 import { DEFAULT_HANDOFF_OPTIONS } from '../types';
 import InboxView from './InboxView';
 import ConversationAnalystView from './ConversationAnalystView';
+import ActivityLogView from './ActivityLogView';
 import ConfirmDialog from './ConfirmDialog';
 import ImageLightbox from './ImageLightbox';
 import { useAuth } from '../context/AuthContext';
@@ -1064,7 +1066,8 @@ const BackendDashboard = () => {
         },
         {
             group: 'AI 團隊管理', items: [
-                { id: 'agents', label: '虛擬團隊 (Agents)', icon: <Users size={20} /> }
+                { id: 'agents', label: '虛擬團隊 (Agents)', icon: <Users size={20} /> },
+                { id: 'activity-logs', label: '團隊運作日誌', icon: <Activity size={20} /> }
             ]
         },
         {
@@ -2683,6 +2686,8 @@ const BackendDashboard = () => {
                                         )}
                                     </>
                                 );
+                            case 'activity-logs':
+                                return <ActivityLogView agentId={routeAgentId} userId={currentAgent?.admin_id} />;
                             case 'inbox':
                                 return <InboxView currentAgent={currentAgent} />;
                             case 'channels':
