@@ -18,6 +18,7 @@ export const DEFAULT_FORM_DATA = {
     tone: ToneType.WARM,
     toneAvoid: '',
     faqs: [],
+    products: [],
     handoffTriggers: [],
     handoffCustomTrigger: '',
 };

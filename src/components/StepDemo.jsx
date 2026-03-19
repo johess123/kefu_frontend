@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import axios from 'axios';
 import config from '../config';
-import { Send, User, Bot, Loader2, RotateCcw, ArrowRight, MessageCircle, Info, ShieldAlert, CheckCircle2, Lightbulb, HelpCircle } from 'lucide-react';
+import { Send, User, Bot, Loader2, RotateCcw, ArrowRight, MessageCircle, Info, ShieldAlert, CheckCircle2, Lightbulb, HelpCircle, Package } from 'lucide-react';
 import { AppStep } from '../types';
 
 import Cookies from 'js-cookie';
@@ -13,6 +13,7 @@ const StepDemo = ({ formData, sessionId, setSessionId, agentId, onNext, setCurre
     const [input, setInput] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [lastResponseInfo, setLastResponseInfo] = useState(null);
+    const [leftTab, setLeftTab] = useState('faq');
     const messagesEndRef = useRef(null);
 
     const scrollToBottom = () => {
@@ -108,28 +109,69 @@ const StepDemo = ({ formData, sessionId, setSessionId, agentId, onNext, setCurre
             </div>
 
             <div className="grid grid-cols-12 gap-6 flex-1 min-h-0 overflow-hidden mb-8">
-                {/* Left Column: FAQ Quick Test (Width 3/12) */}
+                {/* Left Column: FAQ / Product List (Width 3/12) */}
                 <div className="col-span-3 bg-white rounded-2xl border border-slate-200 shadow-sm flex flex-col overflow-hidden">
                     <div className="p-4 border-b border-slate-100 bg-slate-50/50">
-                        <h3 className="font-bold text-slate-700 flex items-center gap-2 text-sm uppercase tracking-wider">
-                            <MessageCircle size={16} className="text-brand-600" />
-                            測試問題清單
-                        </h3>
+                        <div className="flex gap-2">
+                            <button
+                                onClick={() => setLeftTab('faq')}
+                                className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${leftTab === 'faq' ? 'bg-brand-600 text-white shadow-sm' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-100'}`}
+                            >
+                                <MessageCircle size={13} />
+                                FAQ
+                            </button>
+                            <button
+                                onClick={() => setLeftTab('product')}
+                                className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${leftTab === 'product' ? 'bg-green-600 text-white shadow-sm' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-100'}`}
+                            >
+                                <Package size={13} />
+                                商品庫
+                            </button>
+                        </div>
                     </div>
                     <div className="flex-1 overflow-y-auto p-3 space-y-2">
-                        {formData.faqs.map((faq, idx) => (
-                            <button
-                                key={idx}
-                                onClick={() => handleFaqClick(faq.question)}
-                                disabled={isLoading}
-                                className="w-full text-left p-3 rounded-xl border border-slate-100 hover:border-brand-300 hover:bg-brand-50/50 transition-all group"
-                            >
-                                <div className="text-[10px] font-bold text-slate-400 mb-1 group-hover:text-brand-500">FAQ {idx + 1}</div>
-                                <p className="text-xs font-semibold text-slate-600 group-hover:text-slate-900 leading-relaxed">
-                                    {faq.question}
-                                </p>
-                            </button>
-                        ))}
+                        {leftTab === 'faq' ? (
+                            <>
+                                {formData.faqs.map((faq, idx) => (
+                                    <button
+                                        key={idx}
+                                        onClick={() => handleFaqClick(faq.question)}
+                                        disabled={isLoading}
+                                        className="w-full text-left p-3 rounded-xl border border-slate-100 hover:border-brand-300 hover:bg-brand-50/50 transition-all group"
+                                    >
+                                        <div className="text-[10px] font-bold text-slate-400 mb-1 group-hover:text-brand-500 uppercase tracking-widest">FAQ {idx + 1}</div>
+                                        <p className="text-xs font-semibold text-slate-600 group-hover:text-slate-900 leading-relaxed">
+                                            {faq.question}
+                                        </p>
+                                    </button>
+                                ))}
+                                {formData.faqs.length === 0 && (
+                                    <div className="text-center py-10 text-slate-400 text-xs italic">尚未設定任何 FAQ</div>
+                                )}
+                            </>
+                        ) : (
+                            <>
+                                {(formData.products || []).map((product, idx) => (
+                                    <button
+                                        key={idx}
+                                        onClick={() => handleFaqClick(`請問「${product.name}」有什麼特色或詳細資訊？`)}
+                                        disabled={isLoading}
+                                        className="w-full text-left p-3 rounded-xl border border-slate-100 hover:border-green-300 hover:bg-green-50/50 transition-all group"
+                                    >
+                                        <div className="text-[10px] font-bold text-slate-400 mb-0.5 group-hover:text-green-600 uppercase tracking-widest">商品 {idx + 1}</div>
+                                        <p className="text-xs font-semibold text-slate-600 group-hover:text-slate-900 leading-relaxed">
+                                            {product.name}
+                                        </p>
+                                        {product.description && (
+                                            <p className="text-[10px] text-slate-400 mt-0.5 leading-relaxed line-clamp-2">{product.description}</p>
+                                        )}
+                                    </button>
+                                ))}
+                                {(!formData.products || formData.products.length === 0) && (
+                                    <div className="text-center py-10 text-slate-400 text-xs italic">尚未設定任何商品</div>
+                                )}
+                            </>
+                        )}
                     </div>
                 </div>
 

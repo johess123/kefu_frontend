@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import config from '../config';
-import { Loader2, MessageSquare, UserCheck, ArrowRight, Plus, Trash2, Save, CheckCircle, ChevronRight, Edit3 } from 'lucide-react';
+import { Loader2, MessageSquare, UserCheck, ArrowRight, Plus, Trash2, Save, CheckCircle, ChevronRight, Edit3, Package } from 'lucide-react';
 
 import Cookies from 'js-cookie';
 
@@ -50,6 +50,7 @@ const StepReview = ({ onNext, onEdit, formData, setFormData, sessionId, agentId,
                 line_user_id: line_user_id,
                 agent_id: agentId, // Pass agentId for update
                 faqs: reviewData.faqs, // Pass potential edits
+                products: formData.products || [], // Pass products from wizard Q4
                 handoff_triggers: reviewData.handoff_triggers,
                 handoff_preview: reviewData.handoff_preview
             });
@@ -294,6 +295,26 @@ const StepReview = ({ onNext, onEdit, formData, setFormData, sessionId, agentId,
                                     <strong>提示：</strong> 這些規則將被系統優先識別，一旦符合將直接引導至轉接程序。
                                 </p>
                             </div>
+
+                            {/* 商品摘要 */}
+                            {(formData.products || []).length > 0 && (
+                                <div>
+                                    <label className="text-[10px] font-bold text-slate-400 uppercase mb-3 block tracking-widest">商品目錄</label>
+                                    <div className="bg-green-50 p-4 rounded-xl border border-green-100">
+                                        <div className="flex items-center gap-2 mb-2">
+                                            <Package size={14} className="text-green-600" />
+                                            <span className="text-xs font-bold text-green-700">已新增 {formData.products.length} 項商品</span>
+                                        </div>
+                                        <div className="space-y-1 max-h-[120px] overflow-y-auto">
+                                            {formData.products.map((p, idx) => (
+                                                <div key={idx} className="text-[11px] text-green-700 truncate">
+                                                    {idx + 1}. {p.name}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     </div>
                 </div>

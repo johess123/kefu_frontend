@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Bot, ArrowLeft, ArrowRight, Trash2, Plus, CheckCircle2, Globe, Sparkles, Loader2, AlertCircle, Stethoscope, RotateCcw, Upload } from 'lucide-react';
+import React, { useState, useRef } from 'react';
+import { Bot, ArrowLeft, ArrowRight, Trash2, Plus, CheckCircle2, Globe, Sparkles, Loader2, AlertCircle, Stethoscope, RotateCcw, Upload, Package, FileSpreadsheet, X } from 'lucide-react';
 import axios from 'axios';
 import Cookies from 'js-cookie';
 import config from '../config';
@@ -13,8 +13,11 @@ const StepWizard = ({ formData, setFormData, onComplete }) => {
     const [isAnalyzing, setIsAnalyzing] = useState(false);
     const [analysisReport, setAnalysisReport] = useState(null);
     const [uploadingFaqId, setUploadingFaqId] = useState(null);
+    const [isParsingProducts, setIsParsingProducts] = useState(false);
+    const [productFileName, setProductFileName] = useState('');
+    const productFileRef = useRef(null);
 
-    const totalQuestions = 4;
+    const totalQuestions = 5;
 
     const handleNext = () => {
         if (qIndex === 2) {
@@ -45,6 +48,12 @@ const StepWizard = ({ formData, setFormData, onComplete }) => {
             }
 
             setFormData(prev => ({ ...prev, faqs: cleanedFaqs }));
+        }
+
+        if (qIndex === 3) {
+            // 過濾掉沒有名稱的空商品
+            const cleanedProducts = (formData.products || []).filter(p => p.name.trim());
+            setFormData(prev => ({ ...prev, products: cleanedProducts }));
         }
 
         if (qIndex < totalQuestions - 1) {
@@ -518,6 +527,184 @@ const StepWizard = ({ formData, setFormData, onComplete }) => {
     };
 
     const renderQ4 = () => {
+        const addProduct = () => {
+            if ((formData.products || []).length >= 50) {
+                alert('最多只能新增 50 項商品');
+                return;
+            }
+            const newProduct = { id: Date.now().toString(), name: '', description: '', keywords: '' };
+            updateField('products', [...(formData.products || []), newProduct]);
+        };
+
+        const removeProduct = (id) => {
+            updateField('products', (formData.products || []).filter(p => p.id !== id));
+        };
+
+        const updateProduct = (id, field, value) => {
+            updateField('products', (formData.products || []).map(p => p.id === id ? { ...p, [field]: value } : p));
+        };
+
+        const handleParseProducts = async (file) => {
+            if (!file) return;
+            if (file.size > 512 * 1024) {
+                alert('檔案大小不得超過 500KB');
+                return;
+            }
+            const ext = file.name.toLowerCase().split('.').pop();
+            if (!['xlsx', 'csv', 'json'].includes(ext)) {
+                alert('僅支援 .xlsx、.csv 或 .json 格式');
+                return;
+            }
+
+            setIsParsingProducts(true);
+            setProductFileName(file.name);
+            try {
+                const fd = new FormData();
+                fd.append('file', file);
+                fd.append('brandDescription', formData.brandDescription || '');
+                fd.append('line_user_id', Cookies.get('google_user_id') || '');
+                const res = await axios.post(`${config.API_URL}/api/parse_products`, fd, {
+                    headers: { 'Content-Type': 'multipart/form-data' }
+                });
+                if (res.data.error) {
+                    alert('解析失敗：' + res.data.error);
+                } else if (res.data.products) {
+                    const newProducts = res.data.products.map(p => ({
+                        id: Math.random().toString(36).substr(2, 9),
+                        name: p.name,
+                        description: p.description,
+                        keywords: p.keywords || '',
+                    }));
+                    updateField('products', [...(formData.products || []), ...newProducts]);
+                }
+            } catch (err) {
+                console.error('Failed to parse products:', err);
+                alert('解析失敗，請檢查檔案格式或稍後再試');
+            } finally {
+                setIsParsingProducts(false);
+                if (productFileRef.current) productFileRef.current.value = '';
+            }
+        };
+
+        const products = formData.products || [];
+
+        return (
+            <div className="space-y-4">
+                {/* 上傳區 */}
+                <div className="bg-green-50 border border-green-100 rounded-2xl p-4 mb-4">
+                    <div className="flex items-start gap-3">
+                        <div className="mt-1">
+                            <FileSpreadsheet size={20} className="text-green-600" />
+                        </div>
+                        <div className="flex-1">
+                            <h4 className="text-sm font-bold text-green-900 mb-1">上傳你的商品資料</h4>
+                            <p className="text-xs text-green-600 mb-3">支援 Excel (.xlsx)、CSV 或 JSON 檔案，AI 會自動幫你整理成結構化的商品目錄。</p>
+                            <div className="flex items-center gap-3">
+                                <label className={`flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-xl text-xs font-bold hover:bg-green-700 transition-all shadow-md shadow-green-100 cursor-pointer ${isParsingProducts ? 'opacity-50 cursor-not-allowed' : ''}`}>
+                                    {isParsingProducts ? (
+                                        <Loader2 size={14} className="animate-spin" />
+                                    ) : (
+                                        <Upload size={14} />
+                                    )}
+                                    <span>{isParsingProducts ? 'AI 解析中...' : '上傳檔案'}</span>
+                                    <input
+                                        ref={productFileRef}
+                                        type="file"
+                                        accept=".xlsx,.csv,.json"
+                                        className="hidden"
+                                        disabled={isParsingProducts}
+                                        onChange={(e) => handleParseProducts(e.target.files[0])}
+                                    />
+                                </label>
+                                {productFileName && !isParsingProducts && (
+                                    <span className="text-xs text-green-700 flex items-center gap-1">
+                                        <CheckCircle2 size={12} />
+                                        {productFileName}
+                                    </span>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                {/* 商品列表 */}
+                <div className="max-h-[350px] overflow-y-auto pr-2 space-y-4 custom-scrollbar pt-2">
+                    {products.map((product, index) => (
+                        <div key={product.id} className="p-4 bg-white border border-slate-200 rounded-xl shadow-sm relative group pt-6">
+                            <div className="absolute -top-3 left-4 px-2 py-0.5 bg-white border border-green-200 rounded-md text-[10px] font-black text-green-500 uppercase tracking-wider shadow-sm z-10">
+                                P{index + 1}
+                            </div>
+                            <button
+                                onClick={() => removeProduct(product.id)}
+                                className="absolute top-2 right-2 text-slate-400 hover:text-red-500 p-1"
+                            >
+                                <Trash2 size={16} />
+                            </button>
+                            <div className="space-y-3">
+                                <div className="flex items-center gap-2">
+                                    <span className="text-xs font-black text-green-400 uppercase w-8">名稱</span>
+                                    <input
+                                        type="text"
+                                        placeholder="商品名稱"
+                                        className="w-full p-2 border-b border-slate-200 focus:border-green-500 focus:outline-none text-sm font-medium"
+                                        value={product.name}
+                                        maxLength={50}
+                                        onChange={(e) => updateProduct(product.id, 'name', e.target.value)}
+                                    />
+                                    <div className="text-[10px] text-slate-300 ml-1 shrink-0">{product.name.length}/50</div>
+                                </div>
+                                <div className="flex items-start gap-2">
+                                    <span className="text-xs font-black text-green-400 uppercase mt-2 w-8">說明</span>
+                                    <textarea
+                                        placeholder="規格、價格、特色..."
+                                        className="w-full p-2 bg-slate-50 rounded-lg text-sm text-slate-600 focus:outline-none focus:ring-1 focus:ring-green-300 resize-none"
+                                        rows={2}
+                                        value={product.description}
+                                        maxLength={400}
+                                        onChange={(e) => updateProduct(product.id, 'description', e.target.value)}
+                                    />
+                                </div>
+                                <div className="text-[10px] text-slate-300 text-right pr-2">{product.description.length}/400</div>
+                                <div className="flex items-center gap-2">
+                                    <span className="text-xs font-black text-green-400 uppercase w-8">別名</span>
+                                    <input
+                                        type="text"
+                                        placeholder="關鍵字/別名（選填）"
+                                        className="w-full p-2 border-b border-slate-200 focus:border-green-500 focus:outline-none text-sm"
+                                        value={product.keywords || ''}
+                                        maxLength={100}
+                                        onChange={(e) => updateProduct(product.id, 'keywords', e.target.value)}
+                                    />
+                                </div>
+                            </div>
+                        </div>
+                    ))}
+                    {products.length === 0 && !isParsingProducts && (
+                        <div className="text-center py-8 bg-slate-50 rounded-xl border border-dashed border-slate-300 text-slate-500 text-sm">
+                            <Package size={32} className="mx-auto mb-2 text-slate-300" />
+                            尚未新增商品，上傳檔案或手動新增
+                        </div>
+                    )}
+                </div>
+
+                {products.length > 0 && (
+                    <div className="text-xs text-slate-400 text-right">
+                        共 {products.length} 項商品（上限 50）
+                    </div>
+                )}
+
+                <button
+                    onClick={addProduct}
+                    className="w-full py-3 flex items-center justify-center space-x-2 border-2 border-dashed border-green-300 text-green-600 rounded-xl hover:bg-green-50 hover:border-green-500 transition-colors"
+                >
+                    <Plus size={18} />
+                    <span>手動新增商品</span>
+                </button>
+            </div>
+        );
+    };
+
+    const renderQ5 = () => {
         const options = DEFAULT_HANDOFF_OPTIONS;
 
         const toggleTrigger = (trigger) => {
@@ -573,7 +760,8 @@ const StepWizard = ({ formData, setFormData, onComplete }) => {
         { title: '品牌基礎', render: renderQ1, prompt: '第一題，請用一句話介紹你的品牌/店家：你提供什麼服務或商品？（必填）' },
         { title: '品牌口吻', render: renderQ2, prompt: '第二題，你希望 AI 用什麼口吻回覆客人？' },
         { title: '常見問題 FAQ', render: renderQ3, prompt: '第三題，請新增至少 3 組「常見問題」與「你的回答」（越多越準）。' },
-        { title: '轉人工條件', render: renderQ4, prompt: '第四題，什麼情況你希望「轉真人客服」處理？（可複選）' },
+        { title: '商品目錄', render: renderQ4, prompt: '第四題，上傳你的商品資料，AI 會自動整理成目錄來回覆客戶的商品問題。（可跳過）' },
+        { title: '轉人工條件', render: renderQ5, prompt: '第五題，什麼情況你希望「轉真人客服」處理？（可複選）' },
     ];
 
     const currentQ = questions[qIndex];

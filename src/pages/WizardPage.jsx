@@ -69,6 +69,7 @@ const WizardPage = () => {
             tone: rawConfig.tone || '親切自然',
             toneAvoid: rawConfig.tone_avoid || '',
             faqs: rawConfig.faqs || [],
+            products: rawConfig.products || [],
             handoffTriggers,
             handoffCustomTrigger
         });

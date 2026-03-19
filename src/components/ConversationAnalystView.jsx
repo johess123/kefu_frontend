@@ -32,7 +32,7 @@ const ConversationAnalystView = ({ agentId, adminId, onFaqUpdated }) => {
     const [isLoadingStats, setIsLoadingStats] = useState(true);
     const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(true);
     const [days, setDays] = useState(7);
-    const [activeTab, setActiveTab] = useState('all');
+    const [activeTab, setActiveTab] = useState('pending');
     const [expandedId, setExpandedId] = useState(null);
     const [editingId, setEditingId] = useState(null);
     const [editForm, setEditForm] = useState({ question: '', answer: '' });
@@ -41,6 +41,7 @@ const ConversationAnalystView = ({ agentId, adminId, onFaqUpdated }) => {
     const [previewData, setPreviewData] = useState(null);
     const [isLoadingPreview, setIsLoadingPreview] = useState(false);
     const [expandedUserId, setExpandedUserId] = useState(null);
+    const [selectedTheme, setSelectedTheme] = useState('all');
 
     const fetchPreview = useCallback(async (previewDays) => {
         if (!agentId) return;
@@ -189,15 +190,18 @@ const ConversationAnalystView = ({ agentId, adminId, onFaqUpdated }) => {
     };
 
     const tabs = [
-        { key: 'all', label: '全部' },
         { key: 'pending', label: '待處理' },
-        { key: 'accepted', label: '已新增' },
-        { key: 'ignored', label: '已忽略' }
+        { key: 'accepted', label: '歷史紀錄' }
     ];
 
-    const filteredSuggestions = activeTab === 'all'
-        ? suggestions
-        : suggestions.filter(s => s.status === activeTab);
+    const statusFiltered = suggestions.filter(s => s.status === activeTab);
+
+    // 提取所有不重複的 theme 值
+    const themeOptions = [...new Set(statusFiltered.map(s => s.theme).filter(Boolean))];
+
+    const filteredSuggestions = selectedTheme === 'all'
+        ? statusFiltered
+        : statusFiltered.filter(s => s.theme === selectedTheme);
 
     return (
         <div className="max-w-5xl animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -472,7 +476,7 @@ const ConversationAnalystView = ({ agentId, adminId, onFaqUpdated }) => {
                             {tabs.map(tab => (
                                 <button
                                     key={tab.key}
-                                    onClick={() => setActiveTab(tab.key)}
+                                    onClick={() => { setActiveTab(tab.key); setSelectedTheme('all'); }}
                                     className={`px-4 py-2 text-xs font-bold rounded-lg transition-all ${
                                         activeTab === tab.key
                                             ? 'bg-white text-slate-900 shadow-sm'
@@ -487,6 +491,24 @@ const ConversationAnalystView = ({ agentId, adminId, onFaqUpdated }) => {
                 </div>
 
                 <div className="p-6">
+                    {/* Theme Filter */}
+                    {!isLoadingSuggestions && statusFiltered.length > 0 && themeOptions.length > 0 && (
+                        <div className="mb-4">
+                            <select
+                                value={selectedTheme}
+                                onChange={(e) => setSelectedTheme(e.target.value)}
+                                className="px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-purple-200"
+                            >
+                                <option value="all">全部主題 ({statusFiltered.length})</option>
+                                {themeOptions.map(theme => (
+                                    <option key={theme} value={theme}>
+                                        {theme} ({statusFiltered.filter(s => s.theme === theme).length})
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+                    )}
+
                     {isLoadingSuggestions ? (
                         <div className="flex items-center justify-center py-16">
                             <Loader2 size={24} className="animate-spin text-purple-500" />
@@ -495,7 +517,9 @@ const ConversationAnalystView = ({ agentId, adminId, onFaqUpdated }) => {
                         <div className="text-center py-16 bg-slate-50 rounded-2xl border border-dashed border-slate-200">
                             <BarChart2 size={40} className="text-slate-300 mx-auto mb-3" />
                             <p className="text-slate-400 text-sm">
-                                {activeTab === 'all' ? '尚無建議。請先執行分析。' : '此分類沒有建議。'}
+                                {activeTab === 'pending'
+                                    ? '目前沒有待處理的 FAQ 建議。執行分析來發現新的 FAQ 缺口。'
+                                    : '尚無已採納的 FAQ 建議。'}
                             </p>
                         </div>
                     ) : (
@@ -503,7 +527,11 @@ const ConversationAnalystView = ({ agentId, adminId, onFaqUpdated }) => {
                             {filteredSuggestions.map((suggestion) => (
                                 <div
                                     key={suggestion._id}
-                                    className="bg-white border border-slate-100 rounded-2xl overflow-hidden hover:border-purple-200 transition-all"
+                                    className={`border rounded-2xl overflow-hidden transition-all ${
+                                        suggestion.status === 'accepted'
+                                            ? 'bg-slate-50/50 border-slate-100 opacity-75'
+                                            : 'bg-white border-slate-100 hover:border-purple-200'
+                                    }`}
                                 >
                                     {/* Card Header */}
                                     <div
