@@ -5,6 +5,19 @@ import { useAuth } from '../../context/AuthContext';
 const API = `${config.API_URL}/api/monitor`;
 const LIMIT = 10;
 
+const PROMPT_TABS = [
+    { key: 'router_instruction', label: 'Router 指令', match: null },
+    { key: 'faq_instruction', label: 'FAQ 助手指令', match: '客服專員' },
+    { key: 'product_instruction', label: '商品助手指令', match: '商品' },
+    { key: 'handoff_instruction', label: '轉接助手指令', match: '協作' },
+];
+
+const isTabUsed = (tab, subagents) => {
+    if (tab.match === null) return true;
+    if (!subagents || subagents.length === 0) return false;
+    return subagents.some(sa => sa.includes(tab.match));
+};
+
 const MonitorRecords = () => {
     const { userId } = useAuth();
     const [records, setRecords] = useState([]);
@@ -98,6 +111,13 @@ const MonitorRecords = () => {
 };
 
 const RecordCard = ({ rec }) => {
+    const { userId } = useAuth();
+    const [showPrompt, setShowPrompt] = useState(false);
+    const [prompts, setPrompts] = useState(null);
+    const [activeTab, setActiveTab] = useState('router_instruction');
+    const [promptLoading, setPromptLoading] = useState(false);
+    const [copyFeedback, setCopyFeedback] = useState('');
+
     const tokenBrief = rec.tokens && Object.keys(rec.tokens).length > 0
         ? `Total: ${rec.tokens.total_token || 0} (In: ${rec.tokens.input_token || 0}, Out: ${rec.tokens.output_token || 0})`
         : '無 Token 資訊';
@@ -105,6 +125,41 @@ const RecordCard = ({ rec }) => {
     const sessionDisplay = rec.session_id
         ? `🆔 Session: ${rec.session_id.substring(0, 8)}...`
         : '🆔 Session: N/A';
+
+    const togglePrompt = async () => {
+        if (showPrompt) {
+            setShowPrompt(false);
+            return;
+        }
+        if (prompts) {
+            setShowPrompt(true);
+            return;
+        }
+        setPromptLoading(true);
+        try {
+            const res = await fetch(`${API}/agents/${rec.agent_id}/prompts?userId=${userId}`);
+            if (res.ok) {
+                const data = await res.json();
+                setPrompts(data.prompts);
+                setShowPrompt(true);
+            }
+        } catch (err) {
+            console.error('Error fetching prompts:', err);
+        } finally {
+            setPromptLoading(false);
+        }
+    };
+
+    const copyToClipboard = async (text) => {
+        try {
+            await navigator.clipboard.writeText(text);
+            setCopyFeedback('已複製！');
+            setTimeout(() => setCopyFeedback(''), 2000);
+        } catch {
+            setCopyFeedback('複製失敗');
+            setTimeout(() => setCopyFeedback(''), 2000);
+        }
+    };
 
     return (
         <div className="record-card">
@@ -137,7 +192,47 @@ const RecordCard = ({ rec }) => {
                     ))
                     : <span className="badge">無使用 Subagent</span>
                 }
+                {rec.agent_id && (
+                    <button
+                        className="badge badge-prompt-btn"
+                        onClick={togglePrompt}
+                        disabled={promptLoading}
+                    >
+                        {promptLoading ? '載入中...' : showPrompt ? '收合 Prompt' : '📄 查看 Prompt'}
+                    </button>
+                )}
             </div>
+
+            {showPrompt && prompts && (
+                <div className="prompt-section">
+                    <div className="prompt-tabs">
+                        {PROMPT_TABS.map(tab => {
+                            const used = isTabUsed(tab, rec.subagents);
+                            return (
+                                <button
+                                    key={tab.key}
+                                    className={`prompt-tab-btn${activeTab === tab.key ? ' active' : ''}${!used ? ' dimmed' : ''}`}
+                                    onClick={() => setActiveTab(tab.key)}
+                                >
+                                    {used && <span className="used-dot" />}
+                                    {tab.label}
+                                </button>
+                            );
+                        })}
+                    </div>
+                    <div style={{ position: 'relative', marginTop: '0.5rem' }}>
+                        <button
+                            className="copy-btn"
+                            onClick={() => copyToClipboard(prompts[activeTab] || '')}
+                        >
+                            {copyFeedback || '複製'}
+                        </button>
+                        <div className="prompt-display">
+                            {prompts[activeTab] || '（無內容）'}
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

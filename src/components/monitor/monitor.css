@@ -648,3 +648,106 @@
 .monitor-root .daily-chart-wrapper canvas {
     max-height: 250px;
 }
+
+/* Prompt Inspector */
+.monitor-root .prompt-tabs {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 1rem;
+    flex-wrap: wrap;
+}
+
+.monitor-root .prompt-tab-btn {
+    padding: 0.5rem 1rem;
+    border: 1px solid var(--border-color);
+    border-radius: 0.375rem;
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+    font-size: 0.85rem;
+    transition: all 0.2s;
+}
+
+.monitor-root .prompt-tab-btn:hover {
+    background: var(--hover-bg);
+    color: var(--text-primary);
+}
+
+.monitor-root .prompt-tab-btn.active {
+    background: var(--accent-blue);
+    color: #fff;
+    border-color: var(--accent-blue);
+}
+
+.monitor-root .prompt-display {
+    font-size: 0.85rem;
+    line-height: 1.6;
+    color: var(--text-secondary);
+    white-space: pre-wrap;
+    background: #0f172a;
+    padding: 1rem;
+    border-radius: 0.375rem;
+    border: 1px solid var(--border-color);
+    max-height: 500px;
+    overflow-y: auto;
+    font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+}
+
+.monitor-root .copy-btn {
+    position: absolute;
+    top: 0.5rem;
+    right: 0.5rem;
+    padding: 0.3rem 0.7rem;
+    border: 1px solid var(--border-color);
+    border-radius: 0.25rem;
+    background: var(--card-bg);
+    color: var(--text-secondary);
+    cursor: pointer;
+    font-size: 0.75rem;
+    z-index: 1;
+    transition: all 0.2s;
+}
+
+.monitor-root .copy-btn:hover {
+    background: var(--accent-blue);
+    color: #fff;
+    border-color: var(--accent-blue);
+}
+
+.monitor-root .badge-prompt-btn {
+    cursor: pointer;
+    background: rgba(56, 189, 248, 0.15);
+    color: var(--accent-blue);
+    border: 1px solid var(--accent-blue);
+    transition: all 0.2s;
+}
+
+.monitor-root .badge-prompt-btn:hover {
+    background: var(--accent-blue);
+    color: #fff;
+}
+
+.monitor-root .prompt-section {
+    margin-top: 1rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--border-color);
+}
+
+.monitor-root .prompt-tab-btn.dimmed {
+    opacity: 0.4;
+    border-style: dashed;
+}
+
+.monitor-root .prompt-tab-btn .used-dot {
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--accent-green);
+    margin-right: 0.4rem;
+    vertical-align: middle;
+}
+
+.monitor-root .prompt-tab-btn.active .used-dot {
+    background: #fff;
+}

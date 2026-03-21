@@ -8,6 +8,7 @@ import MonitorApp from './components/monitor/MonitorApp';
 import MonitorDashboard from './components/monitor/MonitorDashboard';
 import MonitorRecords from './components/monitor/MonitorRecords';
 import MonitorUsers from './components/monitor/MonitorUsers';
+import MonitorPrompts from './components/monitor/MonitorPrompts';
 import CatalogPage from './components/CatalogPage';
 
 const App = () => {
@@ -25,6 +26,7 @@ const App = () => {
                     <Route index element={<MonitorDashboard />} />
                     <Route path="records" element={<MonitorRecords />} />
                     <Route path="users" element={<MonitorUsers />} />
+                    <Route path="prompts" element={<MonitorPrompts />} />
                 </Route>
             </Route>
         </Routes>
