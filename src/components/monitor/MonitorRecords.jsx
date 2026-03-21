@@ -111,12 +111,11 @@ const MonitorRecords = () => {
 };
 
 const RecordCard = ({ rec }) => {
-    const { userId } = useAuth();
     const [showPrompt, setShowPrompt] = useState(false);
-    const [prompts, setPrompts] = useState(null);
     const [activeTab, setActiveTab] = useState('router_instruction');
-    const [promptLoading, setPromptLoading] = useState(false);
     const [copyFeedback, setCopyFeedback] = useState('');
+
+    const prompts = rec.prompt_snapshot || null;
 
     const tokenBrief = rec.tokens && Object.keys(rec.tokens).length > 0
         ? `Total: ${rec.tokens.total_token || 0} (In: ${rec.tokens.input_token || 0}, Out: ${rec.tokens.output_token || 0})`
@@ -126,28 +125,8 @@ const RecordCard = ({ rec }) => {
         ? `🆔 Session: ${rec.session_id.substring(0, 8)}...`
         : '🆔 Session: N/A';
 
-    const togglePrompt = async () => {
-        if (showPrompt) {
-            setShowPrompt(false);
-            return;
-        }
-        if (prompts) {
-            setShowPrompt(true);
-            return;
-        }
-        setPromptLoading(true);
-        try {
-            const res = await fetch(`${API}/agents/${rec.agent_id}/prompts?userId=${userId}`);
-            if (res.ok) {
-                const data = await res.json();
-                setPrompts(data.prompts);
-                setShowPrompt(true);
-            }
-        } catch (err) {
-            console.error('Error fetching prompts:', err);
-        } finally {
-            setPromptLoading(false);
-        }
+    const togglePrompt = () => {
+        setShowPrompt(prev => !prev);
     };
 
     const copyToClipboard = async (text) => {
@@ -192,13 +171,12 @@ const RecordCard = ({ rec }) => {
                     ))
                     : <span className="badge">無使用 Subagent</span>
                 }
-                {rec.agent_id && (
+                {prompts && (
                     <button
                         className="badge badge-prompt-btn"
                         onClick={togglePrompt}
-                        disabled={promptLoading}
                     >
-                        {promptLoading ? '載入中...' : showPrompt ? '收合 Prompt' : '📄 查看 Prompt'}
+                        {showPrompt ? '收合 Prompt' : '📄 查看 Prompt'}
                     </button>
                 )}
             </div>
