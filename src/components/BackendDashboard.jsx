@@ -565,6 +565,10 @@ const BackendDashboard = () => {
         });
     };
 
+    const storefrontPreviewUrl = routeAgentId
+        ? `${window.location.origin}/store/${routeAgentId}`
+        : '';
+
     // Playground logic
     const initPlaygroundSession = async () => {
         if (playgroundSessionId) return;
@@ -1605,6 +1609,24 @@ const BackendDashboard = () => {
                                                         <p className="text-xs text-slate-400 mt-1 uppercase tracking-widest font-bold">Manage Product Catalog</p>
                                                     </div>
                                                     <div className="flex items-center gap-3">
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => window.open(storefrontPreviewUrl, '_blank', 'noopener,noreferrer')}
+                                                            disabled={!storefrontPreviewUrl}
+                                                            className="flex items-center gap-2 px-3 sm:px-5 py-2.5 border border-amber-200 text-amber-700 bg-amber-50 rounded-xl text-sm font-bold hover:bg-amber-100 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                                                        >
+                                                            <ExternalLink size={16} />
+                                                            <span className="hidden sm:inline">查看商品頁</span>
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => copyToClipboard(storefrontPreviewUrl)}
+                                                            disabled={!storefrontPreviewUrl}
+                                                            className="flex items-center gap-2 px-3 sm:px-5 py-2.5 border border-slate-200 text-slate-600 bg-white rounded-xl text-sm font-bold hover:bg-slate-50 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                                                        >
+                                                            <Copy size={16} />
+                                                            <span className="hidden sm:inline">複製連結</span>
+                                                        </button>
                                                         <label className={`flex items-center gap-2 px-3 sm:px-5 py-2.5 border border-green-200 text-green-700 rounded-xl text-sm font-bold hover:bg-green-50 transition-all cursor-pointer ${isParsingProductFile ? 'opacity-50 cursor-not-allowed' : ''}`}>
                                                             {isParsingProductFile ? (
                                                                 <Loader2 size={16} className="animate-spin" />
