@@ -9,13 +9,11 @@ import MonitorDashboard from './components/monitor/MonitorDashboard';
 import MonitorRecords from './components/monitor/MonitorRecords';
 import MonitorUsers from './components/monitor/MonitorUsers';
 import MonitorPrompts from './components/monitor/MonitorPrompts';
-import CatalogPage from './components/CatalogPage';
 import StorefrontPage from './components/StorefrontPage';
 
 const App = () => {
     return (
         <Routes>
-            <Route path="/catalog/:agentId" element={<CatalogPage />} />
             <Route path="/store/:slug" element={<StorefrontPage />} />
             <Route element={<ProtectedRoute />}>
                 <Route path="/" element={<AgentHome />} />
