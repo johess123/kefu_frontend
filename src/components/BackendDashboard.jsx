@@ -971,10 +971,10 @@ const BackendDashboard = () => {
                 ...(uploadedImageUrl && { image_url: uploadedImageUrl }),
             });
 
-            const { response_text, related_faq_list, related_product_list, handoff_result, faq_image_urls, product_image_urls, catalog_url } = response.data;
-            // 合併圖片順序與 LINE 一致：FAQ 圖優先，有 catalog_url 時限制 2 張
+            const { response_text, related_faq_list, related_product_list, handoff_result, faq_image_urls, product_image_urls, storefront_url } = response.data;
+            // 合併圖片順序與 LINE 一致：FAQ 圖優先，有 storefront_url 時限制 2 張
             const allImages = [...(faq_image_urls || []), ...(product_image_urls || [])];
-            const displayImages = catalog_url ? allImages.slice(0, 2) : allImages.slice(0, 4);
+            const displayImages = storefront_url ? allImages.slice(0, 2) : allImages.slice(0, 4);
             const newMessage = {
                 role: 'model',
                 text: response_text,
@@ -982,7 +982,7 @@ const BackendDashboard = () => {
                 related_products: related_product_list || [],
                 handoff: handoff_result,
                 images: displayImages,
-                catalog_url: catalog_url || '',
+                storefront_url: storefront_url || '',
             };
 
             setPlaygroundMessages(prev => [...prev, newMessage]);
@@ -3308,15 +3308,15 @@ const BackendDashboard = () => {
                                                                     )}
                                                                     <div className={`p-4 ${!msg.text && msg.imagePreview ? 'hidden' : ''}`}>
                                                                         {msg.text}
-                                                                        {msg.catalog_url && (
+                                                                        {msg.storefront_url && (
                                                                             <a
-                                                                                href={msg.catalog_url}
+                                                                                href={msg.storefront_url}
                                                                                 target="_blank"
                                                                                 rel="noopener noreferrer"
                                                                                 className="mt-3 flex items-center gap-1.5 text-brand-600 hover:text-brand-700 font-semibold text-xs underline underline-offset-2"
                                                                             >
                                                                                 <Package size={13} />
-                                                                                完整商品目錄 →
+                                                                                商品網站 →
                                                                             </a>
                                                                         )}
                                                                     </div>
