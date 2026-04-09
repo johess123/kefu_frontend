@@ -13,6 +13,7 @@ export const AuthProvider = ({ children }) => {
     const [userName, setUserName] = useState(null);
     const [userEmail, setUserEmail] = useState(null);
     const [userPicture, setUserPicture] = useState(null);
+    const [userBalance, setUserBalance] = useState(0);
     const [postLoginRedirect, setPostLoginRedirect] = useState(null);
 
     useEffect(() => {
@@ -45,6 +46,19 @@ export const AuthProvider = ({ children }) => {
         setIsMonitorAllowed(false);
     };
 
+    const refreshUserBalance = async (id = userId) => {
+        if (!id) return;
+        try {
+            const response = await axios.get(`${config.API_URL}/api/admin/balance`, {
+                params: { userId: id }
+            });
+            setUserBalance(response.data.balance || 0);
+            return response.data.balance || 0;
+        } catch (error) {
+            console.error('Failed to refresh balance:', error);
+        }
+    };
+
     const handleGoogleSuccess = async (credentialResponse) => {
         try {
             const payload = JSON.parse(atob(credentialResponse.credential.split('.')[1]));
@@ -55,7 +69,7 @@ export const AuthProvider = ({ children }) => {
                 credential: credentialResponse.credential
             });
 
-            const { isAdmin, isMonitor, googleId, name } = response.data;
+            const { isAdmin, isMonitor, googleId, name, balance } = response.data;
 
             if (isAdmin) {
                 setIsAuthorized(true);
@@ -63,6 +77,7 @@ export const AuthProvider = ({ children }) => {
                 setUserName(name);
                 setUserEmail(email);
                 setUserPicture(picture);
+                setUserBalance(balance || 0);
                 setIsMonitorAllowed(isMonitor === true);
 
                 Cookies.set('google_user_id', googleId, { expires: 7 });
@@ -84,6 +99,9 @@ export const AuthProvider = ({ children }) => {
             userName,
             userEmail,
             userPicture,
+            userBalance,
+            setUserBalance,
+            refreshUserBalance,
             isMonitorAllowed,
             postLoginRedirect,
             setPostLoginRedirect,

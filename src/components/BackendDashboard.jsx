@@ -58,6 +58,7 @@ import { DEFAULT_HANDOFF_OPTIONS } from '../types';
 import InboxView from './InboxView';
 import ConversationAnalystView from './ConversationAnalystView';
 import ActivityLogView from './ActivityLogView';
+import BillingView from './BillingView';
 import ConfirmDialog from './ConfirmDialog';
 import ImageLightbox from './ImageLightbox';
 import { useAuth } from '../context/AuthContext';
@@ -339,7 +340,7 @@ const FlexPreviewCard = ({ templateType, formData, userName, brandName, showSeco
 };
 
 const BackendDashboard = () => {
-    const { userName, userEmail, userPicture } = useAuth();
+    const { userId, userName, userEmail, userPicture, userBalance, refreshUserBalance } = useAuth();
     const { agentId: routeAgentId, '*': remainingPath } = useParams();
     const pathParts = (remainingPath || '').split('/').filter(Boolean);
     const section = pathParts[0] || undefined;
@@ -347,6 +348,10 @@ const BackendDashboard = () => {
     const location = useLocation();
     const navigate = useNavigate();
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+    useEffect(() => {
+        if (userId) refreshUserBalance();
+    }, [userId]);
+
     const activeMenu = section || 'agents';
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [currentAgent, setCurrentAgent] = useState(location.state?.agent || null);
@@ -1522,9 +1527,12 @@ const BackendDashboard = () => {
                             <div className="flex items-center justify-between bg-white rounded-lg p-2 border border-slate-100">
                                 <div className="flex items-center gap-1">
                                     <span className="text-yellow-500">🪙</span>
-                                    <span className="text-xs font-bold text-slate-700">Unlimited</span>
+                                    <span className="text-xs font-bold text-slate-700">{userBalance?.toLocaleString() || 0}</span>
                                 </div>
-                                <button className="text-slate-400 hover:text-brand-600">
+                                <button
+                                    onClick={() => navigate('/agent/' + routeAgentId + '/billing')}
+                                    className="text-slate-400 hover:text-brand-600"
+                                >
                                     <Plus size={16} />
                                 </button>
                             </div>
@@ -1697,471 +1705,471 @@ const BackendDashboard = () => {
                                             </div>
 
                                             {knowledgeTab === 'faq' ? (
-                                            <>
-                                            {/* FAQ Content Area */}
-                                            <div className="bg-white rounded-[32px] border border-slate-200 shadow-xl shadow-slate-200/50 overflow-hidden">
-                                                <div className="p-4 sm:p-8 border-b border-slate-100 bg-slate-50/30 flex flex-wrap items-center justify-between gap-3">
-                                                    <div>
-                                                        <h3 className="text-lg font-bold text-slate-800">FAQ 知識庫管理</h3>
-                                                        <p className="text-xs text-slate-400 mt-1 uppercase tracking-widest font-bold">Manage Knowledge Base</p>
-                                                    </div>
-                                                    <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
-                                                        <button
-                                                            onClick={handleAnalyzeFaqs}
-                                                            disabled={isAnalyzing}
-                                                            className="flex items-center gap-2 px-3 sm:px-5 py-2.5 bg-white border border-slate-200 text-slate-600 rounded-xl text-sm font-bold hover:bg-slate-50 transition-all shadow-sm disabled:opacity-50"
-                                                        >
-                                                            {isAnalyzing ? (
-                                                                <Loader2 size={18} className="text-blue-500 animate-spin" />
-                                                            ) : (
-                                                                <Stethoscope size={18} className="text-blue-500" />
-                                                            )}
-                                                            <span className="hidden sm:inline">AI 智能健檢</span>
-                                                        </button>
-                                                        <button
-                                                            onClick={() => {
-                                                                if (editingFaqs.length >= 20) {
-                                                                    alert('最多只能新增 20 組 FAQ');
-                                                                    return;
-                                                                }
-                                                                setNewFaq({ question: '', answer: '' });
-                                                                setShowFaqModal(true);
-                                                            }}
-                                                            className="flex items-center gap-2 px-3 sm:px-5 py-2.5 bg-brand-600 text-white rounded-xl text-sm font-bold hover:bg-brand-700 transition-all shadow-md shadow-brand-100"
-                                                        >
-                                                            <Plus size={18} />
-                                                            新增問答
-                                                        </button>
-                                                    </div>
-                                                </div>
-
-                                                <div className="p-4 sm:p-10 space-y-8">
-                                                    {analysisReport && (
-                                                        <div className="p-6 bg-emerald-50 border border-emerald-100 rounded-3xl relative">
-                                                            <div className="flex items-center gap-3 mb-3">
-                                                                <div className="w-10 h-10 bg-emerald-100 text-emerald-600 rounded-xl flex items-center justify-center">
-                                                                    <CheckCircle2 size={24} />
-                                                                </div>
-                                                                <div>
-                                                                    <h4 className="font-bold text-emerald-900">
-                                                                        AI 健檢報告 (得分: {analysisReport.score})
-                                                                    </h4>
-                                                                    <p className="text-xs text-emerald-600">這是 AI 對目前知識庫的診斷結果。</p>
-                                                                </div>
+                                                <>
+                                                    {/* FAQ Content Area */}
+                                                    <div className="bg-white rounded-[32px] border border-slate-200 shadow-xl shadow-slate-200/50 overflow-hidden">
+                                                        <div className="p-4 sm:p-8 border-b border-slate-100 bg-slate-50/30 flex flex-wrap items-center justify-between gap-3">
+                                                            <div>
+                                                                <h3 className="text-lg font-bold text-slate-800">FAQ 知識庫管理</h3>
+                                                                <p className="text-xs text-slate-400 mt-1 uppercase tracking-widest font-bold">Manage Knowledge Base</p>
                                                             </div>
-                                                            <p className="text-sm text-emerald-800 leading-relaxed mb-3 whitespace-pre-line">
-                                                                {analysisReport.report}
-                                                            </p>
-                                                            {analysisReport.suggestions.length > 0 && (
-                                                                <p className="text-xs text-emerald-500 font-medium italic">
-                                                                    * 請查看下方卡片中的具體優化建議，點擊「快速取代」即可修正。
-                                                                </p>
-                                                            )}
-                                                        </div>
-                                                    )}
-                                                    {editingFaqs.map((faq, idx) => (
-                                                        <div key={idx} className="group relative bg-slate-50/50 rounded-3xl p-4 sm:p-8 border border-slate-100 hover:border-brand-200 hover:bg-white transition-all duration-300">
-                                                            <div className="absolute -top-3 left-6 sm:left-8 bg-white border border-slate-100 px-3 py-1 rounded-full text-[10px] font-black text-slate-400 uppercase tracking-widest shadow-sm">
-                                                                Q{idx + 1}
-                                                            </div>
-                                                            <div className="absolute top-4 sm:top-6 right-4 sm:right-8 flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                            <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
                                                                 <button
-                                                                    onClick={() => handleOptimizeFaq(idx)}
-                                                                    disabled={optimizingIndices.has(idx)}
-                                                                    className="w-9 h-9 flex items-center justify-center bg-white border border-slate-100 text-slate-400 hover:text-brand-600 rounded-xl shadow-sm transition-all hover:scale-105 disabled:opacity-50"
+                                                                    onClick={handleAnalyzeFaqs}
+                                                                    disabled={isAnalyzing}
+                                                                    className="flex items-center gap-2 px-3 sm:px-5 py-2.5 bg-white border border-slate-200 text-slate-600 rounded-xl text-sm font-bold hover:bg-slate-50 transition-all shadow-sm disabled:opacity-50"
                                                                 >
-                                                                    {optimizingIndices.has(idx) ? (
-                                                                        <Loader2 size={16} className="animate-spin text-brand-600" />
+                                                                    {isAnalyzing ? (
+                                                                        <Loader2 size={18} className="text-blue-500 animate-spin" />
                                                                     ) : (
-                                                                        <Sparkles size={16} />
+                                                                        <Stethoscope size={18} className="text-blue-500" />
                                                                     )}
+                                                                    <span className="hidden sm:inline">AI 智能健檢</span>
                                                                 </button>
                                                                 <button
-                                                                    onClick={() => openConfirm({
-                                                                        title: '刪除 FAQ',
-                                                                        message: `確定要刪除 FAQ「${editingFaqs[idx]?.question || ''}」嗎？儲存後才會生效。`,
-                                                                        onConfirm: () => { setEditingFaqs(editingFaqs.filter((_, i) => i !== idx)); closeConfirm(); },
-                                                                    })}
-                                                                    className="w-9 h-9 flex items-center justify-center bg-white border border-slate-100 text-slate-400 hover:text-red-500 rounded-xl shadow-sm transition-all hover:scale-105"
+                                                                    onClick={() => {
+                                                                        if (editingFaqs.length >= 20) {
+                                                                            alert('最多只能新增 20 組 FAQ');
+                                                                            return;
+                                                                        }
+                                                                        setNewFaq({ question: '', answer: '' });
+                                                                        setShowFaqModal(true);
+                                                                    }}
+                                                                    className="flex items-center gap-2 px-3 sm:px-5 py-2.5 bg-brand-600 text-white rounded-xl text-sm font-bold hover:bg-brand-700 transition-all shadow-md shadow-brand-100"
                                                                 >
-                                                                    <Trash2 size={16} />
+                                                                    <Plus size={18} />
+                                                                    新增問答
                                                                 </button>
                                                             </div>
+                                                        </div>
 
-                                                            <div className="space-y-6">
-                                                                <div className="space-y-2">
-                                                                    <div className="flex items-center gap-2 text-slate-400">
-                                                                        <span className="text-[10px] font-black uppercase tracking-widest">Question</span>
-                                                                    </div>
-                                                                    <div className="flex-1">
-                                                                        <div className="relative">
-                                                                            <input
-                                                                                type="text"
-                                                                                value={faq.question}
-                                                                                maxLength={50}
-                                                                                onChange={(e) => {
-                                                                                    const newFaqs = [...editingFaqs];
-                                                                                    newFaqs[idx].question = e.target.value;
-                                                                                    setEditingFaqs(newFaqs);
-                                                                                }}
-                                                                                placeholder="輸入常見問題..."
-                                                                                className="w-full bg-transparent text-lg font-bold text-slate-800 placeholder:text-slate-300 outline-none p-0"
-                                                                            />
+                                                        <div className="p-4 sm:p-10 space-y-8">
+                                                            {analysisReport && (
+                                                                <div className="p-6 bg-emerald-50 border border-emerald-100 rounded-3xl relative">
+                                                                    <div className="flex items-center gap-3 mb-3">
+                                                                        <div className="w-10 h-10 bg-emerald-100 text-emerald-600 rounded-xl flex items-center justify-center">
+                                                                            <CheckCircle2 size={24} />
                                                                         </div>
-                                                                        <div className="text-[10px] text-slate-300 text-right pr-2 mt-1">{faq.question?.length || 0}/50</div>
+                                                                        <div>
+                                                                            <h4 className="font-bold text-emerald-900">
+                                                                                AI 健檢報告 (得分: {analysisReport.score})
+                                                                            </h4>
+                                                                            <p className="text-xs text-emerald-600">這是 AI 對目前知識庫的診斷結果。</p>
+                                                                        </div>
                                                                     </div>
+                                                                    <p className="text-sm text-emerald-800 leading-relaxed mb-3 whitespace-pre-line">
+                                                                        {analysisReport.report}
+                                                                    </p>
+                                                                    {analysisReport.suggestions.length > 0 && (
+                                                                        <p className="text-xs text-emerald-500 font-medium italic">
+                                                                            * 請查看下方卡片中的具體優化建議，點擊「快速取代」即可修正。
+                                                                        </p>
+                                                                    )}
                                                                 </div>
-
-                                                                {analysisReport && analysisReport.suggestions.find(s => s.id.toString() === (faq.id || idx.toString()).toString()) && (
-                                                                    <div className="p-4 bg-amber-50 border border-amber-100 rounded-2xl relative">
-                                                                        <div className="flex items-start gap-3 mb-3">
-                                                                            <AlertCircle size={18} className="text-amber-500 mt-0.5" />
-                                                                            <div>
-                                                                                <p className="text-sm text-amber-900 font-bold mb-1">優化建議：</p>
-                                                                                <p className="text-xs text-amber-700 leading-relaxed italic">
-                                                                                    {analysisReport.suggestions.find(s => s.id.toString() === (faq.id || idx.toString()).toString()).suggestion}
-                                                                                </p>
-                                                                            </div>
-                                                                        </div>
-                                                                        <div className="flex items-center gap-3">
-                                                                            <div className="flex-1 p-2 bg-white/80 border border-amber-200 rounded-xl text-xs text-amber-800 font-medium">
-                                                                                <div className="font-bold text-amber-900 mb-1">Q: {analysisReport.suggestions.find(s => s.id.toString() === (faq.id || idx.toString()).toString()).optimized_q}</div>
-                                                                                <div className="line-clamp-2">A: {analysisReport.suggestions.find(s => s.id.toString() === (faq.id || idx.toString()).toString()).optimized_a}</div>
-                                                                            </div>
-                                                                            <button
-                                                                                onClick={() => {
-                                                                                    const s = analysisReport.suggestions.find(s => s.id.toString() === (faq.id || idx.toString()).toString());
-                                                                                    applySuggestion(idx, s.optimized_q, s.optimized_a);
-                                                                                }}
-                                                                                className="flex items-center gap-1.5 px-4 py-2 bg-white border border-amber-300 text-amber-600 rounded-xl text-xs font-bold hover:bg-amber-100 transition-all shadow-sm whitespace-nowrap"
-                                                                            >
-                                                                                <RotateCcw size={14} />
-                                                                                <span>快速取代</span>
-                                                                            </button>
-                                                                        </div>
+                                                            )}
+                                                            {editingFaqs.map((faq, idx) => (
+                                                                <div key={idx} className="group relative bg-slate-50/50 rounded-3xl p-4 sm:p-8 border border-slate-100 hover:border-brand-200 hover:bg-white transition-all duration-300">
+                                                                    <div className="absolute -top-3 left-6 sm:left-8 bg-white border border-slate-100 px-3 py-1 rounded-full text-[10px] font-black text-slate-400 uppercase tracking-widest shadow-sm">
+                                                                        Q{idx + 1}
                                                                     </div>
-                                                                )}
-
-                                                                <div className="space-y-2">
-                                                                    <div className="flex items-center gap-2 text-slate-400">
-                                                                        <span className="text-[10px] font-black uppercase tracking-widest">Answer</span>
-                                                                    </div>
-                                                                    <div className="relative">
-                                                                        <textarea
-                                                                            value={faq.answer}
-                                                                            maxLength={200}
-                                                                            onChange={(e) => {
-                                                                                const newFaqs = [...editingFaqs];
-                                                                                newFaqs[idx].answer = e.target.value;
-                                                                                setEditingFaqs(newFaqs);
-                                                                            }}
-                                                                            placeholder="輸入預設回覆回答內容..."
-                                                                            className="w-full bg-white border border-slate-200 rounded-2xl p-5 text-slate-600 text-sm leading-relaxed min-h-[120px] focus:ring-2 focus:ring-brand-500/10 focus:border-brand-500 outline-none transition-all shadow-inner"
-                                                                        />
-                                                                        <div className="text-[10px] text-slate-300 text-right pr-2 mt-1">{faq.answer?.length || 0}/200</div>
-                                                                    </div>
-                                                                </div>
-
-                                                                {/* FAQ 附加圖片 */}
-                                                                <div className="space-y-2">
-                                                                    <div className="flex items-center gap-2 text-slate-400">
-                                                                        <span className="text-[10px] font-black uppercase tracking-widest">Image</span>
-                                                                        <span className="text-[10px] text-slate-300">(選填)</span>
-                                                                    </div>
-                                                                    {faq.image_id ? (
-                                                                        <div className="flex items-center gap-3">
-                                                                            <img
-                                                                                src={faq._preview_url || faq.preview_url || ''}
-                                                                                alt="FAQ 附圖"
-                                                                                className="w-20 h-20 object-cover rounded-xl border border-slate-200 cursor-zoom-in hover:opacity-90 transition-opacity"
-                                                                                onClick={() => setLightboxSrc(faq._preview_url || faq.preview_url || '')}
-                                                                                onError={(e) => { e.target.style.display = 'none'; }}
-                                                                            />
-                                                                            <button
-                                                                                onClick={() => openConfirm({
-                                                                                    title: '移除附圖',
-                                                                                    message: '確定要移除這張 FAQ 附圖嗎？此操作無法復原。',
-                                                                                    onConfirm: () => { handleFaqImageDelete(idx); closeConfirm(); },
-                                                                                })}
-                                                                                className="flex items-center gap-1.5 px-3 py-2 bg-white border border-red-200 text-red-500 rounded-xl text-xs font-bold hover:bg-red-50 transition-all"
-                                                                            >
-                                                                                <Trash2 size={14} />
-                                                                                移除圖片
-                                                                            </button>
-                                                                        </div>
-                                                                    ) : (
-                                                                        <label className="flex items-center gap-2 px-4 py-3 bg-white border border-dashed border-slate-200 rounded-xl cursor-pointer hover:border-brand-300 hover:bg-brand-50/50 transition-all">
-                                                                            {uploadingFaqIdx === idx ? (
-                                                                                <Loader2 size={16} className="animate-spin text-brand-500" />
+                                                                    <div className="absolute top-4 sm:top-6 right-4 sm:right-8 flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                                        <button
+                                                                            onClick={() => handleOptimizeFaq(idx)}
+                                                                            disabled={optimizingIndices.has(idx)}
+                                                                            className="w-9 h-9 flex items-center justify-center bg-white border border-slate-100 text-slate-400 hover:text-brand-600 rounded-xl shadow-sm transition-all hover:scale-105 disabled:opacity-50"
+                                                                        >
+                                                                            {optimizingIndices.has(idx) ? (
+                                                                                <Loader2 size={16} className="animate-spin text-brand-600" />
                                                                             ) : (
-                                                                                <Upload size={16} className="text-slate-400" />
+                                                                                <Sparkles size={16} />
                                                                             )}
-                                                                            <span className="text-xs text-slate-500">
-                                                                                {uploadingFaqIdx === idx ? '上傳中...' : '上傳附圖 (jpg/png/webp, 2MB)'}
-                                                                            </span>
-                                                                            <input
-                                                                                type="file"
-                                                                                accept="image/jpeg,image/png,image/webp"
-                                                                                className="hidden"
-                                                                                onChange={(e) => handleFaqImageUpload(idx, e.target.files[0])}
-                                                                                disabled={uploadingFaqIdx === idx}
-                                                                            />
-                                                                        </label>
-                                                                    )}
+                                                                        </button>
+                                                                        <button
+                                                                            onClick={() => openConfirm({
+                                                                                title: '刪除 FAQ',
+                                                                                message: `確定要刪除 FAQ「${editingFaqs[idx]?.question || ''}」嗎？儲存後才會生效。`,
+                                                                                onConfirm: () => { setEditingFaqs(editingFaqs.filter((_, i) => i !== idx)); closeConfirm(); },
+                                                                            })}
+                                                                            className="w-9 h-9 flex items-center justify-center bg-white border border-slate-100 text-slate-400 hover:text-red-500 rounded-xl shadow-sm transition-all hover:scale-105"
+                                                                        >
+                                                                            <Trash2 size={16} />
+                                                                        </button>
+                                                                    </div>
+
+                                                                    <div className="space-y-6">
+                                                                        <div className="space-y-2">
+                                                                            <div className="flex items-center gap-2 text-slate-400">
+                                                                                <span className="text-[10px] font-black uppercase tracking-widest">Question</span>
+                                                                            </div>
+                                                                            <div className="flex-1">
+                                                                                <div className="relative">
+                                                                                    <input
+                                                                                        type="text"
+                                                                                        value={faq.question}
+                                                                                        maxLength={50}
+                                                                                        onChange={(e) => {
+                                                                                            const newFaqs = [...editingFaqs];
+                                                                                            newFaqs[idx].question = e.target.value;
+                                                                                            setEditingFaqs(newFaqs);
+                                                                                        }}
+                                                                                        placeholder="輸入常見問題..."
+                                                                                        className="w-full bg-transparent text-lg font-bold text-slate-800 placeholder:text-slate-300 outline-none p-0"
+                                                                                    />
+                                                                                </div>
+                                                                                <div className="text-[10px] text-slate-300 text-right pr-2 mt-1">{faq.question?.length || 0}/50</div>
+                                                                            </div>
+                                                                        </div>
+
+                                                                        {analysisReport && analysisReport.suggestions.find(s => s.id.toString() === (faq.id || idx.toString()).toString()) && (
+                                                                            <div className="p-4 bg-amber-50 border border-amber-100 rounded-2xl relative">
+                                                                                <div className="flex items-start gap-3 mb-3">
+                                                                                    <AlertCircle size={18} className="text-amber-500 mt-0.5" />
+                                                                                    <div>
+                                                                                        <p className="text-sm text-amber-900 font-bold mb-1">優化建議：</p>
+                                                                                        <p className="text-xs text-amber-700 leading-relaxed italic">
+                                                                                            {analysisReport.suggestions.find(s => s.id.toString() === (faq.id || idx.toString()).toString()).suggestion}
+                                                                                        </p>
+                                                                                    </div>
+                                                                                </div>
+                                                                                <div className="flex items-center gap-3">
+                                                                                    <div className="flex-1 p-2 bg-white/80 border border-amber-200 rounded-xl text-xs text-amber-800 font-medium">
+                                                                                        <div className="font-bold text-amber-900 mb-1">Q: {analysisReport.suggestions.find(s => s.id.toString() === (faq.id || idx.toString()).toString()).optimized_q}</div>
+                                                                                        <div className="line-clamp-2">A: {analysisReport.suggestions.find(s => s.id.toString() === (faq.id || idx.toString()).toString()).optimized_a}</div>
+                                                                                    </div>
+                                                                                    <button
+                                                                                        onClick={() => {
+                                                                                            const s = analysisReport.suggestions.find(s => s.id.toString() === (faq.id || idx.toString()).toString());
+                                                                                            applySuggestion(idx, s.optimized_q, s.optimized_a);
+                                                                                        }}
+                                                                                        className="flex items-center gap-1.5 px-4 py-2 bg-white border border-amber-300 text-amber-600 rounded-xl text-xs font-bold hover:bg-amber-100 transition-all shadow-sm whitespace-nowrap"
+                                                                                    >
+                                                                                        <RotateCcw size={14} />
+                                                                                        <span>快速取代</span>
+                                                                                    </button>
+                                                                                </div>
+                                                                            </div>
+                                                                        )}
+
+                                                                        <div className="space-y-2">
+                                                                            <div className="flex items-center gap-2 text-slate-400">
+                                                                                <span className="text-[10px] font-black uppercase tracking-widest">Answer</span>
+                                                                            </div>
+                                                                            <div className="relative">
+                                                                                <textarea
+                                                                                    value={faq.answer}
+                                                                                    maxLength={200}
+                                                                                    onChange={(e) => {
+                                                                                        const newFaqs = [...editingFaqs];
+                                                                                        newFaqs[idx].answer = e.target.value;
+                                                                                        setEditingFaqs(newFaqs);
+                                                                                    }}
+                                                                                    placeholder="輸入預設回覆回答內容..."
+                                                                                    className="w-full bg-white border border-slate-200 rounded-2xl p-5 text-slate-600 text-sm leading-relaxed min-h-[120px] focus:ring-2 focus:ring-brand-500/10 focus:border-brand-500 outline-none transition-all shadow-inner"
+                                                                                />
+                                                                                <div className="text-[10px] text-slate-300 text-right pr-2 mt-1">{faq.answer?.length || 0}/200</div>
+                                                                            </div>
+                                                                        </div>
+
+                                                                        {/* FAQ 附加圖片 */}
+                                                                        <div className="space-y-2">
+                                                                            <div className="flex items-center gap-2 text-slate-400">
+                                                                                <span className="text-[10px] font-black uppercase tracking-widest">Image</span>
+                                                                                <span className="text-[10px] text-slate-300">(選填)</span>
+                                                                            </div>
+                                                                            {faq.image_id ? (
+                                                                                <div className="flex items-center gap-3">
+                                                                                    <img
+                                                                                        src={faq._preview_url || faq.preview_url || ''}
+                                                                                        alt="FAQ 附圖"
+                                                                                        className="w-20 h-20 object-cover rounded-xl border border-slate-200 cursor-zoom-in hover:opacity-90 transition-opacity"
+                                                                                        onClick={() => setLightboxSrc(faq._preview_url || faq.preview_url || '')}
+                                                                                        onError={(e) => { e.target.style.display = 'none'; }}
+                                                                                    />
+                                                                                    <button
+                                                                                        onClick={() => openConfirm({
+                                                                                            title: '移除附圖',
+                                                                                            message: '確定要移除這張 FAQ 附圖嗎？此操作無法復原。',
+                                                                                            onConfirm: () => { handleFaqImageDelete(idx); closeConfirm(); },
+                                                                                        })}
+                                                                                        className="flex items-center gap-1.5 px-3 py-2 bg-white border border-red-200 text-red-500 rounded-xl text-xs font-bold hover:bg-red-50 transition-all"
+                                                                                    >
+                                                                                        <Trash2 size={14} />
+                                                                                        移除圖片
+                                                                                    </button>
+                                                                                </div>
+                                                                            ) : (
+                                                                                <label className="flex items-center gap-2 px-4 py-3 bg-white border border-dashed border-slate-200 rounded-xl cursor-pointer hover:border-brand-300 hover:bg-brand-50/50 transition-all">
+                                                                                    {uploadingFaqIdx === idx ? (
+                                                                                        <Loader2 size={16} className="animate-spin text-brand-500" />
+                                                                                    ) : (
+                                                                                        <Upload size={16} className="text-slate-400" />
+                                                                                    )}
+                                                                                    <span className="text-xs text-slate-500">
+                                                                                        {uploadingFaqIdx === idx ? '上傳中...' : '上傳附圖 (jpg/png/webp, 2MB)'}
+                                                                                    </span>
+                                                                                    <input
+                                                                                        type="file"
+                                                                                        accept="image/jpeg,image/png,image/webp"
+                                                                                        className="hidden"
+                                                                                        onChange={(e) => handleFaqImageUpload(idx, e.target.files[0])}
+                                                                                        disabled={uploadingFaqIdx === idx}
+                                                                                    />
+                                                                                </label>
+                                                                            )}
+                                                                        </div>
+                                                                    </div>
                                                                 </div>
-                                                            </div>
-                                                        </div>
-                                                    ))}
-                                                    <div ref={faqsEndRef} />
+                                                            ))}
+                                                            <div ref={faqsEndRef} />
 
-                                                    {editingFaqs.length === 0 && (
-                                                        <div className="text-center py-20 bg-slate-50/50 rounded-3xl border border-dashed border-slate-200">
-                                                            <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center mx-auto mb-4 border border-slate-100">
-                                                                <BookOpen size={32} className="text-slate-200" />
-                                                            </div>
-                                                            <h4 className="text-slate-800 font-bold mb-1">知識庫目前為空</h4>
-                                                            <p className="text-xs text-slate-400">點擊上方「新增問答」開始建立 AI 的知識庫。</p>
+                                                            {editingFaqs.length === 0 && (
+                                                                <div className="text-center py-20 bg-slate-50/50 rounded-3xl border border-dashed border-slate-200">
+                                                                    <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center mx-auto mb-4 border border-slate-100">
+                                                                        <BookOpen size={32} className="text-slate-200" />
+                                                                    </div>
+                                                                    <h4 className="text-slate-800 font-bold mb-1">知識庫目前為空</h4>
+                                                                    <p className="text-xs text-slate-400">點擊上方「新增問答」開始建立 AI 的知識庫。</p>
+                                                                </div>
+                                                            )}
                                                         </div>
-                                                    )}
-                                                </div>
 
-                                                <div className="px-4 sm:px-10 py-6 sm:py-8 bg-slate-50/50 border-t border-slate-100 flex justify-end">
-                                                    <button
-                                                        disabled={isSaving}
-                                                        onClick={handleSaveFaqs}
-                                                        className="bg-brand-600 hover:bg-brand-700 disabled:opacity-50 text-white font-bold px-10 py-3.5 rounded-2xl shadow-lg shadow-brand-200 transition-all active:scale-95 flex items-center gap-2"
-                                                    >
-                                                        {isSaving ? <Loader2 className="animate-spin" size={20} /> : <Check size={20} />}
-                                                        儲存設定
-                                                    </button>
-                                                </div>
-                                            </div>
-                                            </>
+                                                        <div className="px-4 sm:px-10 py-6 sm:py-8 bg-slate-50/50 border-t border-slate-100 flex justify-end">
+                                                            <button
+                                                                disabled={isSaving}
+                                                                onClick={handleSaveFaqs}
+                                                                className="bg-brand-600 hover:bg-brand-700 disabled:opacity-50 text-white font-bold px-10 py-3.5 rounded-2xl shadow-lg shadow-brand-200 transition-all active:scale-95 flex items-center gap-2"
+                                                            >
+                                                                {isSaving ? <Loader2 className="animate-spin" size={20} /> : <Check size={20} />}
+                                                                儲存設定
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                </>
                                             ) : (
-                                            <>
-                                            {/* Product Content Area */}
-                                            <div className="bg-white rounded-[32px] border border-slate-200 shadow-xl shadow-slate-200/50 overflow-hidden">
-                                                <div className="p-4 sm:p-8 border-b border-slate-100 bg-slate-50/30 flex flex-wrap items-center justify-between gap-3">
-                                                    <div>
-                                                        <h3 className="text-lg font-bold text-slate-800">商品庫管理</h3>
-                                                        <p className="text-xs text-slate-400 mt-1 uppercase tracking-widest font-bold">Manage Product Catalog</p>
-                                                    </div>
-                                                    <div className="flex items-center gap-3">
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => window.open(storefrontPreviewUrl, '_blank', 'noopener,noreferrer')}
-                                                            disabled={!storefrontPreviewUrl}
-                                                            className="flex items-center gap-2 px-3 sm:px-5 py-2.5 border border-amber-200 text-amber-700 bg-amber-50 rounded-xl text-sm font-bold hover:bg-amber-100 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                                                        >
-                                                            <ExternalLink size={16} />
-                                                            <span className="hidden sm:inline">查看商品頁</span>
-                                                        </button>
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => copyToClipboard(storefrontPreviewUrl)}
-                                                            disabled={!storefrontPreviewUrl}
-                                                            className="flex items-center gap-2 px-3 sm:px-5 py-2.5 border border-slate-200 text-slate-600 bg-white rounded-xl text-sm font-bold hover:bg-slate-50 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                                                        >
-                                                            <Copy size={16} />
-                                                            <span className="hidden sm:inline">複製連結</span>
-                                                        </button>
-                                                        <label className={`flex items-center gap-2 px-3 sm:px-5 py-2.5 border border-green-200 text-green-700 rounded-xl text-sm font-bold hover:bg-green-50 transition-all cursor-pointer ${isParsingProductFile ? 'opacity-50 cursor-not-allowed' : ''}`}>
-                                                            {isParsingProductFile ? (
-                                                                <Loader2 size={16} className="animate-spin" />
-                                                            ) : (
-                                                                <FileSpreadsheet size={16} />
-                                                            )}
-                                                            <span className="hidden sm:inline">{isParsingProductFile ? 'AI 解析中...' : '匯入檔案'}</span>
-                                                            <input
-                                                                ref={productFileRef}
-                                                                type="file"
-                                                                accept=".xlsx,.csv,.json"
-                                                                className="hidden"
-                                                                disabled={isParsingProductFile}
-                                                                onChange={(e) => handleParseProductFile(e.target.files[0])}
-                                                            />
-                                                        </label>
-                                                        <button
-                                                            onClick={() => {
-                                                                if (editingProducts.length >= 50) {
-                                                                    alert('最多只能新增 50 個商品');
-                                                                    return;
-                                                                }
-                                                                setNewProduct({ name: '', description: '', keywords: '' });
-                                                                setShowProductModal(true);
-                                                            }}
-                                                            className="flex items-center gap-2 px-3 sm:px-5 py-2.5 bg-green-600 text-white rounded-xl text-sm font-bold hover:bg-green-700 transition-all shadow-md shadow-green-100"
-                                                        >
-                                                            <Plus size={18} />
-                                                            新增商品
-                                                        </button>
-                                                    </div>
-                                                </div>
-
-                                                <div className="p-4 sm:p-10 space-y-8">
-                                                    {editingProducts.map((product, idx) => (
-                                                        <div key={idx} className="group relative bg-slate-50/50 rounded-3xl p-4 sm:p-8 border border-slate-100 hover:border-green-200 hover:bg-white transition-all duration-300">
-                                                            <div className="absolute -top-3 left-6 sm:left-8 bg-white border border-slate-100 px-3 py-1 rounded-full text-[10px] font-black text-green-500 uppercase tracking-widest shadow-sm">
-                                                                P{idx + 1}
+                                                <>
+                                                    {/* Product Content Area */}
+                                                    <div className="bg-white rounded-[32px] border border-slate-200 shadow-xl shadow-slate-200/50 overflow-hidden">
+                                                        <div className="p-4 sm:p-8 border-b border-slate-100 bg-slate-50/30 flex flex-wrap items-center justify-between gap-3">
+                                                            <div>
+                                                                <h3 className="text-lg font-bold text-slate-800">商品庫管理</h3>
+                                                                <p className="text-xs text-slate-400 mt-1 uppercase tracking-widest font-bold">Manage Product Catalog</p>
                                                             </div>
-                                                            <div className="absolute top-4 sm:top-6 right-4 sm:right-8 flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                            <div className="flex items-center gap-3">
                                                                 <button
-                                                                    onClick={() => openConfirm({
-                                                                        title: '刪除商品',
-                                                                        message: `確定要刪除商品「${editingProducts[idx]?.name || ''}」嗎？儲存後才會生效。`,
-                                                                        onConfirm: () => { setEditingProducts(editingProducts.filter((_, i) => i !== idx)); closeConfirm(); },
-                                                                    })}
-                                                                    className="w-9 h-9 flex items-center justify-center bg-white border border-slate-100 text-slate-400 hover:text-red-500 rounded-xl shadow-sm transition-all hover:scale-105"
+                                                                    type="button"
+                                                                    onClick={() => window.open(storefrontPreviewUrl, '_blank', 'noopener,noreferrer')}
+                                                                    disabled={!storefrontPreviewUrl}
+                                                                    className="flex items-center gap-2 px-3 sm:px-5 py-2.5 border border-amber-200 text-amber-700 bg-amber-50 rounded-xl text-sm font-bold hover:bg-amber-100 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                                                                 >
-                                                                    <Trash2 size={16} />
+                                                                    <ExternalLink size={16} />
+                                                                    <span className="hidden sm:inline">查看商品頁</span>
+                                                                </button>
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => copyToClipboard(storefrontPreviewUrl)}
+                                                                    disabled={!storefrontPreviewUrl}
+                                                                    className="flex items-center gap-2 px-3 sm:px-5 py-2.5 border border-slate-200 text-slate-600 bg-white rounded-xl text-sm font-bold hover:bg-slate-50 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                                                                >
+                                                                    <Copy size={16} />
+                                                                    <span className="hidden sm:inline">複製連結</span>
+                                                                </button>
+                                                                <label className={`flex items-center gap-2 px-3 sm:px-5 py-2.5 border border-green-200 text-green-700 rounded-xl text-sm font-bold hover:bg-green-50 transition-all cursor-pointer ${isParsingProductFile ? 'opacity-50 cursor-not-allowed' : ''}`}>
+                                                                    {isParsingProductFile ? (
+                                                                        <Loader2 size={16} className="animate-spin" />
+                                                                    ) : (
+                                                                        <FileSpreadsheet size={16} />
+                                                                    )}
+                                                                    <span className="hidden sm:inline">{isParsingProductFile ? 'AI 解析中...' : '匯入檔案'}</span>
+                                                                    <input
+                                                                        ref={productFileRef}
+                                                                        type="file"
+                                                                        accept=".xlsx,.csv,.json"
+                                                                        className="hidden"
+                                                                        disabled={isParsingProductFile}
+                                                                        onChange={(e) => handleParseProductFile(e.target.files[0])}
+                                                                    />
+                                                                </label>
+                                                                <button
+                                                                    onClick={() => {
+                                                                        if (editingProducts.length >= 50) {
+                                                                            alert('最多只能新增 50 個商品');
+                                                                            return;
+                                                                        }
+                                                                        setNewProduct({ name: '', description: '', keywords: '' });
+                                                                        setShowProductModal(true);
+                                                                    }}
+                                                                    className="flex items-center gap-2 px-3 sm:px-5 py-2.5 bg-green-600 text-white rounded-xl text-sm font-bold hover:bg-green-700 transition-all shadow-md shadow-green-100"
+                                                                >
+                                                                    <Plus size={18} />
+                                                                    新增商品
                                                                 </button>
                                                             </div>
+                                                        </div>
 
-                                                            <div className="space-y-6">
-                                                                <div className="space-y-2">
-                                                                    <div className="flex items-center gap-2 text-slate-400">
-                                                                        <span className="text-[10px] font-black uppercase tracking-widest">商品名稱</span>
+                                                        <div className="p-4 sm:p-10 space-y-8">
+                                                            {editingProducts.map((product, idx) => (
+                                                                <div key={idx} className="group relative bg-slate-50/50 rounded-3xl p-4 sm:p-8 border border-slate-100 hover:border-green-200 hover:bg-white transition-all duration-300">
+                                                                    <div className="absolute -top-3 left-6 sm:left-8 bg-white border border-slate-100 px-3 py-1 rounded-full text-[10px] font-black text-green-500 uppercase tracking-widest shadow-sm">
+                                                                        P{idx + 1}
                                                                     </div>
-                                                                    <div className="flex-1">
-                                                                        <input
-                                                                            type="text"
-                                                                            value={product.name}
-                                                                            maxLength={50}
-                                                                            onChange={(e) => {
-                                                                                const newProducts = [...editingProducts];
-                                                                                newProducts[idx].name = e.target.value;
-                                                                                setEditingProducts(newProducts);
-                                                                            }}
-                                                                            placeholder="輸入商品名稱..."
-                                                                            className="w-full bg-transparent text-lg font-bold text-slate-800 placeholder:text-slate-300 outline-none p-0"
-                                                                        />
-                                                                        <div className="text-[10px] text-slate-300 text-right pr-2 mt-1">{product.name?.length || 0}/50</div>
+                                                                    <div className="absolute top-4 sm:top-6 right-4 sm:right-8 flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                                        <button
+                                                                            onClick={() => openConfirm({
+                                                                                title: '刪除商品',
+                                                                                message: `確定要刪除商品「${editingProducts[idx]?.name || ''}」嗎？儲存後才會生效。`,
+                                                                                onConfirm: () => { setEditingProducts(editingProducts.filter((_, i) => i !== idx)); closeConfirm(); },
+                                                                            })}
+                                                                            className="w-9 h-9 flex items-center justify-center bg-white border border-slate-100 text-slate-400 hover:text-red-500 rounded-xl shadow-sm transition-all hover:scale-105"
+                                                                        >
+                                                                            <Trash2 size={16} />
+                                                                        </button>
                                                                     </div>
-                                                                </div>
 
-                                                                <div className="space-y-2">
-                                                                    <div className="flex items-center gap-2 text-slate-400">
-                                                                        <span className="text-[10px] font-black uppercase tracking-widest">菜單/規格說明</span>
-                                                                    </div>
-                                                                    <div className="relative">
-                                                                        <textarea
-                                                                            value={product.description}
-                                                                            maxLength={400}
-                                                                            onChange={(e) => {
-                                                                                const newProducts = [...editingProducts];
-                                                                                newProducts[idx].description = e.target.value;
-                                                                                setEditingProducts(newProducts);
-                                                                            }}
-                                                                            placeholder="輸入商品說明、規格、價格等..."
-                                                                            className="w-full bg-white border border-slate-200 rounded-2xl p-5 text-slate-600 text-sm leading-relaxed min-h-[120px] focus:ring-2 focus:ring-green-500/10 focus:border-green-500 outline-none transition-all shadow-inner"
-                                                                        />
-                                                                        <div className="text-[10px] text-slate-300 text-right pr-2 mt-1">{product.description?.length || 0}/400</div>
-                                                                    </div>
-                                                                </div>
-
-                                                                <div className="space-y-2">
-                                                                    <div className="flex items-center gap-2 text-slate-400">
-                                                                        <span className="text-[10px] font-black uppercase tracking-widest">關鍵字/別名 (選填)</span>
-                                                                    </div>
-                                                                    <div className="flex-1">
-                                                                        <input
-                                                                            type="text"
-                                                                            value={product.keywords || ''}
-                                                                            maxLength={100}
-                                                                            onChange={(e) => {
-                                                                                const newProducts = [...editingProducts];
-                                                                                newProducts[idx].keywords = e.target.value;
-                                                                                setEditingProducts(newProducts);
-                                                                            }}
-                                                                            placeholder="例：珍奶、波霸、大杯紅茶..."
-                                                                            className="w-full bg-white border border-slate-200 rounded-2xl px-5 py-3 text-slate-600 text-sm focus:ring-2 focus:ring-green-500/10 focus:border-green-500 outline-none transition-all shadow-inner"
-                                                                        />
-                                                                        <div className="text-[10px] text-slate-300 text-right pr-2 mt-1">{(product.keywords || '').length}/100</div>
-                                                                    </div>
-                                                                </div>
-
-                                                                {/* 商品附加圖片 */}
-                                                                <div className="space-y-2">
-                                                                    <div className="flex items-center gap-2 text-slate-400">
-                                                                        <span className="text-[10px] font-black uppercase tracking-widest">Image</span>
-                                                                        <span className="text-[10px] text-slate-300">(選填)</span>
-                                                                    </div>
-                                                                    {product.image_id ? (
-                                                                        <div className="flex items-center gap-3">
-                                                                            <img
-                                                                                src={product._preview_url || product.preview_url || ''}
-                                                                                alt="商品附圖"
-                                                                                className="w-20 h-20 object-cover rounded-xl border border-slate-200 cursor-zoom-in hover:opacity-90 transition-opacity"
-                                                                                onClick={() => setLightboxSrc(product._preview_url || product.preview_url || '')}
-                                                                                onError={(e) => { e.target.style.display = 'none'; }}
-                                                                            />
-                                                                            <button
-                                                                                onClick={() => openConfirm({
-                                                                                    title: '移除附圖',
-                                                                                    message: '確定要移除這張商品附圖嗎？此操作無法復原。',
-                                                                                    onConfirm: () => { handleProductImageDelete(idx); closeConfirm(); },
-                                                                                })}
-                                                                                className="flex items-center gap-1.5 px-3 py-2 bg-white border border-red-200 text-red-500 rounded-xl text-xs font-bold hover:bg-red-50 transition-all"
-                                                                            >
-                                                                                <Trash2 size={14} />
-                                                                                移除圖片
-                                                                            </button>
+                                                                    <div className="space-y-6">
+                                                                        <div className="space-y-2">
+                                                                            <div className="flex items-center gap-2 text-slate-400">
+                                                                                <span className="text-[10px] font-black uppercase tracking-widest">商品名稱</span>
+                                                                            </div>
+                                                                            <div className="flex-1">
+                                                                                <input
+                                                                                    type="text"
+                                                                                    value={product.name}
+                                                                                    maxLength={50}
+                                                                                    onChange={(e) => {
+                                                                                        const newProducts = [...editingProducts];
+                                                                                        newProducts[idx].name = e.target.value;
+                                                                                        setEditingProducts(newProducts);
+                                                                                    }}
+                                                                                    placeholder="輸入商品名稱..."
+                                                                                    className="w-full bg-transparent text-lg font-bold text-slate-800 placeholder:text-slate-300 outline-none p-0"
+                                                                                />
+                                                                                <div className="text-[10px] text-slate-300 text-right pr-2 mt-1">{product.name?.length || 0}/50</div>
+                                                                            </div>
                                                                         </div>
-                                                                    ) : (
-                                                                        <label className="flex items-center gap-2 px-4 py-3 bg-white border border-dashed border-slate-200 rounded-xl cursor-pointer hover:border-green-300 hover:bg-green-50/50 transition-all">
-                                                                            {uploadingProductIdx === idx ? (
-                                                                                <Loader2 size={16} className="animate-spin text-green-500" />
+
+                                                                        <div className="space-y-2">
+                                                                            <div className="flex items-center gap-2 text-slate-400">
+                                                                                <span className="text-[10px] font-black uppercase tracking-widest">菜單/規格說明</span>
+                                                                            </div>
+                                                                            <div className="relative">
+                                                                                <textarea
+                                                                                    value={product.description}
+                                                                                    maxLength={400}
+                                                                                    onChange={(e) => {
+                                                                                        const newProducts = [...editingProducts];
+                                                                                        newProducts[idx].description = e.target.value;
+                                                                                        setEditingProducts(newProducts);
+                                                                                    }}
+                                                                                    placeholder="輸入商品說明、規格、價格等..."
+                                                                                    className="w-full bg-white border border-slate-200 rounded-2xl p-5 text-slate-600 text-sm leading-relaxed min-h-[120px] focus:ring-2 focus:ring-green-500/10 focus:border-green-500 outline-none transition-all shadow-inner"
+                                                                                />
+                                                                                <div className="text-[10px] text-slate-300 text-right pr-2 mt-1">{product.description?.length || 0}/400</div>
+                                                                            </div>
+                                                                        </div>
+
+                                                                        <div className="space-y-2">
+                                                                            <div className="flex items-center gap-2 text-slate-400">
+                                                                                <span className="text-[10px] font-black uppercase tracking-widest">關鍵字/別名 (選填)</span>
+                                                                            </div>
+                                                                            <div className="flex-1">
+                                                                                <input
+                                                                                    type="text"
+                                                                                    value={product.keywords || ''}
+                                                                                    maxLength={100}
+                                                                                    onChange={(e) => {
+                                                                                        const newProducts = [...editingProducts];
+                                                                                        newProducts[idx].keywords = e.target.value;
+                                                                                        setEditingProducts(newProducts);
+                                                                                    }}
+                                                                                    placeholder="例：珍奶、波霸、大杯紅茶..."
+                                                                                    className="w-full bg-white border border-slate-200 rounded-2xl px-5 py-3 text-slate-600 text-sm focus:ring-2 focus:ring-green-500/10 focus:border-green-500 outline-none transition-all shadow-inner"
+                                                                                />
+                                                                                <div className="text-[10px] text-slate-300 text-right pr-2 mt-1">{(product.keywords || '').length}/100</div>
+                                                                            </div>
+                                                                        </div>
+
+                                                                        {/* 商品附加圖片 */}
+                                                                        <div className="space-y-2">
+                                                                            <div className="flex items-center gap-2 text-slate-400">
+                                                                                <span className="text-[10px] font-black uppercase tracking-widest">Image</span>
+                                                                                <span className="text-[10px] text-slate-300">(選填)</span>
+                                                                            </div>
+                                                                            {product.image_id ? (
+                                                                                <div className="flex items-center gap-3">
+                                                                                    <img
+                                                                                        src={product._preview_url || product.preview_url || ''}
+                                                                                        alt="商品附圖"
+                                                                                        className="w-20 h-20 object-cover rounded-xl border border-slate-200 cursor-zoom-in hover:opacity-90 transition-opacity"
+                                                                                        onClick={() => setLightboxSrc(product._preview_url || product.preview_url || '')}
+                                                                                        onError={(e) => { e.target.style.display = 'none'; }}
+                                                                                    />
+                                                                                    <button
+                                                                                        onClick={() => openConfirm({
+                                                                                            title: '移除附圖',
+                                                                                            message: '確定要移除這張商品附圖嗎？此操作無法復原。',
+                                                                                            onConfirm: () => { handleProductImageDelete(idx); closeConfirm(); },
+                                                                                        })}
+                                                                                        className="flex items-center gap-1.5 px-3 py-2 bg-white border border-red-200 text-red-500 rounded-xl text-xs font-bold hover:bg-red-50 transition-all"
+                                                                                    >
+                                                                                        <Trash2 size={14} />
+                                                                                        移除圖片
+                                                                                    </button>
+                                                                                </div>
                                                                             ) : (
-                                                                                <Upload size={16} className="text-slate-400" />
+                                                                                <label className="flex items-center gap-2 px-4 py-3 bg-white border border-dashed border-slate-200 rounded-xl cursor-pointer hover:border-green-300 hover:bg-green-50/50 transition-all">
+                                                                                    {uploadingProductIdx === idx ? (
+                                                                                        <Loader2 size={16} className="animate-spin text-green-500" />
+                                                                                    ) : (
+                                                                                        <Upload size={16} className="text-slate-400" />
+                                                                                    )}
+                                                                                    <span className="text-xs text-slate-500">
+                                                                                        {uploadingProductIdx === idx ? '上傳中...' : '上傳附圖 (jpg/png/webp, 2MB)'}
+                                                                                    </span>
+                                                                                    <input
+                                                                                        type="file"
+                                                                                        accept="image/jpeg,image/png,image/webp"
+                                                                                        className="hidden"
+                                                                                        onChange={(e) => handleProductImageUpload(idx, e.target.files[0])}
+                                                                                        disabled={uploadingProductIdx === idx}
+                                                                                    />
+                                                                                </label>
                                                                             )}
-                                                                            <span className="text-xs text-slate-500">
-                                                                                {uploadingProductIdx === idx ? '上傳中...' : '上傳附圖 (jpg/png/webp, 2MB)'}
-                                                                            </span>
-                                                                            <input
-                                                                                type="file"
-                                                                                accept="image/jpeg,image/png,image/webp"
-                                                                                className="hidden"
-                                                                                onChange={(e) => handleProductImageUpload(idx, e.target.files[0])}
-                                                                                disabled={uploadingProductIdx === idx}
-                                                                            />
-                                                                        </label>
-                                                                    )}
+                                                                        </div>
+                                                                    </div>
                                                                 </div>
-                                                            </div>
-                                                        </div>
-                                                    ))}
-                                                    <div ref={productsEndRef} />
+                                                            ))}
+                                                            <div ref={productsEndRef} />
 
-                                                    {editingProducts.length === 0 && !isParsingProductFile && (
-                                                        <div className="text-center py-20 bg-slate-50/50 rounded-3xl border border-dashed border-slate-200">
-                                                            <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center mx-auto mb-4 border border-slate-100">
-                                                                <Package size={32} className="text-slate-200" />
-                                                            </div>
-                                                            <h4 className="text-slate-800 font-bold mb-1">商品庫目前為空</h4>
-                                                            <p className="text-xs text-slate-400">點擊上方「新增商品」手動建立，或「匯入 Excel/CSV」批次匯入。</p>
+                                                            {editingProducts.length === 0 && !isParsingProductFile && (
+                                                                <div className="text-center py-20 bg-slate-50/50 rounded-3xl border border-dashed border-slate-200">
+                                                                    <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center mx-auto mb-4 border border-slate-100">
+                                                                        <Package size={32} className="text-slate-200" />
+                                                                    </div>
+                                                                    <h4 className="text-slate-800 font-bold mb-1">商品庫目前為空</h4>
+                                                                    <p className="text-xs text-slate-400">點擊上方「新增商品」手動建立，或「匯入 Excel/CSV」批次匯入。</p>
+                                                                </div>
+                                                            )}
+                                                            {isParsingProductFile && (
+                                                                <div className="text-center py-20 bg-green-50/50 rounded-3xl border border-dashed border-green-200">
+                                                                    <Loader2 size={32} className="animate-spin text-green-500 mx-auto mb-4" />
+                                                                    <h4 className="text-green-800 font-bold mb-1">AI 正在解析「{productFileName}」</h4>
+                                                                    <p className="text-xs text-green-600">自動擷取商品名稱、描述、關鍵字...</p>
+                                                                </div>
+                                                            )}
                                                         </div>
-                                                    )}
-                                                    {isParsingProductFile && (
-                                                        <div className="text-center py-20 bg-green-50/50 rounded-3xl border border-dashed border-green-200">
-                                                            <Loader2 size={32} className="animate-spin text-green-500 mx-auto mb-4" />
-                                                            <h4 className="text-green-800 font-bold mb-1">AI 正在解析「{productFileName}」</h4>
-                                                            <p className="text-xs text-green-600">自動擷取商品名稱、描述、關鍵字...</p>
-                                                        </div>
-                                                    )}
-                                                </div>
 
-                                                <div className="px-4 sm:px-10 py-6 sm:py-8 bg-slate-50/50 border-t border-slate-100 flex justify-end">
-                                                    <button
-                                                        disabled={isSaving}
-                                                        onClick={handleSaveProducts}
-                                                        className="bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white font-bold px-10 py-3.5 rounded-2xl shadow-lg shadow-green-200 transition-all active:scale-95 flex items-center gap-2"
-                                                    >
-                                                        {isSaving ? <Loader2 className="animate-spin" size={20} /> : <Check size={20} />}
-                                                        儲存設定
-                                                    </button>
-                                                </div>
-                                            </div>
-                                            </>
+                                                        <div className="px-4 sm:px-10 py-6 sm:py-8 bg-slate-50/50 border-t border-slate-100 flex justify-end">
+                                                            <button
+                                                                disabled={isSaving}
+                                                                onClick={handleSaveProducts}
+                                                                className="bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white font-bold px-10 py-3.5 rounded-2xl shadow-lg shadow-green-200 transition-all active:scale-95 flex items-center gap-2"
+                                                            >
+                                                                {isSaving ? <Loader2 className="animate-spin" size={20} /> : <Check size={20} />}
+                                                                儲存設定
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                </>
                                             )}
                                         </div>
                                     );
@@ -2704,9 +2712,9 @@ const BackendDashboard = () => {
                                                     <div
                                                         key={idx}
                                                         onClick={() => {
-                                                        const sub_path = EDITING_TO_SUB[sub.name];
-                                                        if (sub_path) navigate('/agent/' + routeAgentId + '/agents/' + sub_path);
-                                                    }}
+                                                            const sub_path = EDITING_TO_SUB[sub.name];
+                                                            if (sub_path) navigate('/agent/' + routeAgentId + '/agents/' + sub_path);
+                                                        }}
                                                         className={`bg-white rounded-[32px] p-8 border ${sub.enabled ? 'border-slate-100' : 'border-slate-50 opacity-60'} shadow-sm flex flex-col h-full relative group cursor-pointer hover:border-brand-200 hover:shadow-2xl hover:shadow-brand-500/5 transition-all duration-500`}
                                                     >
                                                         <div className="flex items-start justify-between mb-8">
@@ -2839,40 +2847,40 @@ const BackendDashboard = () => {
                                                     {filteredCrmUsers.map((user) => {
                                                         const ch = user.channel || 'line';
                                                         return (
-                                                        <button
-                                                            key={user.line_id}
-                                                            onClick={() => { setSelectedCrmUser(user); setEditingNotes(user.notes || ''); }}
-                                                            className="w-full bg-white rounded-2xl border border-slate-200 shadow-sm px-5 py-4 flex items-center justify-between hover:border-brand-300 hover:shadow-md transition-all group"
-                                                        >
-                                                            <div className="flex items-center gap-4 min-w-0">
-                                                                <div className="w-11 h-11 bg-brand-50 rounded-full flex items-center justify-center flex-shrink-0 group-hover:bg-brand-100 transition-colors">
-                                                                    <span className="text-brand-600 font-bold text-base">
-                                                                        {user.user_name.charAt(0).toUpperCase()}
-                                                                    </span>
-                                                                </div>
-                                                                <div className="text-left min-w-0">
-                                                                    <div className="flex items-center gap-2 flex-wrap">
-                                                                        <span className="font-semibold text-slate-800">{user.user_name}</span>
-                                                                        <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${ch === 'telegram' ? 'bg-sky-100 text-sky-600' : 'bg-green-100 text-green-600'}`}>
-                                                                            {ch === 'telegram' ? 'TG' : 'LINE'}
+                                                            <button
+                                                                key={user.line_id}
+                                                                onClick={() => { setSelectedCrmUser(user); setEditingNotes(user.notes || ''); }}
+                                                                className="w-full bg-white rounded-2xl border border-slate-200 shadow-sm px-5 py-4 flex items-center justify-between hover:border-brand-300 hover:shadow-md transition-all group"
+                                                            >
+                                                                <div className="flex items-center gap-4 min-w-0">
+                                                                    <div className="w-11 h-11 bg-brand-50 rounded-full flex items-center justify-center flex-shrink-0 group-hover:bg-brand-100 transition-colors">
+                                                                        <span className="text-brand-600 font-bold text-base">
+                                                                            {user.user_name.charAt(0).toUpperCase()}
                                                                         </span>
                                                                     </div>
-                                                                    <div className="text-xs text-slate-400 mt-0.5">
-                                                                        {user.last_time ? `上次互動：${user.last_time}` : '無互動紀錄'}
-                                                                    </div>
-                                                                    {(user.tags || []).length > 0 && (
-                                                                        <div className="flex items-center gap-1.5 mt-2 flex-wrap">
-                                                                            {user.tags.map(tag => (
-                                                                                <span key={tag} className={`text-[10px] px-2 py-0.5 rounded-full font-bold border ${getTagColor(tag)}`}>
-                                                                                    {tag}
-                                                                                </span>
-                                                                            ))}
+                                                                    <div className="text-left min-w-0">
+                                                                        <div className="flex items-center gap-2 flex-wrap">
+                                                                            <span className="font-semibold text-slate-800">{user.user_name}</span>
+                                                                            <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${ch === 'telegram' ? 'bg-sky-100 text-sky-600' : 'bg-green-100 text-green-600'}`}>
+                                                                                {ch === 'telegram' ? 'TG' : 'LINE'}
+                                                                            </span>
                                                                         </div>
-                                                                    )}
+                                                                        <div className="text-xs text-slate-400 mt-0.5">
+                                                                            {user.last_time ? `上次互動：${user.last_time}` : '無互動紀錄'}
+                                                                        </div>
+                                                                        {(user.tags || []).length > 0 && (
+                                                                            <div className="flex items-center gap-1.5 mt-2 flex-wrap">
+                                                                                {user.tags.map(tag => (
+                                                                                    <span key={tag} className={`text-[10px] px-2 py-0.5 rounded-full font-bold border ${getTagColor(tag)}`}>
+                                                                                        {tag}
+                                                                                    </span>
+                                                                                ))}
+                                                                            </div>
+                                                                        )}
+                                                                    </div>
                                                                 </div>
-                                                            </div>
-                                                            <ChevronRight size={18} className="text-slate-300 group-hover:text-brand-400 transition-colors flex-shrink-0" />
-                                                        </button>
+                                                                <ChevronRight size={18} className="text-slate-300 group-hover:text-brand-400 transition-colors flex-shrink-0" />
+                                                            </button>
                                                         );
                                                     })}
                                                 </div>
@@ -3076,6 +3084,8 @@ const BackendDashboard = () => {
                                 return <ActivityLogView agentId={routeAgentId} userId={currentAgent?.admin_id} />;
                             case 'inbox':
                                 return <InboxView currentAgent={currentAgent} />;
+                            case 'billing':
+                                return <BillingView />;
                             case 'channels':
                                 return (
                                     <div className="max-w-6xl">
@@ -3798,11 +3808,10 @@ const BackendDashboard = () => {
                                                 <button
                                                     key={template.id}
                                                     onClick={() => handleFlexTemplateChange(template.id)}
-                                                    className={`rounded-2xl border p-4 text-left transition-all ${
-                                                        flexTemplateType === template.id
-                                                            ? 'border-brand-500 bg-brand-50 shadow-sm'
-                                                            : 'border-slate-200 bg-white hover:border-slate-300'
-                                                    }`}
+                                                    className={`rounded-2xl border p-4 text-left transition-all ${flexTemplateType === template.id
+                                                        ? 'border-brand-500 bg-brand-50 shadow-sm'
+                                                        : 'border-slate-200 bg-white hover:border-slate-300'
+                                                        }`}
                                                 >
                                                     <div className="font-bold text-slate-800">{template.label}</div>
                                                     <div className="mt-1 text-xs leading-relaxed text-slate-500">{template.description}</div>
@@ -3845,9 +3854,8 @@ const BackendDashboard = () => {
                                                             key={preset}
                                                             type="button"
                                                             onClick={() => handleFlexFieldChange('theme_color', preset)}
-                                                            className={`flex h-10 w-10 items-center justify-center rounded-full border-2 transition-all ${
-                                                                isActive ? 'border-slate-900 scale-110' : 'border-white hover:scale-105'
-                                                            }`}
+                                                            className={`flex h-10 w-10 items-center justify-center rounded-full border-2 transition-all ${isActive ? 'border-slate-900 scale-110' : 'border-white hover:scale-105'
+                                                                }`}
                                                             style={{ backgroundColor: preset, boxShadow: '0 8px 18px rgba(15,23,42,0.12)' }}
                                                             title={preset}
                                                         >
@@ -3943,11 +3951,10 @@ const BackendDashboard = () => {
                                             <button
                                                 type="button"
                                                 onClick={() => setIsSecondaryFlexButtonEnabled((prev) => !prev)}
-                                                className={`inline-flex items-center gap-2 rounded-full px-3 py-2 text-xs font-bold transition-all ${
-                                                    isSecondaryFlexButtonEnabled
-                                                        ? 'bg-brand-600 text-white'
-                                                        : 'bg-white text-slate-500 border border-slate-200'
-                                                }`}
+                                                className={`inline-flex items-center gap-2 rounded-full px-3 py-2 text-xs font-bold transition-all ${isSecondaryFlexButtonEnabled
+                                                    ? 'bg-brand-600 text-white'
+                                                    : 'bg-white text-slate-500 border border-slate-200'
+                                                    }`}
                                             >
                                                 <span
                                                     className={`h-2.5 w-2.5 rounded-full ${isSecondaryFlexButtonEnabled ? 'bg-white' : 'bg-slate-300'}`}

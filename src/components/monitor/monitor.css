@@ -538,6 +538,30 @@
     border-color: rgba(52, 211, 153, 0.3);
 }
 
+.monitor-root .badge-token-in {
+    background: rgba(148, 163, 184, 0.1);
+    color: #94a3b8;
+    border-color: rgba(148, 163, 184, 0.3);
+}
+
+.monitor-root .badge-token-out {
+    background: rgba(56, 189, 248, 0.1);
+    color: var(--accent-blue);
+    border-color: rgba(56, 189, 248, 0.3);
+}
+
+.monitor-root .badge-token-tool {
+    background: rgba(251, 146, 60, 0.1);
+    color: var(--accent-orange);
+    border-color: rgba(251, 146, 60, 0.3);
+}
+
+.monitor-root .badge-token-thought {
+    background: rgba(244, 114, 182, 0.1);
+    color: var(--accent-pink);
+    border-color: rgba(244, 114, 182, 0.3);
+}
+
 .monitor-root .pagination {
     display: flex;
     justify-content: center;

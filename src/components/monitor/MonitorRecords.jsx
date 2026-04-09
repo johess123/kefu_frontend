@@ -117,9 +117,8 @@ const RecordCard = ({ rec }) => {
 
     const prompts = rec.prompt_snapshot || null;
 
-    const tokenBrief = rec.tokens && Object.keys(rec.tokens).length > 0
-        ? `Total: ${rec.tokens.total_token || 0} (In: ${rec.tokens.input_token || 0}, Out: ${rec.tokens.output_token || 0})`
-        : '無 Token 資訊';
+    const tokens = rec.tokens || {};
+    const hasTokens = Object.keys(tokens).length > 0;
 
     const sessionDisplay = rec.session_id
         ? `🆔 Session: ${rec.session_id.substring(0, 8)}...`
@@ -161,7 +160,16 @@ const RecordCard = ({ rec }) => {
                 </div>
             </div>
             <div className="token-info">
-                <span className="badge">📊 {tokenBrief}</span>
+                {hasTokens ? (
+                    <>
+                        <span className="badge badge-token-in">📥 In: {tokens.input_token || 0}</span>
+                        <span className="badge badge-token-out">📤 Out: {tokens.output_token || 0}</span>
+                        <span className="badge badge-token-tool">🛠️ Tool: {tokens.tool_token || 0}</span>
+                        <span className="badge badge-token-thought">🧠 Thought: {tokens.thought_token || 0}</span>
+                    </>
+                ) : (
+                    <span className="badge">📊 無 Token 資訊</span>
+                )}
                 {rec.cost !== undefined && (
                     <span className="badge badge-cost">💰 Est. Cost: ${rec.cost.toFixed(5)}</span>
                 )}
