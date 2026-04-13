@@ -5,6 +5,28 @@ import config from '../config';
 
 const AuthContext = createContext(null);
 
+const decodeGoogleCredentialPayload = (credential) => {
+    try {
+        if (typeof credential !== 'string') return {};
+
+        const [, payloadSegment] = credential.split('.');
+        if (!payloadSegment) return {};
+
+        const normalized = payloadSegment.replace(/-/g, '+').replace(/_/g, '/');
+        const padded = normalized.padEnd(
+            normalized.length + ((4 - (normalized.length % 4)) % 4),
+            '='
+        );
+        const binary = atob(padded);
+        const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
+
+        return JSON.parse(new TextDecoder().decode(bytes));
+    } catch (error) {
+        console.warn('Failed to decode Google credential payload:', error);
+        return {};
+    }
+};
+
 export const AuthProvider = ({ children }) => {
     const [isVerifying, setIsVerifying] = useState(true);
     const [isAuthorized, setIsAuthorized] = useState(false);
@@ -61,12 +83,17 @@ export const AuthProvider = ({ children }) => {
 
     const handleGoogleSuccess = async (credentialResponse) => {
         try {
-            const payload = JSON.parse(atob(credentialResponse.credential.split('.')[1]));
-            const email = payload.email;
-            const picture = payload.picture;
+            const credential = credentialResponse?.credential;
+            if (!credential) {
+                throw new Error('Missing Google credential');
+            }
+
+            const payload = decodeGoogleCredentialPayload(credential);
+            const email = payload.email || '';
+            const picture = payload.picture || '';
 
             const response = await axios.post(`${config.API_URL}/api/admin/login`, {
-                credential: credentialResponse.credential
+                credential
             });
 
             const { isAdmin, isMonitor, googleId, name, balance } = response.data;
