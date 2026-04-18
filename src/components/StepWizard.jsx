@@ -30,11 +30,6 @@ const StepWizard = ({ formData, setFormData, onComplete }) => {
                 return;
             }
 
-            if (cleanedFaqs.length > 80) {
-                alert('FAQ 組數上限為 80 組');
-                return;
-            }
-
             // 檢查是否有半殘的 FAQ (只有 Q 或只有 A) 以及字數限制
             const hasIncomplete = cleanedFaqs.some(f => !f.question.trim() || !f.answer.trim());
             if (hasIncomplete) {
@@ -169,10 +164,6 @@ const StepWizard = ({ formData, setFormData, onComplete }) => {
 
     const renderQ3 = () => {
         const addFAQ = (category = '') => {
-            if (formData.faqs.length >= 80) {
-                alert('最多只能新增 80 組 FAQ');
-                return;
-            }
             const cat = category || (formData.faqs.length > 0 ? (formData.faqs[formData.faqs.length - 1].category || '常見問題') : '常見問題');
             const newFAQ = { id: Date.now().toString(), question: '', answer: '', image_id: '', category: cat };
             updateField('faqs', [...formData.faqs, newFAQ]);
@@ -302,11 +293,6 @@ const StepWizard = ({ formData, setFormData, onComplete }) => {
         const handleAnalyzeFaqs = async () => {
             if (formData.faqs.length === 0) {
                 alert('請先新增問答組');
-                return;
-            }
-
-            if (formData.faqs.length > 80) {
-                alert('FAQ 組數上限為 80 組');
                 return;
             }
 

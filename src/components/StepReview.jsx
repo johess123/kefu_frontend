@@ -82,10 +82,6 @@ const StepReview = ({ onNext, onEdit, formData, setFormData, sessionId, agentId,
     };
 
     const handleAddFaq = () => {
-        if (reviewData.faqs.length >= 80) {
-            alert('最多只能新增 80 組 FAQ');
-            return;
-        }
         const newFaq = { id: Date.now().toString(), question: '', answer: '', category: '' };
         const newFaqs = [...reviewData.faqs, newFaq];
         setReviewData({ ...reviewData, faqs: newFaqs });

@@ -1026,11 +1026,6 @@ const BackendDashboard = () => {
             return;
         }
 
-        if (editingFaqs.length > 80) {
-            alert('FAQ 組數上限為 80 組');
-            return;
-        }
-
         const tooLong = editingFaqs.some(f => (f.question?.length || 0) > 100 || (f.answer?.length || 0) > 500);
         if (tooLong) {
             alert('部分內容超過字數限制 (問題 100 字，回答 500 字)');
@@ -1122,7 +1117,6 @@ const BackendDashboard = () => {
     };
 
     const addFaqToCategory = (category) => {
-        if (editingFaqs.length >= 80) { alert('最多只能新增 80 組 FAQ'); return; }
         const cat = category || (editingFaqs.length > 0 ? (editingFaqs[editingFaqs.length - 1].category || '常見問題') : '常見問題');
         setEditingFaqs(prev => [...prev, { id: Date.now().toString(), question: '', answer: '', image_id: '', category: cat }]);
         setExpandedCategories(prev => new Set([...prev, cat]));
@@ -1171,11 +1165,6 @@ const BackendDashboard = () => {
         const hasIncomplete = cleanedFaqs.some(f => !f.question?.trim() || !f.answer?.trim());
         if (hasIncomplete) {
             alert('請填寫所有 FAQ 的問題與回答，或是刪除未填寫完整的組別');
-            return;
-        }
-
-        if (cleanedFaqs.length > 80) {
-            alert('FAQ 組數上限為 80 組');
             return;
         }
 
