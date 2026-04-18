@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { Bot, ArrowLeft, ArrowRight, Trash2, Plus, CheckCircle2, Globe, Sparkles, Loader2, AlertCircle, Stethoscope, RotateCcw, Upload, Package, FileSpreadsheet, X } from 'lucide-react';
+import { Bot, ArrowLeft, ArrowRight, Trash2, Plus, CheckCircle2, Globe, Sparkles, Loader2, AlertCircle, Stethoscope, RotateCcw, Upload, Package, FileSpreadsheet, X, ChevronDown, ChevronRight } from 'lucide-react';
 import axios from 'axios';
 import Cookies from 'js-cookie';
 import config from '../config';
@@ -16,6 +16,7 @@ const StepWizard = ({ formData, setFormData, onComplete }) => {
     const [isParsingProducts, setIsParsingProducts] = useState(false);
     const [productFileName, setProductFileName] = useState('');
     const productFileRef = useRef(null);
+    const [expandedCategories, setExpandedCategories] = useState(new Set(['常見問題']));
 
     const totalQuestions = 5;
 
@@ -29,8 +30,8 @@ const StepWizard = ({ formData, setFormData, onComplete }) => {
                 return;
             }
 
-            if (cleanedFaqs.length > 20) {
-                alert('FAQ 組數上限為 20 組');
+            if (cleanedFaqs.length > 80) {
+                alert('FAQ 組數上限為 80 組');
                 return;
             }
 
@@ -41,9 +42,9 @@ const StepWizard = ({ formData, setFormData, onComplete }) => {
                 return;
             }
 
-            const tooLong = cleanedFaqs.some(f => f.question.length > 50 || f.answer.length > 200);
+            const tooLong = cleanedFaqs.some(f => f.question.length > 100 || f.answer.length > 500);
             if (tooLong) {
-                alert('部分內容超過字數限制 (問題 50 字，回答 200 字)');
+                alert('部分內容超過字數限制 (問題 100 字，回答 500 字)');
                 return;
             }
 
@@ -167,13 +168,48 @@ const StepWizard = ({ formData, setFormData, onComplete }) => {
     );
 
     const renderQ3 = () => {
-        const addFAQ = () => {
-            if (formData.faqs.length >= 20) {
-                alert('最多只能新增 20 組 FAQ');
+        const addFAQ = (category = '') => {
+            if (formData.faqs.length >= 80) {
+                alert('最多只能新增 80 組 FAQ');
                 return;
             }
-            const newFAQ = { id: Date.now().toString(), question: '', answer: '', image_id: '' };
+            const cat = category || (formData.faqs.length > 0 ? (formData.faqs[formData.faqs.length - 1].category || '常見問題') : '常見問題');
+            const newFAQ = { id: Date.now().toString(), question: '', answer: '', image_id: '', category: cat };
             updateField('faqs', [...formData.faqs, newFAQ]);
+            setExpandedCategories(prev => new Set([...prev, cat]));
+        };
+
+        const renameCategory = (oldName, newName) => {
+            updateField('faqs', formData.faqs.map(f => f.category === oldName ? { ...f, category: newName } : f));
+            setExpandedCategories(prev => {
+                const next = new Set(prev);
+                next.delete(oldName);
+                next.add(newName);
+                return next;
+            });
+        };
+
+        const deleteCategory = (cat) => {
+            if (!window.confirm(`確定要刪除分類「${cat}」及其所有 FAQ 嗎？`)) return;
+            updateField('faqs', formData.faqs.filter(f => f.category !== cat));
+            setExpandedCategories(prev => { const next = new Set(prev); next.delete(cat); return next; });
+        };
+
+        const toggleCategory = (cat) => {
+            setExpandedCategories(prev => {
+                const next = new Set(prev);
+                next.has(cat) ? next.delete(cat) : next.add(cat);
+                return next;
+            });
+        };
+
+        const addNewCategory = () => {
+            const name = window.prompt('請輸入新分類名稱：');
+            if (!name || !name.trim()) return;
+            const trimmed = name.trim();
+            const newFAQ = { id: Date.now().toString(), question: '', answer: '', image_id: '', category: trimmed };
+            updateField('faqs', [...formData.faqs, newFAQ]);
+            setExpandedCategories(prev => new Set([...prev, trimmed]));
         };
 
         const removeFAQ = (id) => {
@@ -205,9 +241,15 @@ const StepWizard = ({ formData, setFormData, onComplete }) => {
                         id: Math.random().toString(36).substr(2, 9),
                         question: f.q,
                         answer: f.a,
-                        image_id: ''
+                        image_id: '',
+                        category: f.category || '常見問題'
                     }));
                     updateField('faqs', [...formData.faqs, ...newFaqs]);
+                    const newCats = new Set(newFaqs.map(f => f.category));
+                    setExpandedCategories(prev => new Set([...prev, ...newCats]));
+                    if (response.data.mode === 'extracted') {
+                        alert(`已從網站擷取 ${newFaqs.length} 筆 FAQ，共 ${newCats.size} 個分類`);
+                    }
                 }
             } catch (error) {
                 console.error('Failed to generate FAQs:', error);
@@ -223,8 +265,8 @@ const StepWizard = ({ formData, setFormData, onComplete }) => {
                 alert('請先輸入完整的問題與回答內容才能進行優化');
                 return;
             }
-            if (faq.question.length > 50 || faq.answer.length > 200) {
-                alert('內容超過字數限制 (問題 50 字，回答 200 字)');
+            if (faq.question.length > 100 || faq.answer.length > 500) {
+                alert('內容超過字數限制 (問題 100 字，回答 500 字)');
                 return;
             }
 
@@ -263,8 +305,8 @@ const StepWizard = ({ formData, setFormData, onComplete }) => {
                 return;
             }
 
-            if (formData.faqs.length > 20) {
-                alert('FAQ 組數上限為 20 組');
+            if (formData.faqs.length > 80) {
+                alert('FAQ 組數上限為 80 組');
                 return;
             }
 
@@ -274,9 +316,9 @@ const StepWizard = ({ formData, setFormData, onComplete }) => {
                 return;
             }
 
-            const tooLong = formData.faqs.some(f => f.question.length > 50 || f.answer.length > 200);
+            const tooLong = formData.faqs.some(f => f.question.length > 100 || f.answer.length > 500);
             if (tooLong) {
-                alert('部分內容超過字數限制 (問題 50 字，回答 200 字)');
+                alert('部分內容超過字數限制 (問題 100 字，回答 500 字)');
                 return;
             }
 
@@ -348,134 +390,117 @@ const StepWizard = ({ formData, setFormData, onComplete }) => {
                     </div>
                 </div>
 
-                <div className="max-h-[400px] overflow-y-auto pr-2 space-y-6 custom-scrollbar pt-4">
-                    {formData.faqs.map((faq, index) => (
-                        <div key={faq.id} className="p-4 bg-white border border-slate-200 rounded-xl shadow-sm relative group pt-6">
-                            <div className="absolute -top-3 left-4 px-2 py-0.5 bg-white border border-slate-200 rounded-md text-[10px] font-black text-slate-400 uppercase tracking-wider shadow-sm z-10">
-                                FAQ {index + 1}
-                            </div>
-                            <div className="absolute top-2 right-2 flex items-center gap-1">
-                                <button
-                                    onClick={() => handleOptimizeFaq(faq.id)}
-                                    disabled={optimizingFaqIds.has(faq.id)}
-                                    className="text-slate-400 hover:text-brand-600 p-1 disabled:opacity-50"
-                                    title="AI 優化"
-                                >
-                                    {optimizingFaqIds.has(faq.id) ? (
-                                        <Loader2 size={14} className="animate-spin" />
-                                    ) : (
-                                        <Sparkles size={14} />
-                                    )}
-                                </button>
-                                <button
-                                    onClick={() => removeFAQ(faq.id)}
-                                    className="text-slate-400 hover:text-red-500 p-1"
-                                >
-                                    <Trash2 size={16} />
-                                </button>
-                            </div>
-                            <div className="space-y-3">
-                                <div className="flex items-center gap-2">
-                                    <span className="text-xs font-black text-slate-300 uppercase">Q</span>
-                                    <input
-                                        type="text"
-                                        placeholder="例如：價格多少？怎麼預約？"
-                                        className="w-full p-2 border-b border-slate-200 focus:border-brand-500 focus:outline-none text-sm font-medium"
-                                        value={faq.question}
-                                        maxLength={50}
-                                        onChange={(e) => updateFAQ(faq.id, 'question', e.target.value)}
-                                    />
-                                    <div className="text-[10px] text-slate-300 ml-2">{faq.question.length}/50</div>
-                                </div>
+                <div className="max-h-[500px] overflow-y-auto pr-2 space-y-3 custom-scrollbar pt-4">
+                    {(() => {
+                        const grouped = {};
+                        formData.faqs.forEach(faq => {
+                            const cat = faq.category || '常見問題';
+                            if (!grouped[cat]) grouped[cat] = [];
+                            grouped[cat].push(faq);
+                        });
+                        const cats = Object.keys(grouped);
 
-                                {analysisReport && analysisReport.suggestions.find(s => s.id === faq.id) && (
-                                    <div className="ml-6 p-3 bg-amber-50 border border-amber-100 rounded-xl relative">
-                                        <div className="flex items-start gap-2 mb-2">
-                                            <AlertCircle size={14} className="text-amber-500 mt-0.5" />
-                                            <p className="text-xs text-amber-700 font-medium">
-                                                建議優化：{analysisReport.suggestions.find(s => s.id === faq.id).suggestion}
-                                            </p>
-                                        </div>
-                                        <div className="flex items-center gap-2">
-                                            <input
-                                                type="text"
-                                                readOnly
-                                                className="flex-1 p-2 bg-white border border-amber-200 rounded text-xs text-amber-800"
-                                                value={analysisReport.suggestions.find(s => s.id === faq.id).optimized_q}
-                                            />
-                                            <button
-                                                onClick={() => {
-                                                    const s = analysisReport.suggestions.find(s => s.id === faq.id);
-                                                    applySuggestion(faq.id, s.optimized_q, s.optimized_a);
-                                                }}
-                                                className="flex items-center gap-1 px-3 py-1.5 bg-white border border-amber-300 text-amber-600 rounded-lg text-xs font-bold hover:bg-amber-50 transition-all shadow-sm whitespace-nowrap"
-                                            >
-                                                <RotateCcw size={12} />
-                                                <span>取代</span>
-                                            </button>
-                                        </div>
+                        const renderFaqCard = (faq, catIndex) => (
+                            <div key={faq.id} className="p-4 bg-white border border-slate-200 rounded-xl shadow-sm relative group pt-6">
+                                <div className="absolute -top-3 left-4 px-2 py-0.5 bg-white border border-slate-200 rounded-md text-[10px] font-black text-slate-400 uppercase tracking-wider shadow-sm z-10">
+                                    FAQ {catIndex + 1}
+                                </div>
+                                <div className="absolute top-2 right-2 flex items-center gap-1">
+                                    <button onClick={() => handleOptimizeFaq(faq.id)} disabled={optimizingFaqIds.has(faq.id)} className="text-slate-400 hover:text-brand-600 p-1 disabled:opacity-50" title="AI 優化">
+                                        {optimizingFaqIds.has(faq.id) ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
+                                    </button>
+                                    <button onClick={() => removeFAQ(faq.id)} className="text-slate-400 hover:text-red-500 p-1"><Trash2 size={16} /></button>
+                                </div>
+                                <div className="space-y-3">
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-xs font-black text-slate-300 uppercase">Q</span>
+                                        <input type="text" placeholder="例如：價格多少？怎麼預約？" className="w-full p-2 border-b border-slate-200 focus:border-brand-500 focus:outline-none text-sm font-medium" value={faq.question} maxLength={100} onChange={(e) => updateFAQ(faq.id, 'question', e.target.value)} />
+                                        <div className="text-[10px] text-slate-300 ml-2">{faq.question.length}/100</div>
                                     </div>
-                                )}
-
-                                <div className="flex items-start gap-2">
-                                    <span className="text-xs font-black text-slate-300 uppercase mt-2">A</span>
-                                    <textarea
-                                        placeholder="例如：單色 899 起..."
-                                        className="w-full p-2 bg-slate-50 rounded-lg text-sm text-slate-600 focus:outline-none focus:ring-1 focus:ring-brand-300 resize-none"
-                                        rows={2}
-                                        value={faq.answer}
-                                        maxLength={200}
-                                        onChange={(e) => updateFAQ(faq.id, 'answer', e.target.value)}
-                                    />
-                                </div>
-                                <div className="text-[10px] text-slate-300 text-right pr-2">{faq.answer.length}/200</div>
-
-                                {/* FAQ 附加圖片 */}
-                                <div className="flex items-start gap-2 mt-1">
-                                    <span className="text-xs font-black text-slate-300 uppercase mt-2">IMG</span>
-                                    {faq.image_id ? (
-                                        <div className="flex items-center gap-2">
-                                            <img src={faq._preview_url} alt="附圖" className="w-14 h-14 object-cover rounded-lg border border-slate-200" onError={(e) => { e.target.style.display = 'none'; }} />
-                                            <button
-                                                onClick={() => updateFAQ(faq.id, 'image_id', '')}
-                                                className="text-xs text-red-400 hover:text-red-600"
-                                            >
-                                                <Trash2 size={14} />
-                                            </button>
+                                    {analysisReport && analysisReport.suggestions.find(s => s.id === faq.id) && (
+                                        <div className="ml-6 p-3 bg-amber-50 border border-amber-100 rounded-xl relative">
+                                            <div className="flex items-start gap-2 mb-2">
+                                                <AlertCircle size={14} className="text-amber-500 mt-0.5" />
+                                                <p className="text-xs text-amber-700 font-medium">建議優化：{analysisReport.suggestions.find(s => s.id === faq.id).suggestion}</p>
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                <input type="text" readOnly className="flex-1 p-2 bg-white border border-amber-200 rounded text-xs text-amber-800" value={analysisReport.suggestions.find(s => s.id === faq.id).optimized_q} />
+                                                <button onClick={() => { const s = analysisReport.suggestions.find(s => s.id === faq.id); applySuggestion(faq.id, s.optimized_q, s.optimized_a); }} className="flex items-center gap-1 px-3 py-1.5 bg-white border border-amber-300 text-amber-600 rounded-lg text-xs font-bold hover:bg-amber-50 transition-all shadow-sm whitespace-nowrap"><RotateCcw size={12} /><span>取代</span></button>
+                                            </div>
                                         </div>
-                                    ) : (
-                                        <label className="flex items-center gap-1.5 px-3 py-1.5 border border-dashed border-slate-200 rounded-lg cursor-pointer hover:border-brand-300 transition-all">
-                                            {uploadingFaqId === faq.id ? (
-                                                <Loader2 size={14} className="animate-spin text-brand-500" />
-                                            ) : (
-                                                <Upload size={14} className="text-slate-400" />
-                                            )}
-                                            <span className="text-[11px] text-slate-400">{uploadingFaqId === faq.id ? '上傳中...' : '上傳附圖'}</span>
-                                            <input type="file" accept="image/jpeg,image/png,image/webp" className="hidden" disabled={uploadingFaqId === faq.id} onChange={async (e) => {
-                                                const file = e.target.files[0];
-                                                if (!file) return;
-                                                if (file.size > 2 * 1024 * 1024) { alert('圖片不可超過 2MB'); return; }
-                                                setUploadingFaqId(faq.id);
-                                                try {
-                                                    const fd = new FormData();
-                                                    fd.append('file', file);
-                                                    const res = await axios.post(`${config.API_URL}/api/admin/upload_image`, fd, { headers: { 'Content-Type': 'multipart/form-data' } });
-                                                    updateFAQ(faq.id, 'image_id', res.data.image_id);
-                                                    updateField('faqs', formData.faqs.map(f => f.id === faq.id ? { ...f, image_id: res.data.image_id, _preview_url: res.data.preview_url } : f));
-                                                } catch { alert('圖片上傳失敗'); }
-                                                finally { setUploadingFaqId(null); }
-                                            }} />
-                                        </label>
                                     )}
+                                    <div className="flex items-start gap-2">
+                                        <span className="text-xs font-black text-slate-300 uppercase mt-2">A</span>
+                                        <textarea placeholder="例如：單色 899 起..." className="w-full p-2 bg-slate-50 rounded-lg text-sm text-slate-600 focus:outline-none focus:ring-1 focus:ring-brand-300 resize-none" rows={3} value={faq.answer} maxLength={500} onChange={(e) => updateFAQ(faq.id, 'answer', e.target.value)} />
+                                    </div>
+                                    <div className="text-[10px] text-slate-300 text-right pr-2">{faq.answer.length}/500</div>
+                                    <div className="flex items-start gap-2 mt-1">
+                                        <span className="text-xs font-black text-slate-300 uppercase mt-2">IMG</span>
+                                        {faq.image_id ? (
+                                            <div className="flex items-center gap-2">
+                                                <img src={faq._preview_url} alt="附圖" className="w-14 h-14 object-cover rounded-lg border border-slate-200" onError={(e) => { e.target.style.display = 'none'; }} />
+                                                <button onClick={() => updateFAQ(faq.id, 'image_id', '')} className="text-xs text-red-400 hover:text-red-600"><Trash2 size={14} /></button>
+                                            </div>
+                                        ) : (
+                                            <label className="flex items-center gap-1.5 px-3 py-1.5 border border-dashed border-slate-200 rounded-lg cursor-pointer hover:border-brand-300 transition-all">
+                                                {uploadingFaqId === faq.id ? <Loader2 size={14} className="animate-spin text-brand-500" /> : <Upload size={14} className="text-slate-400" />}
+                                                <span className="text-[11px] text-slate-400">{uploadingFaqId === faq.id ? '上傳中...' : '上傳附圖'}</span>
+                                                <input type="file" accept="image/jpeg,image/png,image/webp" className="hidden" disabled={uploadingFaqId === faq.id} onChange={async (e) => {
+                                                    const file = e.target.files[0];
+                                                    if (!file) return;
+                                                    if (file.size > 2 * 1024 * 1024) { alert('圖片不可超過 2MB'); return; }
+                                                    setUploadingFaqId(faq.id);
+                                                    try {
+                                                        const fd = new FormData();
+                                                        fd.append('file', file);
+                                                        const res = await axios.post(`${config.API_URL}/api/admin/upload_image`, fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+                                                        updateFAQ(faq.id, 'image_id', res.data.image_id);
+                                                        updateField('faqs', formData.faqs.map(f => f.id === faq.id ? { ...f, image_id: res.data.image_id, _preview_url: res.data.preview_url } : f));
+                                                    } catch { alert('圖片上傳失敗'); }
+                                                    finally { setUploadingFaqId(null); }
+                                                }} />
+                                            </label>
+                                        )}
+                                    </div>
                                 </div>
                             </div>
-                        </div>
-                    ))}
-                    {formData.faqs.length === 0 && !isGeneratingFaqs && (
-                        <div className="text-center py-8 bg-slate-50 rounded-xl border border-dashed border-slate-300 text-slate-500 text-sm">
-                            尚未新增 FAQ，點擊上方按鈕開始
-                        </div>
-                    )}
+                        );
+
+                        if (cats.length === 0) {
+                            return !isGeneratingFaqs && (
+                                <div className="text-center py-8 bg-slate-50 rounded-xl border border-dashed border-slate-300 text-slate-500 text-sm">
+                                    尚未新增 FAQ，點擊上方按鈕開始
+                                </div>
+                            );
+                        }
+
+                        return cats.map(cat => {
+                            const isExpanded = expandedCategories.has(cat);
+                            const catFaqs = grouped[cat];
+                            return (
+                                <div key={cat} className="border border-slate-200 rounded-xl overflow-hidden">
+                                    <div className="flex items-center gap-2 px-4 py-3 bg-slate-50 cursor-pointer select-none" onClick={() => toggleCategory(cat)}>
+                                        {isExpanded ? <ChevronDown size={16} className="text-slate-400 flex-shrink-0" /> : <ChevronRight size={16} className="text-slate-400 flex-shrink-0" />}
+                                        <input
+                                            type="text"
+                                            value={cat}
+                                            onChange={(e) => renameCategory(cat, e.target.value)}
+                                            onClick={(e) => e.stopPropagation()}
+                                            className="flex-1 bg-transparent font-bold text-slate-700 text-sm focus:outline-none focus:border-b focus:border-brand-400 min-w-0"
+                                        />
+                                        <span className="text-xs text-slate-400 flex-shrink-0">{catFaqs.length} 組</span>
+                                        <button onClick={(e) => { e.stopPropagation(); addFAQ(cat); }} className="text-slate-400 hover:text-brand-600 p-1 flex-shrink-0" title="新增此分類 FAQ"><Plus size={14} /></button>
+                                        <button onClick={(e) => { e.stopPropagation(); deleteCategory(cat); }} className="text-slate-400 hover:text-red-500 p-1 flex-shrink-0" title="刪除此分類"><Trash2 size={14} /></button>
+                                    </div>
+                                    {isExpanded && (
+                                        <div className="p-3 space-y-4">
+                                            {catFaqs.map((faq, idx) => renderFaqCard(faq, idx))}
+                                        </div>
+                                    )}
+                                </div>
+                            );
+                        });
+                    })()}
                 </div>
 
                 {formData.faqs.length < 3 && (
@@ -486,11 +511,18 @@ const StepWizard = ({ formData, setFormData, onComplete }) => {
 
                 <div className="flex gap-3">
                     <button
-                        onClick={addFAQ}
+                        onClick={() => addFAQ()}
                         className="flex-1 py-3 flex items-center justify-center space-x-2 border-2 border-dashed border-brand-300 text-brand-600 rounded-xl hover:bg-brand-50 hover:border-brand-500 transition-colors"
                     >
                         <Plus size={18} />
-                        <span>手動新增一組</span>
+                        <span>新增問答</span>
+                    </button>
+                    <button
+                        onClick={addNewCategory}
+                        className="px-4 py-3 flex items-center justify-center space-x-2 border-2 border-dashed border-slate-300 text-slate-500 rounded-xl hover:bg-slate-50 hover:border-slate-400 transition-colors"
+                    >
+                        <Plus size={18} />
+                        <span>新增分類</span>
                     </button>
                     <button
                         onClick={handleAnalyzeFaqs}
