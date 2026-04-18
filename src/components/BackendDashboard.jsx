@@ -422,6 +422,8 @@ const BackendDashboard = () => {
     // Add FAQ / Product modal states
     const [showFaqModal, setShowFaqModal] = useState(false);
     const [newFaq, setNewFaq] = useState({ question: '', answer: '', image_id: '', category: '常見問題' });
+    const [showCategoryModal, setShowCategoryModal] = useState(false);
+    const [newCategoryName, setNewCategoryName] = useState('');
     const [uploadingFaqIdx, setUploadingFaqIdx] = useState(null);
     const [showProductModal, setShowProductModal] = useState(false);
     const [newProduct, setNewProduct] = useState({ name: '', description: '', keywords: '', image_id: '' });
@@ -1145,11 +1147,16 @@ const BackendDashboard = () => {
     };
 
     const addNewFaqCategory = () => {
-        const name = window.prompt('請輸入新分類名稱：');
-        if (!name || !name.trim()) return;
-        const trimmed = name.trim();
+        setNewCategoryName('');
+        setShowCategoryModal(true);
+    };
+
+    const confirmAddCategory = () => {
+        const trimmed = newCategoryName.trim();
+        if (!trimmed) return;
         setEditingFaqs(prev => [...prev, { id: Date.now().toString(), question: '', answer: '', image_id: '', category: trimmed }]);
         setExpandedCategories(prev => new Set([...prev, trimmed]));
+        setShowCategoryModal(false);
         setTimeout(() => faqsEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
     };
 
@@ -1762,7 +1769,11 @@ const BackendDashboard = () => {
                                                                     <span className="hidden sm:inline">新增分類</span>
                                                                 </button>
                                                                 <button
-                                                                    onClick={() => addFaqToCategory()}
+                                                                    onClick={() => {
+                                                                        const cats = [...new Set(editingFaqs.map(f => f.category || '常見問題'))];
+                                                                        setNewFaq({ question: '', answer: '', image_id: '', category: cats[0] || '常見問題' });
+                                                                        setShowFaqModal(true);
+                                                                    }}
                                                                     className="flex items-center gap-2 px-3 sm:px-5 py-2.5 bg-brand-600 text-white rounded-xl text-sm font-bold hover:bg-brand-700 transition-all shadow-md shadow-brand-100"
                                                                 >
                                                                     <Plus size={18} />
@@ -4050,18 +4061,17 @@ const BackendDashboard = () => {
                             </div>
                             <div className="p-8 space-y-6">
                                 <div className="space-y-2">
-                                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Category</label>
-                                    <input
-                                        type="text"
+                                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Category 分類</label>
+                                    <select
                                         value={newFaq.category}
                                         onChange={(e) => setNewFaq({ ...newFaq, category: e.target.value })}
-                                        placeholder="例如：訂購規範與流程"
-                                        className="w-full bg-white border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-700 text-sm focus:ring-2 focus:ring-brand-500/10 focus:border-brand-500 outline-none transition-all"
-                                        list="existing-categories"
-                                    />
-                                    <datalist id="existing-categories">
-                                        {[...new Set(editingFaqs.map(f => f.category || '常見問題'))].map(cat => <option key={cat} value={cat} />)}
-                                    </datalist>
+                                        className="w-full bg-white border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-700 text-sm focus:ring-2 focus:ring-brand-500/10 focus:border-brand-500 outline-none transition-all appearance-none cursor-pointer"
+                                    >
+                                        {[...new Set(editingFaqs.map(f => f.category || '常見問題'))].map(cat => (
+                                            <option key={cat} value={cat}>{cat}</option>
+                                        ))}
+                                        {editingFaqs.length === 0 && <option value="常見問題">常見問題</option>}
+                                    </select>
                                 </div>
                                 <div className="space-y-2">
                                     <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Question</label>
@@ -4137,6 +4147,44 @@ const BackendDashboard = () => {
                                     }}
                                     disabled={!newFaq.question.trim() || !newFaq.answer.trim()}
                                     className="flex items-center gap-2 px-6 py-2.5 bg-brand-600 text-white rounded-xl text-sm font-bold hover:bg-brand-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                    <Plus size={16} />
+                                    新增
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* Add Category Modal */}
+                {showCategoryModal && (
+                    <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
+                        <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setShowCategoryModal(false)} />
+                        <div className="relative bg-white w-full max-w-sm rounded-[28px] overflow-hidden shadow-2xl">
+                            <div className="p-6 border-b border-slate-100 flex items-center justify-between">
+                                <h2 className="text-lg font-bold text-slate-800">新增分類</h2>
+                                <button onClick={() => setShowCategoryModal(false)} className="w-8 h-8 flex items-center justify-center text-slate-400 hover:text-slate-600 hover:bg-slate-50 rounded-full">
+                                    <X size={18} />
+                                </button>
+                            </div>
+                            <div className="p-6">
+                                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 block mb-2">分類名稱</label>
+                                <input
+                                    type="text"
+                                    value={newCategoryName}
+                                    onChange={(e) => setNewCategoryName(e.target.value)}
+                                    onKeyDown={(e) => e.key === 'Enter' && confirmAddCategory()}
+                                    placeholder="例如：訂購規範與流程"
+                                    autoFocus
+                                    className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-slate-800 font-bold text-sm focus:ring-2 focus:ring-brand-500/10 focus:border-brand-500 outline-none"
+                                />
+                            </div>
+                            <div className="px-6 py-4 bg-slate-50/50 border-t border-slate-100 flex justify-end gap-3">
+                                <button onClick={() => setShowCategoryModal(false)} className="px-5 py-2.5 rounded-xl text-sm font-bold text-slate-600 hover:bg-slate-100 transition-all">取消</button>
+                                <button
+                                    onClick={confirmAddCategory}
+                                    disabled={!newCategoryName.trim()}
+                                    className="flex items-center gap-2 px-5 py-2.5 bg-brand-600 text-white rounded-xl text-sm font-bold hover:bg-brand-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
                                     <Plus size={16} />
                                     新增
