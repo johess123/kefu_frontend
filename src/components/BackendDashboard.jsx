@@ -153,30 +153,34 @@ const getFlexThemePalette = (themeColor) => {
 
 const FLEX_TEMPLATE_FIELDS = {
     renewal: [
+        { name: 'brand_name', label: '品牌名稱', placeholder: '例如：KeFu 保險', maxLength: 30 },
         { name: 'customer_name', label: '客戶稱呼', placeholder: '例如：王大明', maxLength: 30 },
         { name: 'expiry_date', label: '到期日期', placeholder: '例如：2027-02-22', maxLength: 30, type: 'date' },
         { name: 'headline', label: '標題', placeholder: '例如：保單到期提醒', maxLength: 40 },
         { name: 'body_text', label: '提醒內容', placeholder: '輸入提醒說明...', maxLength: 160, multiline: true },
     ],
     birthday: [
+        { name: 'brand_name', label: '品牌名稱', placeholder: '例如：KeFu 保險', maxLength: 30 },
         { name: 'customer_name', label: '客戶稱呼', placeholder: '例如：王大明', maxLength: 30 },
         { name: 'headline', label: '祝福標題', placeholder: '例如：生日快樂', maxLength: 40 },
         { name: 'body_text', label: '祝福內容', placeholder: '輸入祝福內容...', maxLength: 160, multiline: true },
         { name: 'offer_text', label: '補充優惠', placeholder: '例如：本月享有生日專屬優惠', maxLength: 80, multiline: true },
     ],
     notice: [
+        { name: 'brand_name', label: '品牌名稱', placeholder: '例如：KeFu 保險', maxLength: 30 },
         { name: 'headline', label: '標題', placeholder: '例如：服務通知', maxLength: 40 },
         { name: 'subheadline', label: '副標', placeholder: '例如：重要提醒', maxLength: 50 },
         { name: 'body_text', label: '通知內容', placeholder: '輸入通知內容...', maxLength: 180, multiline: true },
     ],
 };
 
-const getFlexInitialFormData = (templateType, userName = '') => {
+const getFlexInitialFormData = (templateType, userName = '', brandName = '') => {
     const safeName = userName || '{{name}}';
 
     if (templateType === 'renewal') {
         return {
             theme_color: DEFAULT_FLEX_THEME_COLOR,
+            brand_name: brandName,
             customer_name: safeName,
             expiry_date: '',
             headline: '保單到期提醒',
@@ -193,6 +197,7 @@ const getFlexInitialFormData = (templateType, userName = '') => {
     if (templateType === 'birthday') {
         return {
             theme_color: DEFAULT_FLEX_THEME_COLOR,
+            brand_name: brandName,
             customer_name: safeName,
             headline: '生日快樂',
             body_text: '祝您生日快樂，願您平安順心，也謝謝您一直以來的信任與支持。',
@@ -208,6 +213,7 @@ const getFlexInitialFormData = (templateType, userName = '') => {
 
     return {
         theme_color: DEFAULT_FLEX_THEME_COLOR,
+        brand_name: brandName,
         headline: '一般通知',
         subheadline: '最新訊息',
         body_text: '這裡是要通知客戶的重要內容，您可以自訂這段文字。',
@@ -226,6 +232,7 @@ const mergeSharedFlexFields = (templateType, defaults, previousFormData) => {
     const merged = { ...defaults };
     const sharedKeys = [
         'theme_color',
+        'brand_name',
         'primary_button_label',
         'primary_button_type',
         'primary_button_value',
@@ -250,7 +257,7 @@ const mergeSharedFlexFields = (templateType, defaults, previousFormData) => {
 };
 
 const getFlexPreviewModel = (templateType, formData, userName, brandName) => {
-    const safeBrandName = brandName || '品牌通知';
+    const safeBrandName = formData.brand_name?.trim() || brandName || '品牌通知';
     const safeUserName = formData.customer_name?.trim() || userName || '客戶';
     const headline = formData.headline?.trim() || FLEX_TEMPLATE_OPTIONS.find(item => item.id === templateType)?.label || '通知';
     const bodyText = formData.body_text?.trim() || '請在左側輸入內容。';
@@ -565,7 +572,8 @@ const BackendDashboard = () => {
             return;
         }
         setFlexTemplateType('renewal');
-        const initialData = getFlexInitialFormData('renewal', user.user_name);
+        const agentBrandName = currentAgent?.config?.raw_config?.merchant_name || currentAgent?.name || '';
+        const initialData = getFlexInitialFormData('renewal', user.user_name, agentBrandName);
         setFlexFormData(initialData);
         setIsSecondaryFlexButtonEnabled(Boolean(initialData.secondary_button_label || initialData.secondary_button_value));
         setFlexModalError('');
