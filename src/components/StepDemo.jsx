@@ -191,6 +191,11 @@ const StepDemo = ({ formData, sessionId, setSessionId, agentId, onNext, setCurre
                                         : 'bg-white text-slate-800 rounded-tl-none border border-slate-100'
                                         }`}>
                                         {msg.text}
+                                        {msg.role === 'model' && (
+                                            <div className="mt-2 pt-2 border-t border-slate-100 text-[10px] text-slate-400 text-right">
+                                                By AI客服
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
                             </div>
