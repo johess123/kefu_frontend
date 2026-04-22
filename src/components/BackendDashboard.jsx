@@ -3310,6 +3310,11 @@ const BackendDashboard = () => {
                                                                                 商品網站 →
                                                                             </a>
                                                                         )}
+                                                                        {msg.role === 'model' && (
+                                                                            <div className="mt-2 pt-2 border-t border-slate-100 text-[10px] text-slate-400 text-right">
+                                                                                By AI客服
+                                                                            </div>
+                                                                        )}
                                                                     </div>
                                                                     {msg.images && msg.images.length > 0 && (
                                                                         <div className={`grid gap-1 ${msg.images.length === 1 ? 'grid-cols-1' : 'grid-cols-2'}`}>
