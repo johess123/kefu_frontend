@@ -51,7 +51,8 @@ import {
     Image as ImageIcon,
     Upload,
     FileSpreadsheet,
-    Activity
+    Activity,
+    FolderInput
 } from 'lucide-react';
 import Cookies from 'js-cookie';
 import { DEFAULT_HANDOFF_OPTIONS } from '../types';
@@ -433,6 +434,7 @@ const BackendDashboard = () => {
     const [newCategoryName, setNewCategoryName] = useState('');
     const [uploadingFaqIdx, setUploadingFaqIdx] = useState(null);
     const [expandedFaqItems, setExpandedFaqItems] = useState(new Set());
+    const [movingFaqId, setMovingFaqId] = useState(null);
     const [showProductModal, setShowProductModal] = useState(false);
     const [newProduct, setNewProduct] = useState({ name: '', description: '', keywords: '', image_id: '' });
     const [uploadingProductIdx, setUploadingProductIdx] = useState(null);
@@ -1161,6 +1163,14 @@ const BackendDashboard = () => {
         setExpandedFaqItems(prev => { const next = new Set(prev); next.has(faqId) ? next.delete(faqId) : next.add(faqId); return next; });
     };
 
+    const moveFaqToCategory = (globalIdx, targetCategory) => {
+        const f = [...editingFaqs];
+        f[globalIdx] = { ...f[globalIdx], category: targetCategory };
+        setEditingFaqs(f);
+        setExpandedCategories(prev => new Set([...prev, targetCategory]));
+        setMovingFaqId(null);
+    };
+
     const addNewFaqCategory = () => {
         setNewCategoryName('');
         setShowCategoryModal(true);
@@ -1873,6 +1883,25 @@ const BackendDashboard = () => {
                                                                                                     <button onClick={() => handleOptimizeFaq(idx)} disabled={optimizingIndices.has(idx)} className="w-7 h-7 flex items-center justify-center text-slate-300 hover:text-brand-600 rounded-lg transition-all disabled:opacity-50" title="AI 優化">
                                                                                                         {optimizingIndices.has(idx) ? <Loader2 size={13} className="animate-spin text-brand-600" /> : <Sparkles size={13} />}
                                                                                                     </button>
+                                                                                                    <div className="relative">
+                                                                                                        <button onClick={() => setMovingFaqId(movingFaqId === faq.id ? null : faq.id)} className="w-7 h-7 flex items-center justify-center text-slate-300 hover:text-brand-500 rounded-lg transition-all" title="移動到其他分類">
+                                                                                                            <FolderInput size={13} />
+                                                                                                        </button>
+                                                                                                        {movingFaqId === faq.id && (
+                                                                                                            <>
+                                                                                                                <div className="fixed inset-0 z-10" onClick={() => setMovingFaqId(null)} />
+                                                                                                                <div className="absolute right-0 top-8 z-20 bg-white border border-slate-200 rounded-xl shadow-lg overflow-hidden min-w-[140px]">
+                                                                                                                    {cats.filter(c => c !== cat).length === 0 ? (
+                                                                                                                        <div className="px-4 py-2.5 text-xs text-slate-400 italic">沒有其他分類</div>
+                                                                                                                    ) : cats.filter(c => c !== cat).map(targetCat => (
+                                                                                                                        <button key={targetCat} onClick={() => moveFaqToCategory(idx, targetCat)} className="w-full text-left px-4 py-2.5 text-xs text-slate-600 hover:bg-brand-50 hover:text-brand-700 transition-colors truncate">
+                                                                                                                            {targetCat}
+                                                                                                                        </button>
+                                                                                                                    ))}
+                                                                                                                </div>
+                                                                                                            </>
+                                                                                                        )}
+                                                                                                    </div>
                                                                                                     <button onClick={() => openConfirm({ title: '刪除 FAQ', message: `確定要刪除 FAQ「${faq.question || ''}」嗎？儲存後才會生效。`, onConfirm: () => { setEditingFaqs(editingFaqs.filter((_, i) => i !== idx)); closeConfirm(); } })} className="w-7 h-7 flex items-center justify-center text-slate-300 hover:text-red-500 rounded-lg transition-all" title="刪除">
                                                                                                         <Trash2 size={13} />
                                                                                                     </button>
