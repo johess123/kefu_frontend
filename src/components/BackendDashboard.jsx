@@ -442,6 +442,7 @@ const BackendDashboard = () => {
     const [dragOverCat, setDragOverCat] = useState(null);
     const [showProductModal, setShowProductModal] = useState(false);
     const [newProduct, setNewProduct] = useState({ name: '', description: '', keywords: '', image_id: '' });
+    const [expandedProductItems, setExpandedProductItems] = useState(new Set());
     const [uploadingProductIdx, setUploadingProductIdx] = useState(null);
     const [isParsingProductFile, setIsParsingProductFile] = useState(false);
     const [productFileName, setProductFileName] = useState('');
@@ -705,7 +706,7 @@ const BackendDashboard = () => {
             setEditingFaqs(faqs);
             const orderedCats = [...new Set(faqs.map(f => f.category || '常見問題'))];
             setCategoryOrder(orderedCats.length > 0 ? orderedCats : ['常見問題']);
-            setEditingProducts(rawConfig.products || []);
+            setEditingProducts((rawConfig.products || []).map((p, i) => ({ ...p, id: p.id || `prod_${i}` })));
 
             // Parse handoff_logic
             let triggers = [];
@@ -2058,138 +2059,128 @@ const BackendDashboard = () => {
                                                             </div>
                                                         </div>
 
-                                                        <div className="p-4 sm:p-10 space-y-8">
-                                                            {editingProducts.map((product, idx) => (
-                                                                <div key={idx} className="group relative bg-slate-50/50 rounded-3xl p-4 sm:p-8 border border-slate-100 hover:border-green-200 hover:bg-white transition-all duration-300">
-                                                                    <div className="absolute -top-3 left-6 sm:left-8 bg-white border border-slate-100 px-3 py-1 rounded-full text-[10px] font-black text-green-500 uppercase tracking-widest shadow-sm">
-                                                                        P{idx + 1}
-                                                                    </div>
-                                                                    <div className="absolute top-4 sm:top-6 right-4 sm:right-8 flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                                        <button
-                                                                            onClick={() => openConfirm({
-                                                                                title: '刪除商品',
-                                                                                message: `確定要刪除商品「${editingProducts[idx]?.name || ''}」嗎？儲存後才會生效。`,
-                                                                                onConfirm: () => { setEditingProducts(editingProducts.filter((_, i) => i !== idx)); closeConfirm(); },
-                                                                            })}
-                                                                            className="w-9 h-9 flex items-center justify-center bg-white border border-slate-100 text-slate-400 hover:text-red-500 rounded-xl shadow-sm transition-all hover:scale-105"
-                                                                        >
-                                                                            <Trash2 size={16} />
-                                                                        </button>
+                                                        <div className="p-4 sm:p-6 space-y-3">
+                                                            {editingProducts.map((product, idx) => {
+                                                                const pid = product.id || `prod_${idx}`;
+                                                                const isExpanded = expandedProductItems.has(pid);
+                                                                return (
+                                                                <div key={pid} className="border border-slate-200 rounded-2xl overflow-hidden hover:border-green-200 transition-all duration-200">
+                                                                    {/* Collapsed Header */}
+                                                                    <div
+                                                                        className="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-slate-50/70 transition-colors select-none"
+                                                                        onClick={() => setExpandedProductItems(prev => { const next = new Set(prev); next.has(pid) ? next.delete(pid) : next.add(pid); return next; })}
+                                                                    >
+                                                                        <span className="text-[10px] font-black text-green-500 uppercase tracking-widest bg-white border border-slate-100 px-2.5 py-0.5 rounded-full shadow-sm flex-shrink-0">P{idx + 1}</span>
+                                                                        <span className="flex-1 text-sm font-semibold text-slate-700 truncate min-w-0">
+                                                                            {product.name ? product.name : <span className="text-slate-300 font-normal italic">未填寫商品名稱...</span>}
+                                                                        </span>
+                                                                        {product.image_id && (
+                                                                            <img src={product._preview_url || product.preview_url || ''} alt="" className="w-6 h-6 rounded object-cover border border-slate-200 flex-shrink-0" onError={(e) => { e.target.style.display = 'none'; }} />
+                                                                        )}
+                                                                        <div className="flex items-center gap-1 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+                                                                            <button
+                                                                                onClick={() => openConfirm({
+                                                                                    title: '刪除商品',
+                                                                                    message: `確定要刪除商品「${product.name || ''}」嗎？儲存後才會生效。`,
+                                                                                    onConfirm: () => { setEditingProducts(editingProducts.filter((_, i) => i !== idx)); closeConfirm(); },
+                                                                                })}
+                                                                                className="w-7 h-7 flex items-center justify-center text-slate-300 hover:text-red-500 rounded-lg transition-all"
+                                                                                title="刪除"
+                                                                            >
+                                                                                <Trash2 size={13} />
+                                                                            </button>
+                                                                        </div>
+                                                                        <ChevronDown size={14} className={`text-slate-400 flex-shrink-0 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`} />
                                                                     </div>
 
-                                                                    <div className="space-y-6">
-                                                                        <div className="space-y-2">
-                                                                            <div className="flex items-center gap-2 text-slate-400">
-                                                                                <span className="text-[10px] font-black uppercase tracking-widest">商品名稱</span>
-                                                                            </div>
-                                                                            <div className="flex-1">
+                                                                    {/* Expanded Edit Area */}
+                                                                    {isExpanded && (
+                                                                        <div className="px-4 sm:px-6 pb-5 pt-3 space-y-4 border-t border-slate-100 bg-white">
+                                                                            <div>
+                                                                                <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">商品名稱</div>
                                                                                 <input
                                                                                     type="text"
                                                                                     value={product.name}
                                                                                     maxLength={50}
                                                                                     onChange={(e) => {
                                                                                         const newProducts = [...editingProducts];
-                                                                                        newProducts[idx].name = e.target.value;
+                                                                                        newProducts[idx] = { ...newProducts[idx], name: e.target.value };
                                                                                         setEditingProducts(newProducts);
                                                                                     }}
                                                                                     placeholder="輸入商品名稱..."
-                                                                                    className="w-full bg-transparent text-lg font-bold text-slate-800 placeholder:text-slate-300 outline-none p-0"
+                                                                                    className="w-full bg-transparent text-base font-bold text-slate-800 placeholder:text-slate-300 outline-none p-0"
                                                                                 />
-                                                                                <div className="text-[10px] text-slate-300 text-right pr-2 mt-1">{product.name?.length || 0}/50</div>
+                                                                                <div className="text-[10px] text-slate-300 text-right mt-1">{product.name?.length || 0}/50</div>
                                                                             </div>
-                                                                        </div>
-
-                                                                        <div className="space-y-2">
-                                                                            <div className="flex items-center gap-2 text-slate-400">
-                                                                                <span className="text-[10px] font-black uppercase tracking-widest">菜單/規格說明</span>
-                                                                            </div>
-                                                                            <div className="relative">
+                                                                            <div>
+                                                                                <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">菜單/規格說明</div>
                                                                                 <textarea
                                                                                     value={product.description}
                                                                                     maxLength={400}
                                                                                     onChange={(e) => {
                                                                                         const newProducts = [...editingProducts];
-                                                                                        newProducts[idx].description = e.target.value;
+                                                                                        newProducts[idx] = { ...newProducts[idx], description: e.target.value };
                                                                                         setEditingProducts(newProducts);
                                                                                     }}
                                                                                     placeholder="輸入商品說明、規格、價格等..."
-                                                                                    className="w-full bg-white border border-slate-200 rounded-2xl p-5 text-slate-600 text-sm leading-relaxed min-h-[120px] focus:ring-2 focus:ring-green-500/10 focus:border-green-500 outline-none transition-all shadow-inner"
+                                                                                    className="w-full bg-white border border-slate-200 rounded-xl p-4 text-slate-600 text-sm leading-relaxed min-h-[100px] focus:ring-2 focus:ring-green-500/10 focus:border-green-500 outline-none transition-all shadow-inner resize-none"
                                                                                 />
-                                                                                <div className="text-[10px] text-slate-300 text-right pr-2 mt-1">{product.description?.length || 0}/400</div>
+                                                                                <div className="text-[10px] text-slate-300 text-right mt-1">{product.description?.length || 0}/400</div>
                                                                             </div>
-                                                                        </div>
-
-                                                                        <div className="space-y-2">
-                                                                            <div className="flex items-center gap-2 text-slate-400">
-                                                                                <span className="text-[10px] font-black uppercase tracking-widest">關鍵字/別名 (選填)</span>
-                                                                            </div>
-                                                                            <div className="flex-1">
+                                                                            <div>
+                                                                                <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">關鍵字/別名 <span className="text-slate-300 normal-case font-normal">(選填)</span></div>
                                                                                 <input
                                                                                     type="text"
                                                                                     value={product.keywords || ''}
                                                                                     maxLength={100}
                                                                                     onChange={(e) => {
                                                                                         const newProducts = [...editingProducts];
-                                                                                        newProducts[idx].keywords = e.target.value;
+                                                                                        newProducts[idx] = { ...newProducts[idx], keywords: e.target.value };
                                                                                         setEditingProducts(newProducts);
                                                                                     }}
                                                                                     placeholder="例：珍奶、波霸、大杯紅茶..."
-                                                                                    className="w-full bg-white border border-slate-200 rounded-2xl px-5 py-3 text-slate-600 text-sm focus:ring-2 focus:ring-green-500/10 focus:border-green-500 outline-none transition-all shadow-inner"
+                                                                                    className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-slate-600 text-sm focus:ring-2 focus:ring-green-500/10 focus:border-green-500 outline-none transition-all shadow-inner"
                                                                                 />
-                                                                                <div className="text-[10px] text-slate-300 text-right pr-2 mt-1">{(product.keywords || '').length}/100</div>
+                                                                                <div className="text-[10px] text-slate-300 text-right mt-1">{(product.keywords || '').length}/100</div>
                                                                             </div>
-                                                                        </div>
-
-                                                                        {/* 商品附加圖片 */}
-                                                                        <div className="space-y-2">
-                                                                            <div className="flex items-center gap-2 text-slate-400">
-                                                                                <span className="text-[10px] font-black uppercase tracking-widest">Image</span>
-                                                                                <span className="text-[10px] text-slate-300">(選填)</span>
-                                                                            </div>
-                                                                            {product.image_id ? (
-                                                                                <div className="flex items-center gap-3">
-                                                                                    <img
-                                                                                        src={product._preview_url || product.preview_url || ''}
-                                                                                        alt="商品附圖"
-                                                                                        className="w-20 h-20 object-cover rounded-xl border border-slate-200 cursor-zoom-in hover:opacity-90 transition-opacity"
-                                                                                        onClick={() => setLightboxSrc(product._preview_url || product.preview_url || '')}
-                                                                                        onError={(e) => { e.target.style.display = 'none'; }}
-                                                                                    />
-                                                                                    <button
-                                                                                        onClick={() => openConfirm({
-                                                                                            title: '移除附圖',
-                                                                                            message: '確定要移除這張商品附圖嗎？此操作無法復原。',
-                                                                                            onConfirm: () => { handleProductImageDelete(idx); closeConfirm(); },
-                                                                                        })}
-                                                                                        className="flex items-center gap-1.5 px-3 py-2 bg-white border border-red-200 text-red-500 rounded-xl text-xs font-bold hover:bg-red-50 transition-all"
-                                                                                    >
-                                                                                        <Trash2 size={14} />
-                                                                                        移除圖片
-                                                                                    </button>
+                                                                            <div>
+                                                                                <div className="flex items-center gap-2 text-slate-400 mb-1">
+                                                                                    <span className="text-[10px] font-black uppercase tracking-widest">Image</span>
+                                                                                    <span className="text-[10px] text-slate-300">(選填)</span>
                                                                                 </div>
-                                                                            ) : (
-                                                                                <label className="flex items-center gap-2 px-4 py-3 bg-white border border-dashed border-slate-200 rounded-xl cursor-pointer hover:border-green-300 hover:bg-green-50/50 transition-all">
-                                                                                    {uploadingProductIdx === idx ? (
-                                                                                        <Loader2 size={16} className="animate-spin text-green-500" />
-                                                                                    ) : (
-                                                                                        <Upload size={16} className="text-slate-400" />
-                                                                                    )}
-                                                                                    <span className="text-xs text-slate-500">
-                                                                                        {uploadingProductIdx === idx ? '上傳中...' : '上傳附圖 (jpg/png/webp, 2MB)'}
-                                                                                    </span>
-                                                                                    <input
-                                                                                        type="file"
-                                                                                        accept="image/jpeg,image/png,image/webp"
-                                                                                        className="hidden"
-                                                                                        onChange={(e) => handleProductImageUpload(idx, e.target.files[0])}
-                                                                                        disabled={uploadingProductIdx === idx}
-                                                                                    />
-                                                                                </label>
-                                                                            )}
+                                                                                {product.image_id ? (
+                                                                                    <div className="flex items-center gap-3">
+                                                                                        <img
+                                                                                            src={product._preview_url || product.preview_url || ''}
+                                                                                            alt="商品附圖"
+                                                                                            className="w-16 h-16 object-cover rounded-xl border border-slate-200 cursor-zoom-in hover:opacity-90 transition-opacity"
+                                                                                            onClick={() => setLightboxSrc(product._preview_url || product.preview_url || '')}
+                                                                                            onError={(e) => { e.target.style.display = 'none'; }}
+                                                                                        />
+                                                                                        <button
+                                                                                            onClick={() => openConfirm({
+                                                                                                title: '移除附圖',
+                                                                                                message: '確定要移除這張商品附圖嗎？此操作無法復原。',
+                                                                                                onConfirm: () => { handleProductImageDelete(idx); closeConfirm(); },
+                                                                                            })}
+                                                                                            className="flex items-center gap-1.5 px-3 py-2 bg-white border border-red-200 text-red-500 rounded-xl text-xs font-bold hover:bg-red-50"
+                                                                                        >
+                                                                                            <Trash2 size={14} />移除圖片
+                                                                                        </button>
+                                                                                    </div>
+                                                                                ) : (
+                                                                                    <label className="flex items-center gap-2 px-4 py-3 bg-white border border-dashed border-slate-200 rounded-xl cursor-pointer hover:border-green-300 hover:bg-green-50/50 transition-all">
+                                                                                        {uploadingProductIdx === idx ? <Loader2 size={16} className="animate-spin text-green-500" /> : <Upload size={16} className="text-slate-400" />}
+                                                                                        <span className="text-xs text-slate-500">{uploadingProductIdx === idx ? '上傳中...' : '上傳附圖 (jpg/png/webp, 2MB)'}</span>
+                                                                                        <input type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={(e) => handleProductImageUpload(idx, e.target.files[0])} disabled={uploadingProductIdx === idx} />
+                                                                                    </label>
+                                                                                )}
+                                                                            </div>
                                                                         </div>
-                                                                    </div>
+                                                                    )}
                                                                 </div>
-                                                            ))}
+                                                                );
+                                                            })}
                                                             <div ref={productsEndRef} />
 
                                                             {editingProducts.length === 0 && !isParsingProductFile && (
@@ -4466,7 +4457,9 @@ const BackendDashboard = () => {
                                 </button>
                                 <button
                                     onClick={() => {
-                                        setEditingProducts([...editingProducts, { name: newProduct.name, description: newProduct.description, keywords: newProduct.keywords }]);
+                                        const newProdId = Date.now().toString();
+                                        setEditingProducts([...editingProducts, { id: newProdId, name: newProduct.name, description: newProduct.description, keywords: newProduct.keywords }]);
+                                        setExpandedProductItems(prev => new Set([...prev, newProdId]));
                                         setShowProductModal(false);
                                         setTimeout(() => {
                                             productsEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
