@@ -52,7 +52,8 @@ import {
     Upload,
     FileSpreadsheet,
     Activity,
-    FolderInput
+    FolderInput,
+    GripVertical
 } from 'lucide-react';
 import Cookies from 'js-cookie';
 import { DEFAULT_HANDOFF_OPTIONS } from '../types';
@@ -435,6 +436,9 @@ const BackendDashboard = () => {
     const [uploadingFaqIdx, setUploadingFaqIdx] = useState(null);
     const [expandedFaqItems, setExpandedFaqItems] = useState(new Set());
     const [movingFaqId, setMovingFaqId] = useState(null);
+    const [categoryOrder, setCategoryOrder] = useState([]);
+    const [draggedCat, setDraggedCat] = useState(null);
+    const [dragOverCat, setDragOverCat] = useState(null);
     const [showProductModal, setShowProductModal] = useState(false);
     const [newProduct, setNewProduct] = useState({ name: '', description: '', keywords: '', image_id: '' });
     const [uploadingProductIdx, setUploadingProductIdx] = useState(null);
@@ -696,7 +700,10 @@ const BackendDashboard = () => {
     useEffect(() => {
         if (currentAgent) {
             const rawConfig = currentAgent.config?.raw_config || {};
-            setEditingFaqs(rawConfig.faqs || []);
+            const faqs = rawConfig.faqs || [];
+            setEditingFaqs(faqs);
+            const orderedCats = [...new Set(faqs.map(f => f.category || '常見問題'))];
+            setCategoryOrder(orderedCats.length > 0 ? orderedCats : ['常見問題']);
             setEditingProducts(rawConfig.products || []);
 
             // Parse handoff_logic
@@ -1134,6 +1141,7 @@ const BackendDashboard = () => {
         const newId = Date.now().toString();
         setEditingFaqs(prev => [...prev, { id: newId, question: '', answer: '', image_id: '', category: cat }]);
         setExpandedCategories(prev => new Set([...prev, cat]));
+        setCategoryOrder(prev => prev.includes(cat) ? prev : [...prev, cat]);
         setExpandedFaqItems(prev => new Set([...prev, newId]));
         setTimeout(() => faqsEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
     };
@@ -1141,6 +1149,7 @@ const BackendDashboard = () => {
     const renameFaqCategory = (oldName, newName) => {
         setEditingFaqs(prev => prev.map(f => f.category === oldName ? { ...f, category: newName } : f));
         setExpandedCategories(prev => { const next = new Set(prev); next.delete(oldName); next.add(newName); return next; });
+        setCategoryOrder(prev => prev.map(c => c === oldName ? newName : c));
     };
 
     const deleteFaqCategory = (cat) => {
@@ -1150,6 +1159,7 @@ const BackendDashboard = () => {
             onConfirm: () => {
                 setEditingFaqs(prev => prev.filter(f => f.category !== cat));
                 setExpandedCategories(prev => { const next = new Set(prev); next.delete(cat); return next; });
+                setCategoryOrder(prev => prev.filter(c => c !== cat));
                 closeConfirm();
             }
         });
@@ -1182,14 +1192,21 @@ const BackendDashboard = () => {
         const newCatId = Date.now().toString();
         setEditingFaqs(prev => [...prev, { id: newCatId, question: '', answer: '', image_id: '', category: trimmed }]);
         setExpandedCategories(prev => new Set([...prev, trimmed]));
+        setCategoryOrder(prev => prev.includes(trimmed) ? prev : [...prev, trimmed]);
         setExpandedFaqItems(prev => new Set([...prev, newCatId]));
         setShowCategoryModal(false);
         setTimeout(() => faqsEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
     };
 
     const handleSaveFaqs = async () => {
+        // 按 categoryOrder 排序 FAQs，確保順序持久化
+        const sortedFaqs = [...editingFaqs].sort((a, b) => {
+            const ai = categoryOrder.indexOf(a.category || '常見問題');
+            const bi = categoryOrder.indexOf(b.category || '常見問題');
+            return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi);
+        });
         // 過濾掉全空的組別
-        const cleanedFaqs = editingFaqs.filter(f => f.question?.trim() !== '' || f.answer?.trim() !== '');
+        const cleanedFaqs = sortedFaqs.filter(f => f.question?.trim() !== '' || f.answer?.trim() !== '');
 
         if (cleanedFaqs.length === 0) {
             alert('請至少新增一組 FAQ 並填寫內容');
@@ -1840,7 +1857,7 @@ const BackendDashboard = () => {
                                                                     if (!grouped[cat]) grouped[cat] = [];
                                                                     grouped[cat].push({ faq, globalIdx });
                                                                 });
-                                                                const cats = Object.keys(grouped);
+                                                                const cats = categoryOrder.filter(cat => grouped[cat]);
 
                                                                 if (cats.length === 0) return (
                                                                     <div className="text-center py-20 bg-slate-50/50 rounded-3xl border border-dashed border-slate-200">
@@ -1856,8 +1873,9 @@ const BackendDashboard = () => {
                                                                     const isExpanded = expandedCategories.has(cat);
                                                                     const items = grouped[cat];
                                                                     return (
-                                                                        <div key={cat} className="border border-slate-200 rounded-2xl overflow-hidden">
+                                                                        <div key={cat} className={`border rounded-2xl overflow-hidden transition-all duration-150 ${dragOverCat === cat && draggedCat !== cat ? 'border-brand-400 ring-2 ring-brand-200' : 'border-slate-200'}`} onDragOver={(e) => { e.preventDefault(); setDragOverCat(cat); }} onDrop={() => { if (draggedCat && draggedCat !== cat) { setCategoryOrder(prev => { const arr = [...prev]; const from = arr.indexOf(draggedCat); const to = arr.indexOf(cat); arr.splice(from, 1); arr.splice(to, 0, draggedCat); return arr; }); } setDraggedCat(null); setDragOverCat(null); }} onDragEnd={() => { setDraggedCat(null); setDragOverCat(null); }}>
                                                                             <div className="flex items-center gap-3 px-5 py-4 bg-slate-50 cursor-pointer select-none" onClick={() => toggleFaqCategory(cat)}>
+                                                                                <span draggable={true} onDragStart={(e) => { e.stopPropagation(); setDraggedCat(cat); }} onClick={(e) => e.stopPropagation()} className="cursor-grab active:cursor-grabbing text-slate-300 hover:text-slate-500 flex-shrink-0 px-1" title="拖拉排序"><GripVertical size={14} /></span>
                                                                                 {isExpanded ? <ChevronDown size={16} className="text-slate-400 flex-shrink-0" /> : <ChevronRight size={16} className="text-slate-400 flex-shrink-0" />}
                                                                                 <input
                                                                                     type="text"
@@ -1878,6 +1896,7 @@ const BackendDashboard = () => {
                                                                                         <div key={idx} className="border border-slate-100 rounded-2xl overflow-hidden hover:border-brand-200 transition-all duration-200">
                                                                                             <div className="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-slate-100/50 transition-colors select-none" onClick={() => toggleFaqItem(faq.id)}>
                                                                                                 <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest bg-white border border-slate-100 px-2.5 py-0.5 rounded-full shadow-sm flex-shrink-0">Q{catIdx + 1}</span>
+                                                                                                <span className="text-[9px] text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full flex-shrink-0 max-w-[80px] truncate hidden sm:inline-block">{cat}</span>
                                                                                                 <span className="flex-1 text-sm font-semibold text-slate-700 truncate min-w-0">{faq.question ? faq.question : <span className="text-slate-300 font-normal italic">未填寫問題...</span>}</span>
                                                                                                 <div className="flex items-center gap-1 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
                                                                                                     <button onClick={() => handleOptimizeFaq(idx)} disabled={optimizingIndices.has(idx)} className="w-7 h-7 flex items-center justify-center text-slate-300 hover:text-brand-600 rounded-lg transition-all disabled:opacity-50" title="AI 優化">
@@ -1894,7 +1913,7 @@ const BackendDashboard = () => {
                                                                                                                     {cats.filter(c => c !== cat).length === 0 ? (
                                                                                                                         <div className="px-4 py-2.5 text-xs text-slate-400 italic">沒有其他分類</div>
                                                                                                                     ) : cats.filter(c => c !== cat).map(targetCat => (
-                                                                                                                        <button key={targetCat} onClick={() => moveFaqToCategory(idx, targetCat)} className="w-full text-left px-4 py-2.5 text-xs text-slate-600 hover:bg-brand-50 hover:text-brand-700 transition-colors truncate">
+                                                                                                                        <button key={targetCat} onClick={() => { setMovingFaqId(null); openConfirm({ title: '移動問答', message: `確定要將「${faq.question || '此問答'}」移動到「${targetCat}」嗎？`, onConfirm: () => { moveFaqToCategory(idx, targetCat); closeConfirm(); } }); }} className="w-full text-left px-4 py-2.5 text-xs text-slate-600 hover:bg-brand-50 hover:text-brand-700 transition-colors truncate">
                                                                                                                             {targetCat}
                                                                                                                         </button>
                                                                                                                     ))}
@@ -4199,6 +4218,7 @@ const BackendDashboard = () => {
                                         const modalNewId = Date.now().toString();
                                         setEditingFaqs([...editingFaqs, { id: modalNewId, question: newFaq.question, answer: newFaq.answer, image_id: newFaq.image_id || '', category: cat }]);
                                         setExpandedCategories(prev => new Set([...prev, cat]));
+                                        setCategoryOrder(prev => prev.includes(cat) ? prev : [...prev, cat]);
                                         setExpandedFaqItems(prev => new Set([...prev, modalNewId]));
                                         setShowFaqModal(false);
                                         setTimeout(() => {
