@@ -436,6 +436,7 @@ const BackendDashboard = () => {
     const [uploadingFaqIdx, setUploadingFaqIdx] = useState(null);
     const [expandedFaqItems, setExpandedFaqItems] = useState(new Set());
     const [movingFaqId, setMovingFaqId] = useState(null);
+    const [editFaqModal, setEditFaqModal] = useState({ open: false, idx: null });
     const [categoryOrder, setCategoryOrder] = useState([]);
     const [draggedCat, setDraggedCat] = useState(null);
     const [dragOverCat, setDragOverCat] = useState(null);
@@ -493,9 +494,9 @@ const BackendDashboard = () => {
     const [lightboxSrc, setLightboxSrc] = useState(null);
 
     // ConfirmDialog state
-    const [confirmDialog, setConfirmDialog] = useState({ isOpen: false, title: '', message: '', onConfirm: null });
-    const openConfirm = ({ title, message, onConfirm }) =>
-        setConfirmDialog({ isOpen: true, title, message, onConfirm });
+    const [confirmDialog, setConfirmDialog] = useState({ isOpen: false, title: '', message: '', onConfirm: null, confirmText: '確認', cancelText: '取消', variant: 'danger' });
+    const openConfirm = ({ title, message, onConfirm, confirmText = '確認', cancelText = '取消', variant = 'danger' }) =>
+        setConfirmDialog({ isOpen: true, title, message, onConfirm, confirmText, cancelText, variant });
     const closeConfirm = () =>
         setConfirmDialog(prev => ({ ...prev, isOpen: false }));
 
@@ -1890,16 +1891,14 @@ const BackendDashboard = () => {
                                                                             </div>
                                                                             {isExpanded && (
                                                                                 <div className="p-4 space-y-6">
-                                                                                    {items.map(({ faq, globalIdx: idx }, catIdx) => {
-                                                                                        const isItemExpanded = expandedFaqItems.has(faq.id);
-                                                                                        return (
-                                                                                        <div key={idx} className="border border-slate-100 rounded-2xl overflow-hidden hover:border-brand-200 transition-all duration-200">
-                                                                                            <div className="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-slate-100/50 transition-colors select-none" onClick={() => toggleFaqItem(faq.id)}>
+                                                                                    {items.map(({ faq, globalIdx: idx }, catIdx) => (
+                                                                                        <div key={idx} className="border border-slate-100 rounded-2xl hover:border-brand-200 transition-all duration-200 cursor-pointer" onClick={() => setEditFaqModal({ open: true, idx })}>
+                                                                                            <div className="flex items-center gap-3 px-4 py-3 select-none">
                                                                                                 <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest bg-white border border-slate-100 px-2.5 py-0.5 rounded-full shadow-sm flex-shrink-0">Q{catIdx + 1}</span>
-                                                                                                <span className="text-[9px] text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full flex-shrink-0 max-w-[80px] truncate hidden sm:inline-block">{cat}</span>
+                                                                                                <span className="text-[9px] text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full flex-shrink-0 max-w-[80px] truncate">{cat}</span>
                                                                                                 <span className="flex-1 text-sm font-semibold text-slate-700 truncate min-w-0">{faq.question ? faq.question : <span className="text-slate-300 font-normal italic">未填寫問題...</span>}</span>
                                                                                                 <div className="flex items-center gap-1 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
-                                                                                                    <button onClick={() => handleOptimizeFaq(idx)} disabled={optimizingIndices.has(idx)} className="w-7 h-7 flex items-center justify-center text-slate-300 hover:text-brand-600 rounded-lg transition-all disabled:opacity-50" title="AI 優化">
+                                                                                                    <button onClick={() => openConfirm({ title: 'AI 優化', message: `AI 優化「${faq.question || '此問答'}」將會消耗點數，確定繼續嗎？`, confirmText: '確定優化', cancelText: '取消', variant: 'default', onConfirm: () => { handleOptimizeFaq(idx); closeConfirm(); } })} disabled={optimizingIndices.has(idx)} className="w-7 h-7 flex items-center justify-center text-slate-300 hover:text-brand-600 rounded-lg transition-all disabled:opacity-50" title="AI 優化">
                                                                                                         {optimizingIndices.has(idx) ? <Loader2 size={13} className="animate-spin text-brand-600" /> : <Sparkles size={13} />}
                                                                                                     </button>
                                                                                                     <div className="relative">
@@ -1913,7 +1912,7 @@ const BackendDashboard = () => {
                                                                                                                     {cats.filter(c => c !== cat).length === 0 ? (
                                                                                                                         <div className="px-4 py-2.5 text-xs text-slate-400 italic">沒有其他分類</div>
                                                                                                                     ) : cats.filter(c => c !== cat).map(targetCat => (
-                                                                                                                        <button key={targetCat} onClick={() => { setMovingFaqId(null); openConfirm({ title: '移動問答', message: `確定要將「${faq.question || '此問答'}」移動到「${targetCat}」嗎？`, onConfirm: () => { moveFaqToCategory(idx, targetCat); closeConfirm(); } }); }} className="w-full text-left px-4 py-2.5 text-xs text-slate-600 hover:bg-brand-50 hover:text-brand-700 transition-colors truncate">
+                                                                                                                        <button key={targetCat} onClick={() => { setMovingFaqId(null); openConfirm({ title: '移動問答', message: `確定要將「${faq.question || '此問答'}」移動到「${targetCat}」嗎？`, confirmText: '確定移動', onConfirm: () => { moveFaqToCategory(idx, targetCat); closeConfirm(); } }); }} className="w-full text-left px-4 py-2.5 text-xs text-slate-600 hover:bg-brand-50 hover:text-brand-700 transition-colors truncate">
                                                                                                                             {targetCat}
                                                                                                                         </button>
                                                                                                                     ))}
@@ -1921,62 +1920,14 @@ const BackendDashboard = () => {
                                                                                                             </>
                                                                                                         )}
                                                                                                     </div>
-                                                                                                    <button onClick={() => openConfirm({ title: '刪除 FAQ', message: `確定要刪除 FAQ「${faq.question || ''}」嗎？儲存後才會生效。`, onConfirm: () => { setEditingFaqs(editingFaqs.filter((_, i) => i !== idx)); closeConfirm(); } })} className="w-7 h-7 flex items-center justify-center text-slate-300 hover:text-red-500 rounded-lg transition-all" title="刪除">
+                                                                                                    <button onClick={() => openConfirm({ title: '刪除 FAQ', message: `確定要刪除 FAQ「${faq.question || ''}」嗎？儲存後才會生效。`, confirmText: '確定刪除', onConfirm: () => { setEditingFaqs(editingFaqs.filter((_, i) => i !== idx)); closeConfirm(); } })} className="w-7 h-7 flex items-center justify-center text-slate-300 hover:text-red-500 rounded-lg transition-all" title="刪除">
                                                                                                         <Trash2 size={13} />
                                                                                                     </button>
                                                                                                 </div>
-                                                                                                <ChevronDown size={14} className={`text-slate-400 flex-shrink-0 transition-transform duration-200 ${isItemExpanded ? 'rotate-180' : ''}`} />
+                                                                                                <ChevronRight size={14} className="text-slate-300 flex-shrink-0" />
                                                                                             </div>
-                                                                                            {isItemExpanded && (
-                                                                                                <div className="px-4 sm:px-6 pb-5 pt-3 space-y-4 border-t border-slate-100 bg-white">
-                                                                                                    <div>
-                                                                                                        <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Question</div>
-                                                                                                        <input type="text" value={faq.question} maxLength={100} onChange={(e) => { const f = [...editingFaqs]; f[idx] = { ...f[idx], question: e.target.value }; setEditingFaqs(f); }} placeholder="輸入常見問題..." className="w-full bg-transparent text-base font-bold text-slate-800 placeholder:text-slate-300 outline-none p-0" />
-                                                                                                        <div className="text-[10px] text-slate-300 text-right mt-1">{faq.question?.length || 0}/100</div>
-                                                                                                    </div>
-                                                                                                    {analysisReport && analysisReport.suggestions.find(s => s.id.toString() === (faq.id || idx.toString()).toString()) && (
-                                                                                                        <div className="p-3 bg-amber-50 border border-amber-100 rounded-xl">
-                                                                                                            <div className="flex items-start gap-2 mb-2">
-                                                                                                                <AlertCircle size={14} className="text-amber-500 mt-0.5" />
-                                                                                                                <p className="text-xs text-amber-700 italic">{analysisReport.suggestions.find(s => s.id.toString() === (faq.id || idx.toString()).toString()).suggestion}</p>
-                                                                                                            </div>
-                                                                                                            <div className="flex items-center gap-2">
-                                                                                                                <div className="flex-1 p-2 bg-white/80 border border-amber-200 rounded-lg text-xs text-amber-800">
-                                                                                                                    <div className="font-bold mb-0.5">Q: {analysisReport.suggestions.find(s => s.id.toString() === (faq.id || idx.toString()).toString()).optimized_q}</div>
-                                                                                                                    <div className="line-clamp-2">A: {analysisReport.suggestions.find(s => s.id.toString() === (faq.id || idx.toString()).toString()).optimized_a}</div>
-                                                                                                                </div>
-                                                                                                                <button onClick={() => { const s = analysisReport.suggestions.find(s => s.id.toString() === (faq.id || idx.toString()).toString()); applySuggestion(idx, s.optimized_q, s.optimized_a); }} className="flex items-center gap-1 px-3 py-2 bg-white border border-amber-300 text-amber-600 rounded-lg text-xs font-bold hover:bg-amber-50 whitespace-nowrap"><RotateCcw size={12} />快速取代</button>
-                                                                                                            </div>
-                                                                                                        </div>
-                                                                                                    )}
-                                                                                                    <div>
-                                                                                                        <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Answer</div>
-                                                                                                        <textarea value={faq.answer} maxLength={500} onChange={(e) => { const f = [...editingFaqs]; f[idx] = { ...f[idx], answer: e.target.value }; setEditingFaqs(f); }} placeholder="輸入預設回覆回答內容..." className="w-full bg-white border border-slate-200 rounded-xl p-4 text-slate-600 text-sm leading-relaxed min-h-[100px] focus:ring-2 focus:ring-brand-500/10 focus:border-brand-500 outline-none transition-all shadow-inner resize-none" />
-                                                                                                        <div className="text-[10px] text-slate-300 text-right mt-1">{faq.answer?.length || 0}/500</div>
-                                                                                                    </div>
-                                                                                                    <div>
-                                                                                                        <div className="flex items-center gap-2 text-slate-400 mb-1">
-                                                                                                            <span className="text-[10px] font-black uppercase tracking-widest">Image</span>
-                                                                                                            <span className="text-[10px] text-slate-300">(選填)</span>
-                                                                                                        </div>
-                                                                                                        {faq.image_id ? (
-                                                                                                            <div className="flex items-center gap-3">
-                                                                                                                <img src={faq._preview_url || faq.preview_url || ''} alt="FAQ 附圖" className="w-16 h-16 object-cover rounded-xl border border-slate-200 cursor-zoom-in hover:opacity-90" onClick={() => setLightboxSrc(faq._preview_url || faq.preview_url || '')} onError={(e) => { e.target.style.display = 'none'; }} />
-                                                                                                                <button onClick={() => openConfirm({ title: '移除附圖', message: '確定要移除這張 FAQ 附圖嗎？此操作無法復原。', onConfirm: () => { handleFaqImageDelete(idx); closeConfirm(); } })} className="flex items-center gap-1.5 px-3 py-2 bg-white border border-red-200 text-red-500 rounded-xl text-xs font-bold hover:bg-red-50"><Trash2 size={14} />移除圖片</button>
-                                                                                                            </div>
-                                                                                                        ) : (
-                                                                                                            <label className="flex items-center gap-2 px-4 py-3 bg-white border border-dashed border-slate-200 rounded-xl cursor-pointer hover:border-brand-300 hover:bg-brand-50/50 transition-all">
-                                                                                                                {uploadingFaqIdx === idx ? <Loader2 size={16} className="animate-spin text-brand-500" /> : <Upload size={16} className="text-slate-400" />}
-                                                                                                                <span className="text-xs text-slate-500">{uploadingFaqIdx === idx ? '上傳中...' : '上傳附圖 (jpg/png/webp, 2MB)'}</span>
-                                                                                                                <input type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={(e) => handleFaqImageUpload(idx, e.target.files[0])} disabled={uploadingFaqIdx === idx} />
-                                                                                                            </label>
-                                                                                                        )}
-                                                                                                    </div>
-                                                                                                </div>
-                                                                                            )}
                                                                                         </div>
-                                                                                        );
-                                                                                    })}
+                                                                                    ))}
                                                                                 </div>
                                                                             )}
                                                                         </div>
@@ -4386,12 +4337,85 @@ const BackendDashboard = () => {
                 onClose={() => setLightboxSrc(null)}
             />
 
+            {/* FAQ 編輯彈窗 */}
+            {editFaqModal.open && editFaqModal.idx !== null && (() => {
+                const faq = editingFaqs[editFaqModal.idx];
+                const idx = editFaqModal.idx;
+                if (!faq) return null;
+                return (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setEditFaqModal({ open: false, idx: null })}>
+                        <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
+                        <div className="relative bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+                            <div className="flex items-center justify-between px-8 pt-7 pb-5 border-b border-slate-100">
+                                <div>
+                                    <h3 className="text-lg font-bold text-slate-800">編輯問答</h3>
+                                    <p className="text-xs text-slate-400 mt-0.5">分類：{faq.category || '常見問題'}</p>
+                                </div>
+                                <button onClick={() => setEditFaqModal({ open: false, idx: null })} className="p-1.5 text-slate-400 hover:text-slate-600 transition-colors"><X size={18} /></button>
+                            </div>
+                            <div className="px-8 py-6 space-y-5">
+                                <div>
+                                    <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Question</div>
+                                    <input type="text" value={faq.question} maxLength={100} onChange={(e) => { const f = [...editingFaqs]; f[idx] = { ...f[idx], question: e.target.value }; setEditingFaqs(f); }} placeholder="輸入常見問題..." className="w-full border border-slate-200 rounded-xl px-4 py-3 text-base font-bold text-slate-800 placeholder:text-slate-300 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-400 transition-all" />
+                                    <div className="text-[10px] text-slate-300 text-right mt-1">{faq.question?.length || 0}/100</div>
+                                </div>
+                                {analysisReport && analysisReport.suggestions.find(s => s.id.toString() === (faq.id || idx.toString()).toString()) && (
+                                    <div className="p-3 bg-amber-50 border border-amber-100 rounded-xl">
+                                        <div className="flex items-start gap-2 mb-2">
+                                            <AlertCircle size={14} className="text-amber-500 mt-0.5" />
+                                            <p className="text-xs text-amber-700 italic">{analysisReport.suggestions.find(s => s.id.toString() === (faq.id || idx.toString()).toString()).suggestion}</p>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <div className="flex-1 p-2 bg-white/80 border border-amber-200 rounded-lg text-xs text-amber-800">
+                                                <div className="font-bold mb-0.5">Q: {analysisReport.suggestions.find(s => s.id.toString() === (faq.id || idx.toString()).toString()).optimized_q}</div>
+                                                <div className="line-clamp-2">A: {analysisReport.suggestions.find(s => s.id.toString() === (faq.id || idx.toString()).toString()).optimized_a}</div>
+                                            </div>
+                                            <button onClick={() => { const s = analysisReport.suggestions.find(s => s.id.toString() === (faq.id || idx.toString()).toString()); applySuggestion(idx, s.optimized_q, s.optimized_a); }} className="flex items-center gap-1 px-3 py-2 bg-white border border-amber-300 text-amber-600 rounded-lg text-xs font-bold hover:bg-amber-50 whitespace-nowrap"><RotateCcw size={12} />快速取代</button>
+                                        </div>
+                                    </div>
+                                )}
+                                <div>
+                                    <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Answer</div>
+                                    <textarea value={faq.answer} maxLength={500} onChange={(e) => { const f = [...editingFaqs]; f[idx] = { ...f[idx], answer: e.target.value }; setEditingFaqs(f); }} placeholder="輸入預設回覆回答內容..." className="w-full bg-white border border-slate-200 rounded-xl p-4 text-slate-600 text-sm leading-relaxed min-h-[120px] focus:ring-2 focus:ring-brand-500/10 focus:border-brand-500 outline-none transition-all shadow-inner resize-none" />
+                                    <div className="text-[10px] text-slate-300 text-right mt-1">{faq.answer?.length || 0}/500</div>
+                                </div>
+                                <div>
+                                    <div className="flex items-center gap-2 text-slate-400 mb-2">
+                                        <span className="text-[10px] font-black uppercase tracking-widest">Image</span>
+                                        <span className="text-[10px] text-slate-300">(選填)</span>
+                                    </div>
+                                    {faq.image_id ? (
+                                        <div className="flex items-center gap-3">
+                                            <img src={faq._preview_url || faq.preview_url || ''} alt="FAQ 附圖" className="w-20 h-20 object-cover rounded-xl border border-slate-200 cursor-zoom-in hover:opacity-90" onClick={() => setLightboxSrc(faq._preview_url || faq.preview_url || '')} onError={(e) => { e.target.style.display = 'none'; }} />
+                                            <button onClick={() => openConfirm({ title: '移除附圖', message: '確定要移除這張 FAQ 附圖嗎？此操作無法復原。', confirmText: '確定移除', onConfirm: () => { handleFaqImageDelete(idx); closeConfirm(); } })} className="flex items-center gap-1.5 px-3 py-2 bg-white border border-red-200 text-red-500 rounded-xl text-xs font-bold hover:bg-red-50"><Trash2 size={14} />移除圖片</button>
+                                        </div>
+                                    ) : (
+                                        <label className="flex items-center gap-2 px-4 py-3 bg-white border border-dashed border-slate-200 rounded-xl cursor-pointer hover:border-brand-300 hover:bg-brand-50/50 transition-all">
+                                            {uploadingFaqIdx === idx ? <Loader2 size={16} className="animate-spin text-brand-500" /> : <Upload size={16} className="text-slate-400" />}
+                                            <span className="text-xs text-slate-500">{uploadingFaqIdx === idx ? '上傳中...' : '上傳附圖 (jpg/png/webp, 2MB)'}</span>
+                                            <input type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={(e) => handleFaqImageUpload(idx, e.target.files[0])} disabled={uploadingFaqIdx === idx} />
+                                        </label>
+                                    )}
+                                </div>
+                            </div>
+                            <div className="px-8 py-5 border-t border-slate-100 flex justify-end">
+                                <button onClick={() => setEditFaqModal({ open: false, idx: null })} className="px-6 py-2.5 bg-brand-600 hover:bg-brand-700 text-white font-bold text-sm rounded-xl transition-all">
+                                    完成編輯
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                );
+            })()}
+
             {/* 共用確認彈窗 */}
             <ConfirmDialog
                 isOpen={confirmDialog.isOpen}
                 title={confirmDialog.title}
                 message={confirmDialog.message}
-                confirmText="確認移除"
+                confirmText={confirmDialog.confirmText}
+                cancelText={confirmDialog.cancelText}
+                variant={confirmDialog.variant}
                 onConfirm={confirmDialog.onConfirm}
                 onCancel={closeConfirm}
             />
