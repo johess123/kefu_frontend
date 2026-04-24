@@ -1035,7 +1035,7 @@ const BackendDashboard = () => {
         handlePlaygroundSend(question);
     };
 
-    const handleAnalyzeFaqs = async () => {
+    const validateAndAnalyzeFaqs = async () => {
         if (!editingFaqs || editingFaqs.length === 0) {
             alert('請先新增問答組');
             return;
@@ -1073,6 +1073,20 @@ const BackendDashboard = () => {
         } finally {
             setIsAnalyzing(false);
         }
+    };
+
+    const handleAnalyzeFaqs = () => {
+        openConfirm({
+            title: 'AI 智能健檢',
+            message: '進行 FAQ 知識庫健檢會消耗點數，確定要繼續嗎？',
+            confirmText: '確定健檢',
+            cancelText: '取消',
+            variant: 'default',
+            onConfirm: () => {
+                validateAndAnalyzeFaqs();
+                closeConfirm();
+            }
+        });
     };
 
     const applySuggestion = (idx, optimizedQ, optimizedA) => {
