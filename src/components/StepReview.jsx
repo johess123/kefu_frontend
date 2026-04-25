@@ -51,6 +51,7 @@ const StepReview = ({ onNext, onEdit, formData, setFormData, sessionId, agentId,
                 agent_id: agentId, // Pass agentId for update
                 faqs: reviewData.faqs, // Pass potential edits
                 products: formData.products || [], // Pass products from wizard Q4
+                product_field_schema: formData.productFieldSchema || [],
                 handoff_triggers: reviewData.handoff_triggers,
                 handoff_preview: reviewData.handoff_preview
             });
