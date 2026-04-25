@@ -17,6 +17,8 @@ const StepWizard = ({ formData, setFormData, onComplete }) => {
     const [productFileName, setProductFileName] = useState('');
     const productFileRef = useRef(null);
     const [expandedCategories, setExpandedCategories] = useState(new Set(['常見問題']));
+    const [newFieldLabel, setNewFieldLabel] = useState('');
+    const [schemaInputVisible, setSchemaInputVisible] = useState(false);
 
     const totalQuestions = 5;
 
@@ -545,12 +547,36 @@ const StepWizard = ({ formData, setFormData, onComplete }) => {
     };
 
     const renderQ4 = () => {
+        const fieldSchema = formData.productFieldSchema || [];
+
+        const addCustomField = (label) => {
+            const trimmed = label.trim();
+            if (!trimmed) return;
+            if (fieldSchema.length >= 8) {
+                alert('最多新增 8 個自訂欄位');
+                return;
+            }
+            const key = trimmed.toLowerCase().replace(/[\s一-龥]+/g, '_').replace(/[^a-z0-9_]/g, '').replace(/^_+|_+$/g, '') || `field_${Date.now()}`;
+            if (fieldSchema.some(f => f.key === key)) {
+                alert('欄位已存在');
+                return;
+            }
+            updateField('productFieldSchema', [...fieldSchema, { key, label: trimmed, type: 'text', max_length: 100 }]);
+            setNewFieldLabel('');
+            setSchemaInputVisible(false);
+        };
+
+        const removeCustomField = (key) => {
+            updateField('productFieldSchema', fieldSchema.filter(f => f.key !== key));
+        };
+
         const addProduct = () => {
             if ((formData.products || []).length >= 50) {
                 alert('最多只能新增 50 項商品');
                 return;
             }
-            const newProduct = { id: Date.now().toString(), name: '', description: '', keywords: '' };
+            const initCustomFields = Object.fromEntries(fieldSchema.map(f => [f.key, '']));
+            const newProduct = { id: Date.now().toString(), name: '', description: '', keywords: '', custom_fields: initCustomFields };
             updateField('products', [...(formData.products || []), newProduct]);
         };
 
@@ -560,6 +586,12 @@ const StepWizard = ({ formData, setFormData, onComplete }) => {
 
         const updateProduct = (id, field, value) => {
             updateField('products', (formData.products || []).map(p => p.id === id ? { ...p, [field]: value } : p));
+        };
+
+        const updateProductCustomField = (id, key, value) => {
+            updateField('products', (formData.products || []).map(p =>
+                p.id === id ? { ...p, custom_fields: { ...(p.custom_fields || {}), [key]: value } } : p
+            ));
         };
 
         const handleParseProducts = async (file) => {
@@ -581,6 +613,9 @@ const StepWizard = ({ formData, setFormData, onComplete }) => {
                 fd.append('file', file);
                 fd.append('brandDescription', formData.brandDescription || '');
                 fd.append('line_user_id', Cookies.get('google_user_id') || '');
+                if (fieldSchema.length > 0) {
+                    fd.append('field_schema', JSON.stringify(fieldSchema));
+                }
                 const res = await axios.post(`${config.API_URL}/api/parse_products`, fd, {
                     headers: { 'Content-Type': 'multipart/form-data' }
                 });
@@ -592,6 +627,7 @@ const StepWizard = ({ formData, setFormData, onComplete }) => {
                         name: p.name,
                         description: p.description,
                         keywords: p.keywords || '',
+                        custom_fields: p.custom_fields || {},
                     }));
                     updateField('products', [...(formData.products || []), ...newProducts]);
                 }
@@ -608,6 +644,46 @@ const StepWizard = ({ formData, setFormData, onComplete }) => {
 
         return (
             <div className="space-y-4">
+                {/* 欄位設定 */}
+                <div className="bg-white border border-slate-200 rounded-2xl p-4">
+                    <div className="text-xs font-black text-slate-500 uppercase tracking-widest mb-3">欄位設定</div>
+                    <div className="flex flex-wrap gap-2 mb-2">
+                        {/* 固定欄位 */}
+                        {['名稱', '說明', '別名'].map(label => (
+                            <span key={label} className="flex items-center gap-1 px-2.5 py-1 bg-slate-100 text-slate-400 rounded-full text-xs font-bold">{label}</span>
+                        ))}
+                        {/* 自訂欄位 */}
+                        {fieldSchema.map(f => (
+                            <span key={f.key} className="flex items-center gap-1 px-2.5 py-1 bg-green-50 border border-green-200 text-green-700 rounded-full text-xs font-bold">
+                                {f.label}
+                                <button onClick={() => removeCustomField(f.key)} className="ml-0.5 text-green-400 hover:text-red-500 transition-colors"><X size={10} /></button>
+                            </span>
+                        ))}
+                        {/* 新增欄位按鈕 */}
+                        {!schemaInputVisible ? (
+                            <button onClick={() => setSchemaInputVisible(true)} className="flex items-center gap-1 px-2.5 py-1 border border-dashed border-green-300 text-green-500 rounded-full text-xs font-bold hover:bg-green-50 transition-colors">
+                                <Plus size={10} />新增欄位
+                            </button>
+                        ) : (
+                            <div className="flex items-center gap-1">
+                                <input
+                                    autoFocus
+                                    type="text"
+                                    value={newFieldLabel}
+                                    onChange={(e) => setNewFieldLabel(e.target.value)}
+                                    onKeyDown={(e) => { if (e.key === 'Enter') addCustomField(newFieldLabel); if (e.key === 'Escape') { setSchemaInputVisible(false); setNewFieldLabel(''); } }}
+                                    placeholder="欄位名稱"
+                                    maxLength={20}
+                                    className="w-24 px-2 py-1 border border-green-300 rounded-full text-xs focus:outline-none focus:border-green-500"
+                                />
+                                <button onClick={() => addCustomField(newFieldLabel)} className="px-2 py-1 bg-green-500 text-white rounded-full text-xs font-bold hover:bg-green-600">確認</button>
+                                <button onClick={() => { setSchemaInputVisible(false); setNewFieldLabel(''); }} className="px-2 py-1 text-slate-400 text-xs hover:text-slate-600">取消</button>
+                            </div>
+                        )}
+                    </div>
+                    <p className="text-[10px] text-slate-300">固定欄位不可刪除，最多可新增 8 個自訂欄位</p>
+                </div>
+
                 {/* 上傳區 */}
                 <div className="bg-green-50 border border-green-100 rounded-2xl p-4 mb-4">
                     <div className="flex items-start gap-3">
@@ -694,6 +770,21 @@ const StepWizard = ({ formData, setFormData, onComplete }) => {
                                         onChange={(e) => updateProduct(product.id, 'keywords', e.target.value)}
                                     />
                                 </div>
+                                {/* 自訂欄位 */}
+                                {fieldSchema.map(f => (
+                                    <div key={f.key} className="flex items-center gap-2">
+                                        <span className="text-xs font-black text-green-400 truncate w-8 shrink-0" title={f.label}>{f.label.slice(0, 2)}</span>
+                                        <input
+                                            type="text"
+                                            placeholder={`${f.label}（選填）`}
+                                            className="w-full p-2 border-b border-slate-200 focus:border-green-500 focus:outline-none text-sm"
+                                            value={(product.custom_fields || {})[f.key] || ''}
+                                            maxLength={f.max_length}
+                                            onChange={(e) => updateProductCustomField(product.id, f.key, e.target.value)}
+                                        />
+                                        <div className="text-[10px] text-slate-300 ml-1 shrink-0">{((product.custom_fields || {})[f.key] || '').length}/{f.max_length}</div>
+                                    </div>
+                                ))}
                             </div>
                         </div>
                     ))}

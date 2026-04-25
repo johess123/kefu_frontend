@@ -447,6 +447,10 @@ const BackendDashboard = () => {
     const [isParsingProductFile, setIsParsingProductFile] = useState(false);
     const [productFileName, setProductFileName] = useState('');
     const productFileRef = React.useRef(null);
+    const [productFieldSchema, setProductFieldSchema] = useState([]);
+    const [schemaInputVisible, setSchemaInputVisible] = useState(false);
+    const [newFieldLabel, setNewFieldLabel] = useState('');
+    const [isSavingSchema, setIsSavingSchema] = useState(false);
 
     const handleParseProductFile = async (file) => {
         if (!file) return;
@@ -466,6 +470,9 @@ const BackendDashboard = () => {
             fd.append('file', file);
             fd.append('brandDescription', currentAgent?.config?.raw_config?.merchant_name || '');
             fd.append('line_user_id', Cookies.get('google_user_id') || '');
+            if (productFieldSchema.length > 0) {
+                fd.append('field_schema', JSON.stringify(productFieldSchema));
+            }
             const res = await axios.post(`${config.API_URL}/api/parse_products`, fd, {
                 headers: { 'Content-Type': 'multipart/form-data' }
             });
@@ -477,6 +484,7 @@ const BackendDashboard = () => {
                     name: p.name,
                     description: p.description,
                     keywords: p.keywords || '',
+                    custom_fields: p.custom_fields || {},
                 }));
                 const merged = [...editingProducts, ...newProducts].slice(0, 50);
                 setEditingProducts(merged);
@@ -707,6 +715,7 @@ const BackendDashboard = () => {
             const orderedCats = [...new Set(faqs.map(f => f.category || '常見問題'))];
             setCategoryOrder(orderedCats.length > 0 ? orderedCats : ['常見問題']);
             setEditingProducts((rawConfig.products || []).map((p, i) => ({ ...p, id: p.id || `prod_${i}` })));
+            setProductFieldSchema(rawConfig.product_field_schema || []);
 
             // Parse handoff_logic
             let triggers = [];
@@ -1344,6 +1353,40 @@ const BackendDashboard = () => {
         const newProducts = [...editingProducts];
         newProducts[idx] = { ...newProducts[idx], image_id: '', _preview_url: '' };
         setEditingProducts(newProducts);
+    };
+
+    const handleSaveSchema = async (schema) => {
+        if (!currentAgent) return;
+        setIsSavingSchema(true);
+        try {
+            await axios.post(`${config.API_URL}/api/admin/agent/${currentAgent._id}/update_product_schema`, {
+                userId: currentAgent.admin_id,
+                schema
+            });
+        } catch (e) {
+            console.error('Failed to save field schema:', e);
+        } finally {
+            setIsSavingSchema(false);
+        }
+    };
+
+    const addCustomField = (label) => {
+        const trimmed = label.trim();
+        if (!trimmed) return;
+        if (productFieldSchema.length >= 8) { alert('最多新增 8 個自訂欄位'); return; }
+        const key = trimmed.toLowerCase().replace(/[\s一-鿿]+/g, '_').replace(/[^a-z0-9_]/g, '').replace(/^_+|_+$/g, '') || `field_${Date.now()}`;
+        if (productFieldSchema.some(f => f.key === key)) { alert('欄位已存在'); return; }
+        const newSchema = [...productFieldSchema, { key, label: trimmed, type: 'text', max_length: 100 }];
+        setProductFieldSchema(newSchema);
+        setNewFieldLabel('');
+        setSchemaInputVisible(false);
+        handleSaveSchema(newSchema);
+    };
+
+    const removeCustomField = (key) => {
+        const newSchema = productFieldSchema.filter(f => f.key !== key);
+        setProductFieldSchema(newSchema);
+        handleSaveSchema(newSchema);
     };
 
     const handleSaveProducts = async () => {
@@ -2059,6 +2102,45 @@ const BackendDashboard = () => {
                                                             </div>
                                                         </div>
 
+                                                        {/* 欄位設定 */}
+                                                        <div className="px-4 sm:px-8 py-4 border-b border-slate-100 bg-slate-50/30">
+                                                            <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 flex items-center gap-2">
+                                                                欄位設定
+                                                                {isSavingSchema && <Loader2 size={10} className="animate-spin text-green-400" />}
+                                                            </div>
+                                                            <div className="flex flex-wrap gap-2">
+                                                                {['名稱', '說明', '別名'].map(label => (
+                                                                    <span key={label} className="flex items-center gap-1 px-2.5 py-1 bg-slate-100 text-slate-400 rounded-full text-xs font-bold">{label}</span>
+                                                                ))}
+                                                                {productFieldSchema.map(f => (
+                                                                    <span key={f.key} className="flex items-center gap-1 px-2.5 py-1 bg-green-50 border border-green-200 text-green-700 rounded-full text-xs font-bold">
+                                                                        {f.label}
+                                                                        <button onClick={() => removeCustomField(f.key)} className="ml-0.5 text-green-400 hover:text-red-500 transition-colors"><X size={10} /></button>
+                                                                    </span>
+                                                                ))}
+                                                                {!schemaInputVisible ? (
+                                                                    <button onClick={() => setSchemaInputVisible(true)} className="flex items-center gap-1 px-2.5 py-1 border border-dashed border-green-300 text-green-500 rounded-full text-xs font-bold hover:bg-green-50 transition-colors">
+                                                                        <Plus size={10} />新增欄位
+                                                                    </button>
+                                                                ) : (
+                                                                    <div className="flex items-center gap-1">
+                                                                        <input
+                                                                            autoFocus
+                                                                            type="text"
+                                                                            value={newFieldLabel}
+                                                                            onChange={(e) => setNewFieldLabel(e.target.value)}
+                                                                            onKeyDown={(e) => { if (e.key === 'Enter') addCustomField(newFieldLabel); if (e.key === 'Escape') { setSchemaInputVisible(false); setNewFieldLabel(''); } }}
+                                                                            placeholder="欄位名稱"
+                                                                            maxLength={20}
+                                                                            className="w-24 px-2 py-1 border border-green-300 rounded-full text-xs focus:outline-none focus:border-green-500"
+                                                                        />
+                                                                        <button onClick={() => addCustomField(newFieldLabel)} className="px-2 py-1 bg-green-500 text-white rounded-full text-xs font-bold hover:bg-green-600">確認</button>
+                                                                        <button onClick={() => { setSchemaInputVisible(false); setNewFieldLabel(''); }} className="px-2 py-1 text-slate-400 text-xs hover:text-slate-600">取消</button>
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        </div>
+
                                                         <div className="p-4 sm:p-6 space-y-3">
                                                             {editingProducts.map((product, idx) => {
                                                                 const pid = product.id || `prod_${idx}`;
@@ -2143,6 +2225,25 @@ const BackendDashboard = () => {
                                                                                 />
                                                                                 <div className="text-[10px] text-slate-300 text-right mt-1">{(product.keywords || '').length}/100</div>
                                                                             </div>
+                                                                            {/* 自訂欄位 */}
+                                                                            {productFieldSchema.map(f => (
+                                                                                <div key={f.key}>
+                                                                                    <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">{f.label} <span className="text-slate-300 normal-case font-normal">(選填)</span></div>
+                                                                                    <input
+                                                                                        type="text"
+                                                                                        value={(product.custom_fields || {})[f.key] || ''}
+                                                                                        maxLength={f.max_length}
+                                                                                        onChange={(e) => {
+                                                                                            const newProducts = [...editingProducts];
+                                                                                            newProducts[idx] = { ...newProducts[idx], custom_fields: { ...(newProducts[idx].custom_fields || {}), [f.key]: e.target.value } };
+                                                                                            setEditingProducts(newProducts);
+                                                                                        }}
+                                                                                        placeholder={`輸入${f.label}...`}
+                                                                                        className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-slate-600 text-sm focus:ring-2 focus:ring-green-500/10 focus:border-green-500 outline-none transition-all shadow-inner"
+                                                                                    />
+                                                                                    <div className="text-[10px] text-slate-300 text-right mt-1">{((product.custom_fields || {})[f.key] || '').length}/{f.max_length}</div>
+                                                                                </div>
+                                                                            ))}
                                                                             <div>
                                                                                 <div className="flex items-center gap-2 text-slate-400 mb-1">
                                                                                     <span className="text-[10px] font-black uppercase tracking-widest">Image</span>
@@ -4458,7 +4559,8 @@ const BackendDashboard = () => {
                                 <button
                                     onClick={() => {
                                         const newProdId = Date.now().toString();
-                                        setEditingProducts([...editingProducts, { id: newProdId, name: newProduct.name, description: newProduct.description, keywords: newProduct.keywords }]);
+                                        const initCustomFields = Object.fromEntries(productFieldSchema.map(f => [f.key, '']));
+                                        setEditingProducts([...editingProducts, { id: newProdId, name: newProduct.name, description: newProduct.description, keywords: newProduct.keywords, custom_fields: initCustomFields }]);
                                         setExpandedProductItems(prev => new Set([...prev, newProdId]));
                                         setShowProductModal(false);
                                         setTimeout(() => {
