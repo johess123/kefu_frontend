@@ -449,7 +449,7 @@ const BackendDashboard = () => {
     const productFileRef = React.useRef(null);
     const [productFieldSchema, setProductFieldSchema] = useState([]);
     const [keywordsEnabled, setKeywordsEnabled] = useState(true);
-    const [addFieldModalOpen, setAddFieldModalOpen] = useState(false);
+    const [fieldSettingsOpen, setFieldSettingsOpen] = useState(false);
     const [modalFieldLabel, setModalFieldLabel] = useState('');
     const [isSavingSchema, setIsSavingSchema] = useState(false);
 
@@ -1382,7 +1382,6 @@ const BackendDashboard = () => {
         const newSchema = [...productFieldSchema, { key, label: trimmed, type: 'text', max_length: 100 }];
         setProductFieldSchema(newSchema);
         setModalFieldLabel('');
-        setAddFieldModalOpen(false);
         handleSaveSchema(newSchema);
     };
 
@@ -2110,36 +2109,19 @@ const BackendDashboard = () => {
                                                             </div>
                                                         </div>
 
-                                                        {/* 欄位設定 */}
-                                                        <div className="px-4 sm:px-8 py-4 border-b border-slate-100 bg-slate-50/30">
-                                                            <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 flex items-center gap-2">
+                                                        {/* 欄位設定按鈕 */}
+                                                        <div className="px-4 sm:px-8 py-3 border-b border-slate-100 flex items-center justify-between">
+                                                            <div className="flex items-center gap-2 text-[11px] text-slate-400">
+                                                                <span className="font-bold">欄位</span>
+                                                                <span className="text-slate-300">名稱・說明{keywordsEnabled ? '・別名' : ''}{productFieldSchema.map(f => `・${f.label}`).join('')}</span>
+                                                            </div>
+                                                            <button
+                                                                onClick={() => setFieldSettingsOpen(true)}
+                                                                className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-slate-500 border border-slate-200 rounded-lg hover:bg-slate-50 hover:border-slate-300 transition-all"
+                                                            >
+                                                                {isSavingSchema ? <Loader2 size={11} className="animate-spin text-green-400" /> : <Settings size={11} />}
                                                                 欄位設定
-                                                                {isSavingSchema && <Loader2 size={10} className="animate-spin text-green-400" />}
-                                                            </div>
-                                                            <div className="flex flex-wrap gap-2">
-                                                                {['名稱', '說明'].map(label => (
-                                                                    <span key={label} className="flex items-center gap-1 px-2.5 py-1 bg-slate-100 text-slate-400 rounded-full text-xs font-bold">{label}</span>
-                                                                ))}
-                                                                {keywordsEnabled ? (
-                                                                    <span className="flex items-center gap-1 px-2.5 py-1 bg-green-50 border border-green-200 text-green-700 rounded-full text-xs font-bold">
-                                                                        別名
-                                                                        <button onClick={() => toggleKeywords(false)} className="ml-0.5 text-green-400 hover:text-red-500 transition-colors"><X size={10} /></button>
-                                                                    </span>
-                                                                ) : (
-                                                                    <button onClick={() => toggleKeywords(true)} className="flex items-center gap-1 px-2.5 py-1 border border-dashed border-slate-300 text-slate-400 rounded-full text-xs hover:bg-slate-50 transition-colors">
-                                                                        <Plus size={10} />別名
-                                                                    </button>
-                                                                )}
-                                                                {productFieldSchema.map(f => (
-                                                                    <span key={f.key} className="flex items-center gap-1 px-2.5 py-1 bg-green-50 border border-green-200 text-green-700 rounded-full text-xs font-bold">
-                                                                        {f.label}
-                                                                        <button onClick={() => removeCustomField(f.key)} className="ml-0.5 text-green-400 hover:text-red-500 transition-colors"><X size={10} /></button>
-                                                                    </span>
-                                                                ))}
-                                                                <button onClick={() => setAddFieldModalOpen(true)} className="flex items-center gap-1 px-2.5 py-1 border border-dashed border-green-300 text-green-500 rounded-full text-xs font-bold hover:bg-green-50 transition-colors">
-                                                                    <Plus size={10} />新增欄位
-                                                                </button>
-                                                            </div>
+                                                            </button>
                                                         </div>
 
                                                         <div className="p-4 sm:p-6 space-y-3">
@@ -4642,25 +4624,75 @@ const BackendDashboard = () => {
                 onCancel={closeConfirm}
             />
 
-            {/* 新增自訂欄位 Modal */}
-            {addFieldModalOpen && (
-                <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-[130]" onClick={() => { setAddFieldModalOpen(false); setModalFieldLabel(''); }}>
-                    <div className="bg-white rounded-2xl p-6 shadow-xl w-80 mx-4" onClick={e => e.stopPropagation()}>
-                        <div className="text-sm font-bold text-slate-700 mb-1">新增自訂欄位</div>
-                        <div className="text-xs text-slate-400 mb-4">欄位名稱將顯示在商品卡片上</div>
-                        <input
-                            autoFocus
-                            type="text"
-                            value={modalFieldLabel}
-                            onChange={(e) => setModalFieldLabel(e.target.value)}
-                            onKeyDown={(e) => { if (e.key === 'Enter') addCustomField(modalFieldLabel); if (e.key === 'Escape') { setAddFieldModalOpen(false); setModalFieldLabel(''); } }}
-                            placeholder="例：前調、份量、材質..."
-                            maxLength={20}
-                            className="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-green-500/20 focus:border-green-500 outline-none transition-all mb-4"
-                        />
-                        <div className="flex gap-2 justify-end">
-                            <button onClick={() => { setAddFieldModalOpen(false); setModalFieldLabel(''); }} className="px-4 py-2 text-slate-500 text-sm hover:bg-slate-100 rounded-xl transition-colors">取消</button>
-                            <button onClick={() => addCustomField(modalFieldLabel)} className="px-4 py-2 bg-green-500 text-white text-sm font-bold rounded-xl hover:bg-green-600 transition-colors">確認新增</button>
+            {/* 欄位設定 Modal */}
+            {fieldSettingsOpen && (
+                <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-[130]" onClick={() => { setFieldSettingsOpen(false); setModalFieldLabel(''); }}>
+                    <div className="bg-white rounded-2xl shadow-xl w-96 mx-4 overflow-hidden" onClick={e => e.stopPropagation()}>
+                        <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+                            <div>
+                                <div className="text-sm font-bold text-slate-700">欄位設定</div>
+                                <div className="text-xs text-slate-400 mt-0.5">設定商品卡片顯示的欄位</div>
+                            </div>
+                            {isSavingSchema && <Loader2 size={14} className="animate-spin text-green-400" />}
+                        </div>
+                        <div className="px-6 py-5 space-y-5">
+                            {/* 固定欄位 */}
+                            <div>
+                                <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">固定欄位</div>
+                                <div className="flex gap-2">
+                                    {['名稱', '說明'].map(label => (
+                                        <span key={label} className="px-3 py-1.5 bg-slate-100 text-slate-400 rounded-lg text-xs font-bold">{label}</span>
+                                    ))}
+                                </div>
+                            </div>
+                            {/* 選用欄位 */}
+                            <div>
+                                <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">選用欄位</div>
+                                <div className="flex flex-wrap gap-2">
+                                    {keywordsEnabled ? (
+                                        <span className="flex items-center gap-1.5 px-3 py-1.5 bg-green-50 border border-green-200 text-green-700 rounded-lg text-xs font-bold">
+                                            別名
+                                            <button onClick={() => toggleKeywords(false)} className="text-green-400 hover:text-red-500 transition-colors"><X size={11} /></button>
+                                        </span>
+                                    ) : (
+                                        <button onClick={() => toggleKeywords(true)} className="flex items-center gap-1 px-3 py-1.5 border border-dashed border-slate-300 text-slate-400 rounded-lg text-xs hover:bg-slate-50 transition-colors">
+                                            <Plus size={11} />別名
+                                        </button>
+                                    )}
+                                </div>
+                            </div>
+                            {/* 自訂欄位 */}
+                            <div>
+                                <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">自訂欄位 <span className="text-slate-300 normal-case font-normal">({productFieldSchema.length}/8)</span></div>
+                                <div className="flex flex-wrap gap-2 mb-3">
+                                    {productFieldSchema.map(f => (
+                                        <span key={f.key} className="flex items-center gap-1.5 px-3 py-1.5 bg-green-50 border border-green-200 text-green-700 rounded-lg text-xs font-bold">
+                                            {f.label}
+                                            <button onClick={() => removeCustomField(f.key)} className="text-green-400 hover:text-red-500 transition-colors"><X size={11} /></button>
+                                        </span>
+                                    ))}
+                                </div>
+                                <div className="flex gap-2">
+                                    <input
+                                        type="text"
+                                        value={modalFieldLabel}
+                                        onChange={(e) => setModalFieldLabel(e.target.value)}
+                                        onKeyDown={(e) => { if (e.key === 'Enter') addCustomField(modalFieldLabel); }}
+                                        placeholder="輸入欄位名稱..."
+                                        maxLength={20}
+                                        className="flex-1 px-3 py-2 border border-slate-200 rounded-lg text-xs focus:ring-2 focus:ring-green-500/20 focus:border-green-500 outline-none transition-all"
+                                    />
+                                    <button
+                                        onClick={() => addCustomField(modalFieldLabel)}
+                                        className="px-3 py-2 bg-green-500 text-white text-xs font-bold rounded-lg hover:bg-green-600 transition-colors"
+                                    >
+                                        新增
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        <div className="px-6 py-4 border-t border-slate-100 flex justify-end">
+                            <button onClick={() => { setFieldSettingsOpen(false); setModalFieldLabel(''); }} className="px-5 py-2 bg-slate-800 text-white text-sm font-bold rounded-xl hover:bg-slate-700 transition-colors">完成</button>
                         </div>
                     </div>
                 </div>
