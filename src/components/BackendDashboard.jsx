@@ -63,6 +63,7 @@ import ActivityLogView from './ActivityLogView';
 import BillingView from './BillingView';
 import ConfirmDialog from './ConfirmDialog';
 import ImageLightbox from './ImageLightbox';
+import LineDeployGuide from './LineDeployGuide';
 import { useAuth } from '../context/AuthContext';
 
 const SUB_SECTION_MAP = {
@@ -369,6 +370,7 @@ const BackendDashboard = () => {
 
     // LINE Integration states
     const [isLineModalOpen, setIsLineModalOpen] = useState(false);
+    const [showLineGuide, setShowLineGuide] = useState(false);
 
     // Telegram Integration states
     const [isTelegramModalOpen, setIsTelegramModalOpen] = useState(false);
@@ -3740,6 +3742,22 @@ const BackendDashboard = () => {
                                         />
                                     </div>
                                 </div>
+                                <div className="p-4 bg-amber-50 rounded-2xl border border-amber-100 flex gap-3">
+                                    <div className="text-amber-500 mt-0.5"><Lightbulb size={20} /></div>
+                                    <div className="flex-1">
+                                        <h4 className="font-bold text-amber-800 text-sm mb-1">不知道去哪裡找？</h4>
+                                        <p className="text-xs text-amber-700 leading-relaxed">
+                                            我們準備了完整教學，
+                                            <button
+                                                onClick={() => setShowLineGuide(true)}
+                                                className="underline font-bold hover:text-amber-900 mx-1"
+                                            >
+                                                點此查看如何取得 Token 與 Secret
+                                            </button>
+                                            。
+                                        </p>
+                                    </div>
+                                </div>
                             </div>
 
                             {/* Modal Footer */}
@@ -4613,6 +4631,14 @@ const BackendDashboard = () => {
             )}
 
             {/* 共用確認彈窗 */}
+            {showLineGuide && (
+                <LineDeployGuide
+                    onClose={() => setShowLineGuide(false)}
+                    lineConfig={lineConfig}
+                    setLineConfig={setLineConfig}
+                />
+            )}
+
             <ConfirmDialog
                 isOpen={confirmDialog.isOpen}
                 title={confirmDialog.title}
