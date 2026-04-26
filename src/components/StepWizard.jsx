@@ -3,7 +3,7 @@ import { Bot, ArrowLeft, ArrowRight, Trash2, Plus, CheckCircle2, Globe, Sparkles
 import axios from 'axios';
 import Cookies from 'js-cookie';
 import config from '../config';
-import { ToneType, DEFAULT_HANDOFF_OPTIONS } from '../types';
+import { ToneType, TONE_PROMPTS, DEFAULT_HANDOFF_OPTIONS } from '../types';
 
 const StepWizard = ({ formData, setFormData, onComplete }) => {
     const [qIndex, setQIndex] = useState(0);
@@ -132,22 +132,40 @@ const StepWizard = ({ formData, setFormData, onComplete }) => {
 
     const renderQ2 = () => (
         <div className="space-y-4">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="flex flex-wrap gap-2">
                 {Object.values(ToneType).map((tone) => (
-                    <label key={tone} className={`flex items-center p-4 border rounded-xl cursor-pointer transition-all ${formData.tone === tone ? 'border-brand-500 bg-brand-50' : 'border-slate-200 hover:border-brand-300'}`}>
-                        <input
-                            type="radio"
-                            name="tone"
-                            value={tone}
-                            checked={formData.tone === tone}
-                            onChange={() => updateField('tone', tone)}
-                            className="w-4 h-4 text-brand-600 focus:ring-brand-500 border-gray-300"
-                        />
-                        <span className="ml-3 text-slate-700">{tone}</span>
-                    </label>
+                    <button
+                        key={tone}
+                        type="button"
+                        onClick={() => updateField('tone', tone)}
+                        className={`px-4 py-2.5 rounded-xl font-medium text-sm transition-all border ${formData.tone === tone ? 'border-brand-500 bg-brand-50 text-brand-700' : 'border-slate-200 text-slate-600 hover:border-brand-300 hover:bg-slate-50'}`}
+                    >
+                        {tone}
+                    </button>
                 ))}
             </div>
-            <div className="mt-4">
+            {formData.tone === '自定義' ? (
+                <div>
+                    <label className="block text-sm font-medium text-slate-600 mb-2">自定義語氣指令</label>
+                    <div className="relative">
+                        <textarea
+                            rows={3}
+                            className="w-full p-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-brand-500 text-sm resize-none"
+                            placeholder="描述 AI 應該如何回覆，例如：以台灣在地化的語氣，用詞親切但不失禮貌，適時加入輕鬆的表達..."
+                            value={formData.toneCustom || ''}
+                            maxLength={200}
+                            onChange={(e) => updateField('toneCustom', e.target.value)}
+                        />
+                        <div className="text-[10px] text-slate-400 text-right pr-2 mt-1">{(formData.toneCustom || '').length}/200</div>
+                    </div>
+                </div>
+            ) : (
+                <div className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-3">
+                    <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">AI Prompt 預覽</div>
+                    <p className="text-sm text-slate-600">{TONE_PROMPTS[formData.tone] || ''}</p>
+                </div>
+            )}
+            <div className="mt-2">
                 <label className="block text-sm font-medium text-slate-600 mb-2">你希望避免的語氣/用詞？（選填）</label>
                 <div className="relative">
                     <input

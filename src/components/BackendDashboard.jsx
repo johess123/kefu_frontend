@@ -57,7 +57,7 @@ import {
     LogOut
 } from 'lucide-react';
 import Cookies from 'js-cookie';
-import { DEFAULT_HANDOFF_OPTIONS } from '../types';
+import { DEFAULT_HANDOFF_OPTIONS, ToneType, TONE_PROMPTS } from '../types';
 import InboxView from './InboxView';
 import ConversationAnalystView from './ConversationAnalystView';
 import ActivityLogView from './ActivityLogView';
@@ -420,7 +420,8 @@ const BackendDashboard = () => {
         services: '',
         website_url: '',
         tone: '親切有溫度',
-        tone_avoid: ''
+        tone_avoid: '',
+        tone_custom: ''
     });
     const [isStatsLoading, setIsStatsLoading] = useState(false);
     const [showAllHistory, setShowAllHistory] = useState(false);
@@ -751,7 +752,8 @@ const BackendDashboard = () => {
                 services: rawConfig.services || '',
                 website_url: rawConfig.website_url || '',
                 tone: rawConfig.tone || '親切有溫度',
-                tone_avoid: rawConfig.tone_avoid || ''
+                tone_avoid: rawConfig.tone_avoid || '',
+                tone_custom: rawConfig.tone_custom || ''
             });
 
             // Sync LINE config
@@ -2782,17 +2784,38 @@ const BackendDashboard = () => {
                                                             <div className="p-8 space-y-8">
                                                                 <div>
                                                                     <label className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4 block">選擇語氣</label>
-                                                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                                                                        {['親切有溫度', '專業簡潔', '像朋友聊天', '活潑可愛'].map(t => (
+                                                                    <div className="flex flex-wrap gap-3 mb-4">
+                                                                        {Object.values(ToneType).map(t => (
                                                                             <button
                                                                                 key={t}
                                                                                 onClick={() => setRootConfig({ ...rootConfig, tone: t })}
-                                                                                className={`py-4 rounded-2xl font-bold text-sm transition-all border ${rootConfig.tone === t ? 'bg-brand-50 border-brand-500 text-brand-600 shadow-sm' : 'bg-white border-slate-100 text-slate-500 hover:bg-slate-50'}`}
+                                                                                className={`px-5 py-3 rounded-2xl font-bold text-sm transition-all border ${rootConfig.tone === t ? 'bg-brand-50 border-brand-500 text-brand-600 shadow-sm' : 'bg-white border-slate-100 text-slate-500 hover:bg-slate-50'}`}
                                                                             >
                                                                                 {t}
                                                                             </button>
                                                                         ))}
                                                                     </div>
+                                                                    {rootConfig.tone === '自定義' ? (
+                                                                        <div>
+                                                                            <label className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 block">自定義語氣指令</label>
+                                                                            <div className="relative">
+                                                                                <textarea
+                                                                                    value={rootConfig.tone_custom}
+                                                                                    maxLength={200}
+                                                                                    rows={3}
+                                                                                    onChange={(e) => setRootConfig({ ...rootConfig, tone_custom: e.target.value })}
+                                                                                    className="w-full px-6 py-4 bg-slate-900 text-white rounded-2xl outline-none placeholder:text-slate-600 border border-slate-800 focus:border-brand-500 transition-all text-sm resize-none"
+                                                                                    placeholder="描述 AI 應該如何回覆，例如：以台灣在地化的語氣，用詞親切但不失禮貌，適時加入輕鬆的表達..."
+                                                                                />
+                                                                                <div className="text-[10px] text-slate-500 text-right pr-4 mt-1">{(rootConfig.tone_custom || '').length}/200</div>
+                                                                            </div>
+                                                                        </div>
+                                                                    ) : (
+                                                                        <div className="bg-slate-50 border border-slate-200 rounded-2xl px-5 py-4">
+                                                                            <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">AI Prompt 預覽</div>
+                                                                            <p className="text-sm text-slate-600">{TONE_PROMPTS[rootConfig.tone] || ''}</p>
+                                                                        </div>
+                                                                    )}
                                                                 </div>
                                                                 <div>
                                                                     <label className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3 block">避免用詞 (Negative Prompt)</label>
