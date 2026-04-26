@@ -2846,14 +2846,14 @@ const BackendDashboard = () => {
                                                         <div className="px-2">
                                                             <div className="text-slate-500 text-[11px] font-bold uppercase tracking-wider mb-1">今日對話</div>
                                                             <div className="text-2xl font-bold tracking-tight">
-                                                                {isStatsLoading ? '...' : (tokenStats?.daily_stats?.today_chats || 128)}
+                                                                {isStatsLoading ? '...' : (tokenStats?.daily_stats?.today_chats ?? 0)}
                                                             </div>
                                                         </div>
                                                         <div className="w-px h-10 bg-white/10 hidden md:block"></div>
                                                         <div className="px-2">
                                                             <div className="text-slate-500 text-[11px] font-bold uppercase tracking-wider mb-1">健康度</div>
                                                             <div className="text-2xl font-bold text-[#4ade80] tracking-tight">
-                                                                {isStatsLoading ? '...' : (tokenStats?.daily_stats?.health_score || 100)}%
+                                                                {isStatsLoading ? '...' : (tokenStats?.daily_stats?.health_score ?? 0)}%
                                                             </div>
                                                         </div>
                                                     </div>
