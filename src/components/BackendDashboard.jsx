@@ -53,7 +53,8 @@ import {
     FileSpreadsheet,
     Activity,
     FolderInput,
-    GripVertical
+    GripVertical,
+    LogOut
 } from 'lucide-react';
 import Cookies from 'js-cookie';
 import { DEFAULT_HANDOFF_OPTIONS } from '../types';
@@ -350,7 +351,8 @@ const FlexPreviewCard = ({ templateType, formData, userName, brandName, showSeco
 };
 
 const BackendDashboard = () => {
-    const { userId, userName, userEmail, userPicture, userBalance, refreshUserBalance } = useAuth();
+    const { userId, userName, userEmail, userPicture, userBalance, refreshUserBalance, logout } = useAuth();
+    const [showUserMenu, setShowUserMenu] = useState(false);
     const { agentId: routeAgentId, '*': remainingPath } = useParams();
     const pathParts = (remainingPath || '').split('/').filter(Boolean);
     const section = pathParts[0] || undefined;
@@ -1729,17 +1731,44 @@ const BackendDashboard = () => {
                             <Plus size={16} />
                             建立新 Agent
                         </button>
-                        <div className="hidden sm:flex items-center gap-4 border-l border-slate-100 pl-4 ml-4">
-                            <div className="text-right">
-                                <div className="text-xs font-bold text-slate-900">{userName || '管理員'}</div>
-                                <div className="text-[10px] text-slate-400">{userEmail || ''}</div>
-                            </div>
-                            {userPicture ? (
-                                <img src={userPicture} alt="avatar" className="w-10 h-10 rounded-xl object-cover" />
-                            ) : (
-                                <div className="w-10 h-10 bg-slate-700 rounded-xl flex items-center justify-center text-white font-bold text-sm">
-                                    {(userName || userEmail || '?')[0].toUpperCase()}
+                        <div className="relative hidden sm:block border-l border-slate-100 pl-4 ml-4">
+                            <button
+                                onClick={() => setShowUserMenu(v => !v)}
+                                className="flex items-center gap-2 pl-1 pr-2 py-1.5 rounded-xl hover:bg-slate-100 transition-colors cursor-pointer"
+                            >
+                                <div className="text-right">
+                                    <div className="text-xs font-bold text-slate-900">{userName || '管理員'}</div>
+                                    <div className="text-[10px] text-slate-400">{userEmail || ''}</div>
                                 </div>
+                                {userPicture ? (
+                                    <img src={userPicture} alt="avatar" className="w-10 h-10 rounded-xl object-cover" />
+                                ) : (
+                                    <div className="w-10 h-10 bg-slate-700 rounded-xl flex items-center justify-center text-white font-bold text-sm">
+                                        {(userName || userEmail || '?')[0].toUpperCase()}
+                                    </div>
+                                )}
+                                <ChevronDown size={14} className={`text-slate-400 transition-transform ${showUserMenu ? 'rotate-180' : ''}`} />
+                            </button>
+                            {showUserMenu && (
+                                <>
+                                    <div className="fixed inset-0 z-10" onClick={() => setShowUserMenu(false)} />
+                                    <div className="absolute right-0 top-full mt-2 w-56 bg-white rounded-xl shadow-xl border border-slate-200 z-20 overflow-hidden">
+                                        <div className="px-4 py-3 border-b border-slate-100">
+                                            <p className="text-xs font-semibold text-slate-800">{userName}</p>
+                                            <p className="text-xs text-slate-400 truncate">{userEmail}</p>
+                                        </div>
+                                        <button
+                                            onClick={() => {
+                                                setShowUserMenu(false);
+                                                openConfirm({ title: '確認登出', message: '確定要登出嗎？', onConfirm: logout, confirmText: '登出', variant: 'danger' });
+                                            }}
+                                            className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-red-500 hover:bg-red-50 transition-colors cursor-pointer"
+                                        >
+                                            <LogOut size={15} />
+                                            登出
+                                        </button>
+                                    </div>
+                                </>
                             )}
                         </div>
                         {/* Menu icon in top right as per Image 3/4 */}
