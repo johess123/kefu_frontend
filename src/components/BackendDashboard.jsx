@@ -353,6 +353,7 @@ const FlexPreviewCard = ({ templateType, formData, userName, brandName, showSeco
 const BackendDashboard = () => {
     const { userId, userName, userEmail, userPicture, userBalance, refreshUserBalance, logout } = useAuth();
     const [showUserMenu, setShowUserMenu] = useState(false);
+    const [agentCount, setAgentCount] = useState(null);
     const { agentId: routeAgentId, '*': remainingPath } = useParams();
     const pathParts = (remainingPath || '').split('/').filter(Boolean);
     const section = pathParts[0] || undefined;
@@ -710,6 +711,14 @@ const BackendDashboard = () => {
                 })
                 .catch(err => console.error('Failed to fetch agent:', err));
         }
+    }, []);
+
+    useEffect(() => {
+        const uid = Cookies.get('google_user_id');
+        if (!uid) return;
+        axios.get(`${config.API_URL}/api/admin/agents`, { params: { userId: uid } })
+            .then(res => setAgentCount(res.data.length))
+            .catch(() => setAgentCount(0));
     }, []);
 
     useEffect(() => {
@@ -1669,9 +1678,16 @@ const BackendDashboard = () => {
                                     <h6 className="text-sm font-bold text-slate-900 truncate">{userName || '管理員'}</h6>
                                     <p className="text-[10px] text-slate-500 truncate">{userEmail || ''}</p>
                                 </div>
-                                <button onClick={() => navigate('/')} className="text-slate-400 hover:text-slate-600">
-                                    <ExternalLink size={16} />
-                                </button>
+                                {agentCount > 1 && (
+                                    <button
+                                        onClick={() => navigate('/')}
+                                        className="flex items-center gap-1 text-xs text-slate-400 hover:text-brand-600 font-medium transition-colors flex-shrink-0"
+                                        title="切換虛擬團隊"
+                                    >
+                                        <LayoutGrid size={13} />
+                                        切換
+                                    </button>
+                                )}
                             </div>
                             <div className="flex items-center justify-between bg-white rounded-lg p-2 border border-slate-100">
                                 <div className="flex items-center gap-1">
