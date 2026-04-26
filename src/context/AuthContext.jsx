@@ -60,12 +60,7 @@ export const AuthProvider = ({ children }) => {
         Cookies.remove('google_user_email');
         Cookies.remove('google_user_picture');
         Cookies.remove('is_monitor');
-        setIsAuthorized(false);
-        setUserId(null);
-        setUserName(null);
-        setUserEmail(null);
-        setUserPicture(null);
-        setIsMonitorAllowed(false);
+        window.location.replace('/');
     };
 
     const refreshUserBalance = async (id = userId) => {
