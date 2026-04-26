@@ -53,7 +53,12 @@ const AgentHome = () => {
                 const response = await axios.get(`${config.API_URL}/api/admin/agents`, {
                     params: { userId: userId }
                 });
-                setAgents(response.data);
+                const data = response.data;
+                if (data.length === 1) {
+                    navigate(`/agent/${data[0]._id}`, { replace: true });
+                    return;
+                }
+                setAgents(data);
             } catch (error) {
                 console.error('Failed to fetch agents:', error);
             } finally {

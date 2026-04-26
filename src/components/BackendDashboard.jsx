@@ -1722,6 +1722,13 @@ const BackendDashboard = () => {
                             <Bell size={20} />
                             <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full border-2 border-white"></span>
                         </button> */}
+                        <button
+                            onClick={() => navigate('/wizard/new')}
+                            className="hidden sm:flex items-center gap-2 bg-brand-600 hover:bg-brand-700 text-white font-semibold py-2 px-4 rounded-xl transition-all shadow-md shadow-brand-100 active:scale-95 text-sm"
+                        >
+                            <Plus size={16} />
+                            建立新 Agent
+                        </button>
                         <div className="hidden sm:flex items-center gap-4 border-l border-slate-100 pl-4 ml-4">
                             <div className="text-right">
                                 <div className="text-xs font-bold text-slate-900">{userName || '管理員'}</div>
