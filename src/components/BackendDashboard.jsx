@@ -2861,6 +2861,7 @@ const BackendDashboard = () => {
                                     );
                                 }
                                 return (
+                                    <>
                                     <div className="max-w-7xl">
                                         <div className="mb-10 flex justify-between items-start">
                                             <div>
@@ -3005,6 +3006,7 @@ const BackendDashboard = () => {
                                             setShowTeamTour(false);
                                         }}
                                     />
+                                    </>
                                 );
                             case 'crm':
                                 const filteredCrmUsers = crmUsers.filter(user => {
