@@ -68,6 +68,9 @@ import LineDeployGuide from './LineDeployGuide';
 import NotifyBanner from './NotifyBanner';
 import SpotlightTour from './SpotlightTour';
 import OnboardingChecklist from './OnboardingChecklist';
+import InboxIntroModal from './InboxIntroModal';
+import ActivityIntroModal from './ActivityIntroModal';
+import CrmIntroModal from './CrmIntroModal';
 import { useAuth } from '../context/AuthContext';
 
 const SUB_SECTION_MAP = {
@@ -461,6 +464,15 @@ const BackendDashboard = () => {
     const analystCardRef = React.useRef(null);
     const [showTeamTour, setShowTeamTour] = useState(
         () => !localStorage.getItem('kefu_team_tour_done_v1')
+    );
+    const [showInboxIntro, setShowInboxIntro] = useState(
+        () => !localStorage.getItem('kefu_intro_inbox_v1')
+    );
+    const [showActivityIntro, setShowActivityIntro] = useState(
+        () => !localStorage.getItem('kefu_intro_activity_v1')
+    );
+    const [showCrmIntro, setShowCrmIntro] = useState(
+        () => !localStorage.getItem('kefu_intro_crm_v1')
     );
     const [productFieldSchema, setProductFieldSchema] = useState([]);
     const [keywordsEnabled, setKeywordsEnabled] = useState(true);
@@ -3330,12 +3342,41 @@ const BackendDashboard = () => {
                                                 </div>
                                             </>
                                         )}
+                                        <CrmIntroModal
+                                            isOpen={showCrmIntro}
+                                            onClose={() => {
+                                                localStorage.setItem('kefu_intro_crm_v1', '1');
+                                                setShowCrmIntro(false);
+                                            }}
+                                        />
                                     </>
                                 );
                             case 'activity-logs':
-                                return <ActivityLogView agentId={routeAgentId} userId={currentAgent?.admin_id} />;
+                                return (
+                                    <>
+                                        <ActivityLogView agentId={routeAgentId} userId={currentAgent?.admin_id} />
+                                        <ActivityIntroModal
+                                            isOpen={showActivityIntro}
+                                            onClose={() => {
+                                                localStorage.setItem('kefu_intro_activity_v1', '1');
+                                                setShowActivityIntro(false);
+                                            }}
+                                        />
+                                    </>
+                                );
                             case 'inbox':
-                                return <InboxView currentAgent={currentAgent} />;
+                                return (
+                                    <>
+                                        <InboxView currentAgent={currentAgent} />
+                                        <InboxIntroModal
+                                            isOpen={showInboxIntro}
+                                            onClose={() => {
+                                                localStorage.setItem('kefu_intro_inbox_v1', '1');
+                                                setShowInboxIntro(false);
+                                            }}
+                                        />
+                                    </>
+                                );
                             case 'billing':
                                 return <BillingView />;
                             case 'channels':
