@@ -456,6 +456,7 @@ const BackendDashboard = () => {
     const [productFileName, setProductFileName] = useState('');
     const productFileRef = React.useRef(null);
     const kbCardRef = React.useRef(null);
+    const escalationCardRef = React.useRef(null);
     const [showTeamTour, setShowTeamTour] = useState(
         () => !localStorage.getItem('kefu_team_tour_done_v1')
     );
@@ -2928,7 +2929,7 @@ const BackendDashboard = () => {
                                                 {teamSubagents.map((sub, idx) => (
                                                     <div
                                                         key={idx}
-                                                        ref={idx === 0 ? kbCardRef : null}
+                                                        ref={idx === 0 ? kbCardRef : idx === 1 ? escalationCardRef : null}
                                                         onClick={() => {
                                                             const sub_path = EDITING_TO_SUB[sub.name];
                                                             if (sub_path) navigate('/agent/' + routeAgentId + '/agents/' + sub_path);
@@ -2991,20 +2992,29 @@ const BackendDashboard = () => {
                                         </div>
                                     </div>
                                     <SpotlightTour
-                                        isOpen={showTeamTour}
-                                        targetRef={kbCardRef}
-                                        title="先從「客服專員」開始設定"
-                                        description="客服專員是 AI 回答客戶問題的核心，負責管理 FAQ 知識庫。進入設定後，新增您的常見問答，AI 才能準確回覆客戶。"
-                                        ctaLabel="前往設定客服專員"
-                                        onCta={() => {
-                                            localStorage.setItem('kefu_team_tour_done_v1', '1');
-                                            setShowTeamTour(false);
-                                            navigate(`/agent/${routeAgentId}/agents/knowledge-base`);
-                                        }}
+                                        isOpen={showTeamTour && teamSubagents.length > 0}
                                         onClose={() => {
                                             localStorage.setItem('kefu_team_tour_done_v1', '1');
                                             setShowTeamTour(false);
                                         }}
+                                        steps={[
+                                            {
+                                                targetRef: kbCardRef,
+                                                title: '客服專員（Knowledge Base）',
+                                                description: '管理 FAQ 知識庫與商品目錄，是 AI 回答客戶問題的核心依據。先在這裡新增您的常見問答，AI 才能準確回覆客戶。',
+                                            },
+                                            {
+                                                targetRef: escalationCardRef,
+                                                title: '協作專員（Escalation Manager）',
+                                                description: '設定轉人工的觸發條件，並指定通知接收者。當顧客需要真人協助時，系統會自動通知您的團隊成員。',
+                                                ctaLabel: '開始設定客服專員',
+                                                onCta: () => {
+                                                    localStorage.setItem('kefu_team_tour_done_v1', '1');
+                                                    setShowTeamTour(false);
+                                                    navigate(`/agent/${routeAgentId}/agents/knowledge-base`);
+                                                },
+                                            },
+                                        ]}
                                     />
                                     </>
                                 );

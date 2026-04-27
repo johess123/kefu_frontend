@@ -1,63 +1,87 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { X, ArrowRight } from 'lucide-react';
+import { X, ArrowRight, ChevronRight } from 'lucide-react';
 
 /**
- * Generic spotlight tour component.
- * Elevates a target element above a dark overlay and shows a positioned tooltip.
+ * Multi-step spotlight tour component.
  *
  * Props:
- *   isOpen      boolean
- *   onClose     () => void
+ *   isOpen   boolean
+ *   onClose  () => void
+ *   steps    StepDef[]
+ *
+ * StepDef:
  *   targetRef   React.RefObject — element to spotlight
  *   title       string
  *   description string
- *   ctaLabel?   string
- *   onCta?      () => void
+ *   ctaLabel?   string          — overrides default finish button text on last step
+ *   onCta?      () => void      — called when finish button is clicked on last step
  */
-const SpotlightTour = ({ isOpen, onClose, targetRef, title, description, ctaLabel, onCta }) => {
+const SpotlightTour = ({ isOpen, onClose, steps = [] }) => {
+    const [stepIndex, setStepIndex] = useState(0);
     const [highlightRect, setHighlightRect] = useState(null);
     const [tooltipPos, setTooltipPos] = useState({ top: 0, left: 0, below: true });
 
-    const computePositions = useCallback(() => {
-        if (!targetRef?.current) return;
-        const rect = targetRef.current.getBoundingClientRect();
-        setHighlightRect({
-            top: rect.top - 4,
-            left: rect.left - 4,
-            width: rect.width + 8,
-            height: rect.height + 8,
-        });
-        const tooltipHeight = 220;
-        const below = rect.bottom + 16 + tooltipHeight < window.innerHeight;
-        setTooltipPos({
-            top: below ? rect.bottom + 16 : rect.top - tooltipHeight - 16,
-            left: Math.min(rect.left, window.innerWidth - 360),
-            below,
-        });
-    }, [targetRef]);
+    const currentStep = steps[stepIndex];
+    const isLast = stepIndex === steps.length - 1;
 
-    // Elevate target element above overlay
+    const computePos = useCallback(() => {
+        const el = currentStep?.targetRef?.current;
+        if (!el) return;
+        // Defer until after browser paint so getBoundingClientRect is accurate
+        requestAnimationFrame(() => {
+            const r = el.getBoundingClientRect();
+            if (!r.width && !r.height) return; // element not visible yet, skip
+
+            setHighlightRect({
+                top: r.top - 6,
+                left: r.left - 6,
+                width: r.width + 12,
+                height: r.height + 12,
+            });
+
+            const tooltipW = 340;
+            const tooltipH = 260;
+            const below = r.bottom + 16 + tooltipH < window.innerHeight;
+            const top = below ? r.bottom + 16 : r.top - tooltipH - 16;
+            const left = Math.max(16, Math.min(r.left, window.innerWidth - tooltipW - 16));
+            setTooltipPos({ top, left, below });
+        });
+    }, [currentStep]);
+
+    // Elevate only current step's target above the overlay
     useEffect(() => {
-        if (!targetRef?.current) return;
-        if (isOpen) {
-            targetRef.current.style.zIndex = '51';
-            targetRef.current.style.position = 'relative';
+        if (!isOpen) {
+            steps.forEach(s => {
+                if (s.targetRef?.current) {
+                    s.targetRef.current.style.zIndex = '';
+                    s.targetRef.current.style.position = '';
+                }
+            });
+            return;
         }
-        return () => {
-            if (targetRef?.current) {
-                targetRef.current.style.zIndex = '';
-                targetRef.current.style.position = '';
-            }
-        };
-    }, [isOpen, targetRef]);
+        steps.forEach((s, i) => {
+            if (!s.targetRef?.current) return;
+            s.targetRef.current.style.zIndex = i === stepIndex ? '51' : '';
+            s.targetRef.current.style.position = i === stepIndex ? 'relative' : '';
+        });
+    }, [isOpen, stepIndex, steps]);
 
-    // Compute highlight & tooltip positions
+    // Recompute position on step change or open
     useEffect(() => {
         if (!isOpen) return;
-        computePositions();
-        window.addEventListener('resize', computePositions);
-        return () => window.removeEventListener('resize', computePositions);
-    }, [isOpen, computePositions]);
+        computePos();
+        window.addEventListener('resize', computePos);
+        window.addEventListener('scroll', computePos, true);
+        return () => {
+            window.removeEventListener('resize', computePos);
+            window.removeEventListener('scroll', computePos, true);
+        };
+    }, [isOpen, computePos]);
+
+    // Reset to first step whenever tour opens
+    useEffect(() => {
+        if (isOpen) setStepIndex(0);
+    }, [isOpen]);
 
     // ESC to close
     useEffect(() => {
@@ -67,7 +91,16 @@ const SpotlightTour = ({ isOpen, onClose, targetRef, title, description, ctaLabe
         return () => window.removeEventListener('keydown', handler);
     }, [isOpen, onClose]);
 
-    if (!isOpen) return null;
+    if (!isOpen || !currentStep) return null;
+
+    const handleNext = () => {
+        if (isLast) {
+            currentStep.onCta?.();
+            onClose();
+        } else {
+            setStepIndex(i => i + 1);
+        }
+    };
 
     return (
         <>
@@ -77,7 +110,7 @@ const SpotlightTour = ({ isOpen, onClose, targetRef, title, description, ctaLabe
                 onClick={onClose}
             />
 
-            {/* Pulsing highlight ring at target position */}
+            {/* Pulsing highlight ring */}
             {highlightRect && (
                 <div
                     className="fixed z-[51] rounded-[36px] pointer-events-none"
@@ -86,7 +119,7 @@ const SpotlightTour = ({ isOpen, onClose, targetRef, title, description, ctaLabe
                         left: highlightRect.left,
                         width: highlightRect.width,
                         height: highlightRect.height,
-                        boxShadow: '0 0 0 3px #4f46e5, 0 0 0 6px rgba(79,70,229,0.25)',
+                        boxShadow: '0 0 0 3px #4f46e5, 0 0 0 8px rgba(79,70,229,0.2)',
                         animation: 'spotlight-pulse 2s ease-in-out infinite',
                     }}
                 />
@@ -98,14 +131,16 @@ const SpotlightTour = ({ isOpen, onClose, targetRef, title, description, ctaLabe
                 style={{ top: tooltipPos.top, left: tooltipPos.left }}
                 onClick={(e) => e.stopPropagation()}
             >
-                {/* Arrow indicator */}
+                {/* Header */}
                 <div className="flex items-start gap-3 mb-4">
-                    <div className="w-9 h-9 bg-brand-50 rounded-xl flex items-center justify-center shrink-0">
-                        <ArrowRight size={18} className={`text-brand-600 ${tooltipPos.below ? '-rotate-90' : 'rotate-90'} transition-transform`} />
+                    <div className={`w-9 h-9 bg-brand-50 rounded-xl flex items-center justify-center shrink-0 transition-transform duration-300 ${tooltipPos.below ? '' : 'rotate-180'}`}>
+                        <ArrowRight size={18} className="text-brand-600 -rotate-90" />
                     </div>
-                    <div className="flex-1">
-                        <p className="text-[10px] font-bold text-brand-600 uppercase tracking-widest mb-0.5">從這裡開始</p>
-                        <h4 className="font-bold text-slate-800 text-base leading-tight">{title}</h4>
+                    <div className="flex-1 min-w-0">
+                        <p className="text-[10px] font-bold text-brand-500 uppercase tracking-widest mb-0.5">
+                            步驟 {stepIndex + 1} / {steps.length}
+                        </p>
+                        <h4 className="font-bold text-slate-800 text-base leading-tight">{currentStep.title}</h4>
                     </div>
                     <button
                         onClick={onClose}
@@ -115,8 +150,22 @@ const SpotlightTour = ({ isOpen, onClose, targetRef, title, description, ctaLabe
                     </button>
                 </div>
 
-                <p className="text-sm text-slate-600 leading-relaxed mb-5">{description}</p>
+                {/* Description */}
+                <p className="text-sm text-slate-600 leading-relaxed mb-5">{currentStep.description}</p>
 
+                {/* Progress dots */}
+                {steps.length > 1 && (
+                    <div className="flex justify-center gap-1.5 mb-4">
+                        {steps.map((_, i) => (
+                            <div
+                                key={i}
+                                className={`h-1.5 rounded-full transition-all duration-300 ${i === stepIndex ? 'w-5 bg-brand-600' : 'w-1.5 bg-slate-200'}`}
+                            />
+                        ))}
+                    </div>
+                )}
+
+                {/* Actions */}
                 <div className="flex gap-2">
                     <button
                         onClick={onClose}
@@ -124,22 +173,20 @@ const SpotlightTour = ({ isOpen, onClose, targetRef, title, description, ctaLabe
                     >
                         稍後再說
                     </button>
-                    {ctaLabel && onCta && (
-                        <button
-                            onClick={onCta}
-                            className="flex-1 py-2 rounded-xl bg-brand-600 text-white text-sm font-semibold hover:bg-brand-700 transition-colors flex items-center justify-center gap-1.5"
-                        >
-                            {ctaLabel}
-                            <ArrowRight size={14} />
-                        </button>
-                    )}
+                    <button
+                        onClick={handleNext}
+                        className="flex-1 py-2 rounded-xl bg-brand-600 text-white text-sm font-semibold hover:bg-brand-700 transition-colors flex items-center justify-center gap-1.5"
+                    >
+                        {isLast ? (currentStep.ctaLabel || '完成') : '下一個'}
+                        {isLast ? <ArrowRight size={14} /> : <ChevronRight size={14} />}
+                    </button>
                 </div>
             </div>
 
             <style>{`
                 @keyframes spotlight-pulse {
-                    0%, 100% { box-shadow: 0 0 0 3px #4f46e5, 0 0 0 6px rgba(79,70,229,0.25); }
-                    50% { box-shadow: 0 0 0 3px #4f46e5, 0 0 0 12px rgba(79,70,229,0.1); }
+                    0%, 100% { box-shadow: 0 0 0 3px #4f46e5, 0 0 0 8px rgba(79,70,229,0.2); }
+                    50%       { box-shadow: 0 0 0 3px #4f46e5, 0 0 0 16px rgba(79,70,229,0.08); }
                 }
             `}</style>
         </>
