@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useLocation, useNavigate } from 'react-router-dom';
 import { AppStep, DEFAULT_FORM_DATA, DEFAULT_HANDOFF_OPTIONS } from '../types';
 import StepWizard from '../components/StepWizard';
@@ -35,6 +35,7 @@ const WizardPage = () => {
     const [sessionId, setSessionId] = useState(null);
     const [agentId, setAgentId] = useState(null);
     const [isInitializing, setIsInitializing] = useState(true);
+    const didInit = useRef(false);
 
     const handleStartFilling = async (currentAgentId = null) => {
         const response = await fetch(`${config.API_URL}/api/init_session`);
@@ -45,13 +46,16 @@ const WizardPage = () => {
             setAgentId(currentAgentId);
         } else {
             setFormData(DEFAULT_FORM_DATA);
-            setAgentId(null);
+            const lineUserId = (await import('js-cookie')).default.get('google_user_id');
+            const draftRes = await axios.post(`${config.API_URL}/api/agents/draft`, { line_user_id: lineUserId });
+            setAgentId(draftRes.data.agent_id);
         }
         setCurrentStep(AppStep.WIZARD);
     };
 
     const parseAndLoadAgent = (agent) => {
-        const rawConfig = agent.config.raw_config;
+        const rawConfig = agent.config?.raw_config;
+        if (!rawConfig) return agent._id; // draft agent，沒有 config，直接帶 id 進 wizard
         let handoffTriggers = [];
         let handoffCustomTrigger = '';
         if (rawConfig.handoff_logic) {
@@ -77,6 +81,8 @@ const WizardPage = () => {
     };
 
     useEffect(() => {
+        if (didInit.current) return;
+        didInit.current = true;
         const init = async () => {
             try {
                 if (routeAgentId) {
@@ -151,6 +157,7 @@ const WizardPage = () => {
                     <StepWizard
                         formData={formData}
                         setFormData={setFormData}
+                        agentId={agentId}
                         onComplete={() => {
                             setReviewData(null);
                             setCurrentStep(AppStep.REVIEW);

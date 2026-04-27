@@ -18,7 +18,6 @@ import {
     BarChart3,
     Package,
     Timer,
-    Hash,
 } from 'lucide-react';
 
 /* ── Action badge types ── */
@@ -27,6 +26,7 @@ const ACTION_BADGES = {
     handoff: { label: 'HANDOFF', className: 'bg-red-100 text-red-700' },
     reply: { label: 'REPLY', className: 'bg-blue-100 text-blue-700' },
     analysis: { label: 'ANALYSIS', className: 'bg-purple-100 text-purple-700' },
+    build: { label: 'BUILD', className: 'bg-indigo-100 text-indigo-700' },
 };
 
 /* ── Agent identity mapping ── */
@@ -36,6 +36,7 @@ const AGENT_IDENTITY = {
     product_expert: { name: '商品庫專員', dot: 'bg-emerald-500' },
     handoff_expert: { name: '協作專員', dot: 'bg-orange-500' },
     conversation_analyst: { name: '數據分析師', dot: 'bg-purple-500' },
+    builder: { name: 'Agent 建置', dot: 'bg-indigo-500' },
 };
 
 const SUBAGENT_PILL = {
@@ -43,6 +44,7 @@ const SUBAGENT_PILL = {
     product_expert: 'bg-emerald-50 text-emerald-700 border-emerald-200',
     handoff_expert: 'bg-orange-50 text-orange-700 border-orange-200',
     conversation_analyst: 'bg-purple-50 text-purple-700 border-purple-200',
+    builder: 'bg-indigo-50 text-indigo-700 border-indigo-200',
 };
 
 const SOURCE_DOT = {
@@ -50,6 +52,7 @@ const SOURCE_DOT = {
     Telegram: 'bg-blue-500',
     test: 'bg-slate-400',
     analysis: 'bg-purple-500',
+    build: 'bg-indigo-500',
 };
 
 /* ── Derive card metadata from log entry ── */
@@ -57,18 +60,30 @@ const SOURCE_DOT = {
 function deriveCardMeta(log) {
     const events = log.events || [];
     const isAnalysis = log.log_type === 'analysis';
+    const isBuild = log.source === 'build' || (log.log_type && log.log_type.startsWith('build_'));
 
-    // Find primary event (priority: handoff > product > faq > analysis)
+    // Find primary event (priority: handoff > product > faq > analysis > build)
     const handoffEvt = events.find(e => e.action === 'handoff_triggered');
     const productEvt = events.find(e => e.action === 'product_matched');
     const faqEvt = events.find(e => e.action === 'faq_matched');
     const analysisEvt = events.find(e => e.action === 'analysis_completed');
+    const buildEvt = events.find(e => ['faq_generated', 'faq_optimized', 'faq_health_checked', 'website_crawled', 'form_parsed'].includes(e.action));
 
     let agentKey = 'faq_expert';
     let actionType = 'reply';
     let summary = '';
 
-    if (isAnalysis || analysisEvt) {
+    if (isBuild || buildEvt) {
+        agentKey = 'builder';
+        actionType = 'build';
+        const d = buildEvt?.detail || {};
+        if (buildEvt?.action === 'faq_generated') summary = `生成 FAQ ${d.count ?? 0} 筆`;
+        else if (buildEvt?.action === 'faq_optimized') summary = `優化 FAQ：${d.original_q || ''}`;
+        else if (buildEvt?.action === 'faq_health_checked') summary = `FAQ 健檢：評分 ${d.score ?? 0} 分，建議 ${d.suggestion_count ?? 0} 則`;
+        else if (buildEvt?.action === 'website_crawled') summary = `爬取網站：${d.url || ''}`;
+        else if (buildEvt?.action === 'form_parsed') summary = `解析表單：${d.merchant_name || ''}`;
+        else summary = '執行 Agent 建置操作';
+    } else if (isAnalysis || analysisEvt) {
         agentKey = 'conversation_analyst';
         actionType = 'analysis';
         const d = analysisEvt?.detail || {};
@@ -95,7 +110,7 @@ function deriveCardMeta(log) {
     const agent = AGENT_IDENTITY[agentKey] || { name: 'AI 主控', dot: 'bg-slate-400' };
     const badge = ACTION_BADGES[actionType];
 
-    return { agent, badge, summary, agentKey, actionType, events, isAnalysis, handoffEvt, faqEvt, productEvt, analysisEvt };
+    return { agent, badge, summary, agentKey, actionType, events, isAnalysis, isBuild, handoffEvt, faqEvt, productEvt, analysisEvt, buildEvt };
 }
 
 /* ── Build reasoning lines from events ── */
@@ -129,6 +144,24 @@ function buildReasoning(events) {
         } else if (evt.action === 'analysis_completed') {
             const d = evt.detail || {};
             lines.push(`分析 ${d.total_conversations ?? 0} 則對話，覆蓋率 ${d.coverage_rate ?? 0}%，產生 ${d.suggestions_generated ?? 0} 則建議。`);
+        } else if (evt.action === 'faq_generated') {
+            const d = evt.detail || {};
+            lines.push(`AI 生成 ${d.count ?? 0} 筆 FAQ。`);
+        } else if (evt.action === 'faq_optimized') {
+            const d = evt.detail || {};
+            lines.push(`優化 FAQ 問題。`);
+            if (d.original_q) pills.push({ label: `原始: ${d.original_q.slice(0, 30)}`, type: 'builder' });
+            if (d.optimized_q) pills.push({ label: `優化後: ${d.optimized_q.slice(0, 30)}`, type: 'builder' });
+        } else if (evt.action === 'faq_health_checked') {
+            const d = evt.detail || {};
+            lines.push(`FAQ 健檢完成，評分 ${d.score ?? 0} 分，產生 ${d.suggestion_count ?? 0} 則優化建議。`);
+        } else if (evt.action === 'website_crawled') {
+            const d = evt.detail || {};
+            lines.push(`爬取商家網站內容。`);
+            if (d.url) pills.push({ label: d.url.slice(0, 40), type: 'builder' });
+        } else if (evt.action === 'form_parsed') {
+            const d = evt.detail || {};
+            lines.push(`解析商家表單，識別商家名稱：${d.merchant_name || ''}。`);
         }
     }
 
@@ -214,10 +247,6 @@ const LogDetail = ({ log, meta }) => {
                     <span className="flex items-center gap-1">
                         <Timer size={11} />
                         {log.duration_ms?.toLocaleString()}ms
-                    </span>
-                    <span className="flex items-center gap-1">
-                        <Hash size={11} />
-                        {log.total_tokens?.toLocaleString()} tokens
                     </span>
                 </div>
                 <button
@@ -331,6 +360,7 @@ const ActivityLogView = ({ agentId, userId }) => {
                     <option value="Telegram">Telegram</option>
                     <option value="test">測試</option>
                     <option value="analysis">分析</option>
+                    <option value="build">建置</option>
                 </select>
                 <select
                     value={actionFilter}

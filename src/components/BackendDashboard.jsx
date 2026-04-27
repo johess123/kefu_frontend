@@ -1108,7 +1108,8 @@ const BackendDashboard = () => {
             const response = await axios.post(`${config.API_URL}/api/analyze_faqs`, {
                 brandDescription: currentAgent?.config?.raw_config?.services || currentAgent?.name || '',
                 faqs: editingFaqs.map((f, i) => ({ ...f, id: f.id || i.toString() })),
-                line_user_id: line_user_id
+                line_user_id: line_user_id,
+                agent_id: currentAgent?._id
             });
 
             if (response.data && !response.data.error) {
@@ -1174,7 +1175,8 @@ const BackendDashboard = () => {
             const response = await axios.post(`${config.API_URL}/api/optimize_faq`, {
                 question: faq.question,
                 answer: faq.answer,
-                line_user_id: line_user_id
+                line_user_id: line_user_id,
+                agent_id: currentAgent?._id
             });
 
             if (response.data && !response.data.error) {
