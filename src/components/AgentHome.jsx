@@ -4,6 +4,7 @@ import { Plus, Bot, Calendar, ArrowRight, Loader2, MessageCircle, ExternalLink, 
 import axios from 'axios';
 import config from '../config';
 import { useAuth } from '../context/AuthContext';
+import OnboardingModal from './OnboardingModal';
 
 const ConfirmModal = ({ icon, iconBg, iconColor, title, description, confirmText, confirmStyle, onConfirm, onCancel, loading }) => (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
@@ -42,6 +43,9 @@ const AgentHome = () => {
     const { userId, userName, userEmail, userPicture, isMonitorAllowed, logout } = useAuth();
     const [agents, setAgents] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [showOnboarding, setShowOnboarding] = useState(
+        () => !localStorage.getItem('kefu_onboarding_done_v1')
+    );
     const [showLogoutModal, setShowLogoutModal] = useState(false);
     const [showUserMenu, setShowUserMenu] = useState(false);
     const [deleteTarget, setDeleteTarget] = useState(null);
@@ -345,6 +349,14 @@ const AgentHome = () => {
                 onCancel={() => { if (!deleting) setDeleteTarget(null); }}
             />
         )}
+
+        <OnboardingModal
+            isOpen={showOnboarding && !loading}
+            onClose={() => {
+                localStorage.setItem('kefu_onboarding_done_v1', '1');
+                setShowOnboarding(false);
+            }}
+        />
         </>
     );
 };

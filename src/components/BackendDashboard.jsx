@@ -65,6 +65,7 @@ import BillingView from './BillingView';
 import ConfirmDialog from './ConfirmDialog';
 import ImageLightbox from './ImageLightbox';
 import LineDeployGuide from './LineDeployGuide';
+import NotifyBanner from './NotifyBanner';
 import { useAuth } from '../context/AuthContext';
 
 const SUB_SECTION_MAP = {
@@ -519,6 +520,7 @@ const BackendDashboard = () => {
     // CRM states
     const [crmUsers, setCrmUsers] = useState([]);
     const [isLoadingCrm, setIsLoadingCrm] = useState(false);
+    const [notifyBannerDismissed, setNotifyBannerDismissed] = useState(false);
     const [settingNotifyId, setSettingNotifyId] = useState(null);
     const [selectedCrmUser, setSelectedCrmUser] = useState(null);
     const [notifySearch, setNotifySearch] = useState('');
@@ -2460,6 +2462,9 @@ const BackendDashboard = () => {
                                                     </button>
                                                 </div>
                                             </div>
+                                            {!notifyBannerDismissed && !isLoadingCrm && crmUsers.length > 0 && !crmUsers.some(u => u.is_notify_target) && (
+                                                <NotifyBanner onDismiss={() => setNotifyBannerDismissed(true)} />
+                                            )}
                                             {/* 通知設定 Card */}
                                             <div className="bg-white rounded-[32px] border border-slate-200 shadow-xl shadow-slate-200/50 overflow-hidden mt-6">
                                                 <div className="p-8 border-b border-slate-100 bg-slate-50/30">

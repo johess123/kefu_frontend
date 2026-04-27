@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import config from '../config';
-import { Rocket, CheckCircle2, MessageCircle, ShieldCheck, Loader2, Home, Lightbulb, ExternalLink, ArrowRight } from 'lucide-react';
+import { Rocket, CheckCircle2, MessageCircle, ShieldCheck, Loader2, Home, Lightbulb, ExternalLink, ArrowRight, Bell } from 'lucide-react';
 import LineDeployGuide from './LineDeployGuide';
 
 const StepDeploy = ({ formData, sessionId, agentId, onHome }) => {
@@ -218,7 +218,22 @@ const StepDeploy = ({ formData, sessionId, agentId, onHome }) => {
                                 </div>
                             </div>
 
-                            <div className="flex justify-center">
+                            <div className="mt-6 p-5 bg-amber-50 border border-amber-200 rounded-2xl text-left">
+                                <div className="flex items-start gap-3">
+                                    <Bell size={18} className="text-amber-500 shrink-0 mt-0.5" />
+                                    <div>
+                                        <p className="text-sm font-bold text-amber-800 mb-1">
+                                            別忘了：設定轉人工通知接收者
+                                        </p>
+                                        <p className="text-xs text-amber-700 leading-relaxed">
+                                            回到後台後，請前往「AI 團隊管理 → 人機協作專員 → 通知設定」，
+                                            指定至少一位接收者。否則當顧客轉人工時，您將不會收到任何通知。
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="flex justify-center mt-4">
                                 <button
                                     onClick={onHome}
                                     className="w-full py-4 bg-brand-600 text-white rounded-2xl font-bold hover:bg-brand-700 transition-all shadow-xl shadow-brand-100 flex items-center justify-center gap-2 active:scale-95"
