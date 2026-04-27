@@ -457,6 +457,7 @@ const BackendDashboard = () => {
     const productFileRef = React.useRef(null);
     const kbCardRef = React.useRef(null);
     const escalationCardRef = React.useRef(null);
+    const analystCardRef = React.useRef(null);
     const [showTeamTour, setShowTeamTour] = useState(
         () => !localStorage.getItem('kefu_team_tour_done_v1')
     );
@@ -2929,7 +2930,7 @@ const BackendDashboard = () => {
                                                 {teamSubagents.map((sub, idx) => (
                                                     <div
                                                         key={idx}
-                                                        ref={idx === 0 ? kbCardRef : idx === 1 ? escalationCardRef : null}
+                                                        ref={idx === 0 ? kbCardRef : idx === 1 ? escalationCardRef : idx === 2 ? analystCardRef : null}
                                                         onClick={() => {
                                                             const sub_path = EDITING_TO_SUB[sub.name];
                                                             if (sub_path) navigate('/agent/' + routeAgentId + '/agents/' + sub_path);
@@ -3006,7 +3007,12 @@ const BackendDashboard = () => {
                                             {
                                                 targetRef: escalationCardRef,
                                                 title: '協作專員（Escalation Manager）',
-                                                description: '設定轉人工的觸發條件，並指定通知接收者。當顧客需要真人協助時，系統會自動通知您的團隊成員。',
+                                                description: '設定轉人工的觸發條件，並指定通知接收者。當顧客需要真人協助時，系統會自動通知指定的團隊成員。',
+                                            },
+                                            {
+                                                targetRef: analystCardRef,
+                                                title: '數據分析師（Conversation Analyst）',
+                                                description: '自動分析對話紀錄，找出 FAQ 覆蓋不足的問題並生成改善建議，幫助您持續優化 AI 客服品質。',
                                                 ctaLabel: '開始設定客服專員',
                                                 onCta: () => {
                                                     localStorage.setItem('kefu_team_tour_done_v1', '1');

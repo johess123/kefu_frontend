@@ -13,8 +13,8 @@ import { X, ArrowRight, ChevronRight } from 'lucide-react';
  *   targetRef   React.RefObject — element to spotlight
  *   title       string
  *   description string
- *   ctaLabel?   string          — overrides default finish button text on last step
- *   onCta?      () => void      — called when finish button is clicked on last step
+ *   ctaLabel?   string          — finish button label override (last step only)
+ *   onCta?      () => void      — called when finish button is clicked (last step)
  */
 const SpotlightTour = ({ isOpen, onClose, steps = [] }) => {
     const [stepIndex, setStepIndex] = useState(0);
@@ -27,10 +27,9 @@ const SpotlightTour = ({ isOpen, onClose, steps = [] }) => {
     const computePos = useCallback(() => {
         const el = currentStep?.targetRef?.current;
         if (!el) return;
-        // Defer until after browser paint so getBoundingClientRect is accurate
         requestAnimationFrame(() => {
             const r = el.getBoundingClientRect();
-            if (!r.width && !r.height) return; // element not visible yet, skip
+            if (!r.width && !r.height) return;
 
             setHighlightRect({
                 top: r.top - 6,
@@ -47,6 +46,26 @@ const SpotlightTour = ({ isOpen, onClose, steps = [] }) => {
             setTooltipPos({ top, left, below });
         });
     }, [currentStep]);
+
+    // On step change: scroll target into view, then compute position after scroll settles
+    useEffect(() => {
+        if (!isOpen) return;
+        const el = currentStep?.targetRef?.current;
+        if (!el) return;
+
+        // Scroll target to center of viewport, then wait for scroll animation
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+        const timer = setTimeout(computePos, 380); // ~300ms for smooth scroll
+        return () => clearTimeout(timer);
+    }, [isOpen, stepIndex]); // eslint-disable-line react-hooks/exhaustive-deps
+
+    // Recompute on window resize
+    useEffect(() => {
+        if (!isOpen) return;
+        window.addEventListener('resize', computePos);
+        return () => window.removeEventListener('resize', computePos);
+    }, [isOpen, computePos]);
 
     // Elevate only current step's target above the overlay
     useEffect(() => {
@@ -65,18 +84,6 @@ const SpotlightTour = ({ isOpen, onClose, steps = [] }) => {
             s.targetRef.current.style.position = i === stepIndex ? 'relative' : '';
         });
     }, [isOpen, stepIndex, steps]);
-
-    // Recompute position on step change or open
-    useEffect(() => {
-        if (!isOpen) return;
-        computePos();
-        window.addEventListener('resize', computePos);
-        window.addEventListener('scroll', computePos, true);
-        return () => {
-            window.removeEventListener('resize', computePos);
-            window.removeEventListener('scroll', computePos, true);
-        };
-    }, [isOpen, computePos]);
 
     // Reset to first step whenever tour opens
     useEffect(() => {
@@ -105,10 +112,7 @@ const SpotlightTour = ({ isOpen, onClose, steps = [] }) => {
     return (
         <>
             {/* Dark overlay */}
-            <div
-                className="fixed inset-0 z-50 bg-black/60"
-                onClick={onClose}
-            />
+            <div className="fixed inset-0 z-50 bg-black/60" onClick={onClose} />
 
             {/* Pulsing highlight ring */}
             {highlightRect && (
@@ -133,7 +137,7 @@ const SpotlightTour = ({ isOpen, onClose, steps = [] }) => {
             >
                 {/* Header */}
                 <div className="flex items-start gap-3 mb-4">
-                    <div className={`w-9 h-9 bg-brand-50 rounded-xl flex items-center justify-center shrink-0 transition-transform duration-300 ${tooltipPos.below ? '' : 'rotate-180'}`}>
+                    <div className={`w-9 h-9 bg-brand-50 rounded-xl flex items-center justify-center shrink-0 ${tooltipPos.below ? '' : 'rotate-180'} transition-transform duration-300`}>
                         <ArrowRight size={18} className="text-brand-600 -rotate-90" />
                     </div>
                     <div className="flex-1 min-w-0">
