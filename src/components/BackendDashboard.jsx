@@ -4890,6 +4890,9 @@ const BackendDashboard = () => {
                 agentId={routeAgentId}
                 navigate={navigate}
                 isDeployed={!!currentAgent?.line_channel_id}
+                inboxVisited={!showInboxIntro}
+                activityVisited={!showActivityIntro}
+                crmVisited={!showCrmIntro}
             />
         </div>
     );
