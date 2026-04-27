@@ -66,6 +66,7 @@ import ConfirmDialog from './ConfirmDialog';
 import ImageLightbox from './ImageLightbox';
 import LineDeployGuide from './LineDeployGuide';
 import NotifyBanner from './NotifyBanner';
+import SpotlightTour from './SpotlightTour';
 import { useAuth } from '../context/AuthContext';
 
 const SUB_SECTION_MAP = {
@@ -454,6 +455,10 @@ const BackendDashboard = () => {
     const [isParsingProductFile, setIsParsingProductFile] = useState(false);
     const [productFileName, setProductFileName] = useState('');
     const productFileRef = React.useRef(null);
+    const kbCardRef = React.useRef(null);
+    const [showTeamTour, setShowTeamTour] = useState(
+        () => !localStorage.getItem('kefu_team_tour_done_v1')
+    );
     const [productFieldSchema, setProductFieldSchema] = useState([]);
     const [keywordsEnabled, setKeywordsEnabled] = useState(true);
     const [fieldSettingsOpen, setFieldSettingsOpen] = useState(false);
@@ -2922,6 +2927,7 @@ const BackendDashboard = () => {
                                                 {teamSubagents.map((sub, idx) => (
                                                     <div
                                                         key={idx}
+                                                        ref={idx === 0 ? kbCardRef : null}
                                                         onClick={() => {
                                                             const sub_path = EDITING_TO_SUB[sub.name];
                                                             if (sub_path) navigate('/agent/' + routeAgentId + '/agents/' + sub_path);
@@ -2983,6 +2989,22 @@ const BackendDashboard = () => {
                                             </div>
                                         </div>
                                     </div>
+                                    <SpotlightTour
+                                        isOpen={showTeamTour}
+                                        targetRef={kbCardRef}
+                                        title="先從「客服專員」開始設定"
+                                        description="客服專員是 AI 回答客戶問題的核心，負責管理 FAQ 知識庫。進入設定後，新增您的常見問答，AI 才能準確回覆客戶。"
+                                        ctaLabel="前往設定客服專員"
+                                        onCta={() => {
+                                            localStorage.setItem('kefu_team_tour_done_v1', '1');
+                                            setShowTeamTour(false);
+                                            navigate(`/agent/${routeAgentId}/agents/knowledge-base`);
+                                        }}
+                                        onClose={() => {
+                                            localStorage.setItem('kefu_team_tour_done_v1', '1');
+                                            setShowTeamTour(false);
+                                        }}
+                                    />
                                 );
                             case 'crm':
                                 const filteredCrmUsers = crmUsers.filter(user => {
