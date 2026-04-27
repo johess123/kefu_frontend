@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import config from '../config';
-import { Rocket, CheckCircle2, MessageCircle, ShieldCheck, Loader2, Home, Lightbulb, ExternalLink, ArrowRight, Bell } from 'lucide-react';
+import { Rocket, CheckCircle2, MessageCircle, ShieldCheck, Loader2, Home, Lightbulb, ExternalLink, ArrowRight, Bell, Key, Lock } from 'lucide-react';
 import LineDeployGuide from './LineDeployGuide';
 
 const StepDeploy = ({ formData, sessionId, agentId, onHome }) => {
