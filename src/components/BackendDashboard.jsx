@@ -54,7 +54,10 @@ import {
     Activity,
     FolderInput,
     GripVertical,
-    LogOut
+    LogOut,
+    SlidersHorizontal,
+    ToggleLeft,
+    ToggleRight
 } from 'lucide-react';
 import Cookies from 'js-cookie';
 import { DEFAULT_HANDOFF_OPTIONS, ToneType, TONE_PROMPTS } from '../types';
@@ -380,6 +383,9 @@ const BackendDashboard = () => {
     // LINE Integration states
     const [isLineModalOpen, setIsLineModalOpen] = useState(false);
     const [showLineGuide, setShowLineGuide] = useState(false);
+
+    // Channel management overlay
+    const [isChannelManageOverlayOpen, setIsChannelManageOverlayOpen] = useState(false);
 
     // Telegram Integration states
     const [isTelegramModalOpen, setIsTelegramModalOpen] = useState(false);
@@ -970,6 +976,29 @@ const BackendDashboard = () => {
             alert('部署過程中發生錯誤: ' + detail);
         } finally {
             setIsTelegramDeploying(false);
+        }
+    };
+
+    const handleToggleChannel = async (channel, enabled) => {
+        if (!currentAgent?._id) return;
+        try {
+            await axios.patch(
+                `${config.API_URL}/api/agent/${currentAgent._id}/channel/${channel}/toggle`,
+                { enabled }
+            );
+            setCurrentAgent(prev => ({
+                ...prev,
+                deploy_config: {
+                    ...prev.deploy_config,
+                    [channel]: {
+                        ...prev.deploy_config?.[channel],
+                        enabled
+                    }
+                }
+            }));
+        } catch (error) {
+            const msg = error?.response?.data?.detail || error?.message || '未知錯誤';
+            alert('切換渠道狀態失敗: ' + msg);
         }
     };
 
@@ -2039,72 +2068,72 @@ const BackendDashboard = () => {
                                                                                     {items.map(({ faq, globalIdx: idx }, catIdx) => {
                                                                                         const isItemExpanded = expandedFaqItems.has(faq.id);
                                                                                         return (
-                                                                                        <div key={idx} className="border border-slate-100 rounded-2xl overflow-hidden hover:border-brand-200 transition-all duration-200">
-                                                                                            <div className="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-slate-100/50 transition-colors select-none" onClick={() => toggleFaqItem(faq.id)}>
-                                                                                                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest bg-white border border-slate-100 px-2.5 py-0.5 rounded-full shadow-sm flex-shrink-0">Q{catIdx + 1}</span>
-                                                                                                <span className="text-[9px] text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full flex-shrink-0 max-w-[80px] truncate">{cat}</span>
-                                                                                                <span className="flex-1 text-sm font-semibold text-slate-700 truncate min-w-0">{faq.question ? faq.question : <span className="text-slate-300 font-normal italic">未填寫問題...</span>}</span>
-                                                                                                <div className="flex items-center gap-1 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
-                                                                                                    <button onClick={() => openConfirm({ title: 'AI 優化', message: `AI 優化「${faq.question || '此問答'}」將會消耗點數，確定繼續嗎？`, confirmText: '確定優化', cancelText: '取消', variant: 'default', onConfirm: () => { handleOptimizeFaq(idx); closeConfirm(); } })} disabled={optimizingIndices.has(idx)} className="w-7 h-7 flex items-center justify-center text-slate-300 hover:text-brand-600 rounded-lg transition-all disabled:opacity-50" title="AI 優化">
-                                                                                                        {optimizingIndices.has(idx) ? <Loader2 size={13} className="animate-spin text-brand-600" /> : <Sparkles size={13} />}
-                                                                                                    </button>
-                                                                                                    <button onClick={() => setMoveFaqModal({ open: true, idx, faqQuestion: faq.question, currentCat: cat })} className="w-7 h-7 flex items-center justify-center text-slate-300 hover:text-brand-500 rounded-lg transition-all" title="移動到其他分類">
-                                                                                                        <FolderInput size={13} />
-                                                                                                    </button>
-                                                                                                    <button onClick={() => openConfirm({ title: '刪除 FAQ', message: `確定要刪除 FAQ「${faq.question || ''}」嗎？儲存後才會生效。`, confirmText: '確定刪除', onConfirm: () => { setEditingFaqs(editingFaqs.filter((_, i) => i !== idx)); closeConfirm(); } })} className="w-7 h-7 flex items-center justify-center text-slate-300 hover:text-red-500 rounded-lg transition-all" title="刪除">
-                                                                                                        <Trash2 size={13} />
-                                                                                                    </button>
-                                                                                                </div>
-                                                                                                <ChevronDown size={14} className={`text-slate-400 flex-shrink-0 transition-transform duration-200 ${isItemExpanded ? 'rotate-180' : ''}`} />
-                                                                                            </div>
-                                                                                            {isItemExpanded && (
-                                                                                                <div className="px-4 sm:px-6 pb-5 pt-3 space-y-4 border-t border-slate-100 bg-white">
-                                                                                                    <div>
-                                                                                                        <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Question</div>
-                                                                                                        <input type="text" value={faq.question} maxLength={100} onChange={(e) => { const f = [...editingFaqs]; f[idx] = { ...f[idx], question: e.target.value }; setEditingFaqs(f); }} placeholder="輸入常見問題..." className="w-full bg-transparent text-base font-bold text-slate-800 placeholder:text-slate-300 outline-none p-0" />
-                                                                                                        <div className="text-[10px] text-slate-300 text-right mt-1">{faq.question?.length || 0}/100</div>
+                                                                                            <div key={idx} className="border border-slate-100 rounded-2xl overflow-hidden hover:border-brand-200 transition-all duration-200">
+                                                                                                <div className="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-slate-100/50 transition-colors select-none" onClick={() => toggleFaqItem(faq.id)}>
+                                                                                                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest bg-white border border-slate-100 px-2.5 py-0.5 rounded-full shadow-sm flex-shrink-0">Q{catIdx + 1}</span>
+                                                                                                    <span className="text-[9px] text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full flex-shrink-0 max-w-[80px] truncate">{cat}</span>
+                                                                                                    <span className="flex-1 text-sm font-semibold text-slate-700 truncate min-w-0">{faq.question ? faq.question : <span className="text-slate-300 font-normal italic">未填寫問題...</span>}</span>
+                                                                                                    <div className="flex items-center gap-1 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+                                                                                                        <button onClick={() => openConfirm({ title: 'AI 優化', message: `AI 優化「${faq.question || '此問答'}」將會消耗點數，確定繼續嗎？`, confirmText: '確定優化', cancelText: '取消', variant: 'default', onConfirm: () => { handleOptimizeFaq(idx); closeConfirm(); } })} disabled={optimizingIndices.has(idx)} className="w-7 h-7 flex items-center justify-center text-slate-300 hover:text-brand-600 rounded-lg transition-all disabled:opacity-50" title="AI 優化">
+                                                                                                            {optimizingIndices.has(idx) ? <Loader2 size={13} className="animate-spin text-brand-600" /> : <Sparkles size={13} />}
+                                                                                                        </button>
+                                                                                                        <button onClick={() => setMoveFaqModal({ open: true, idx, faqQuestion: faq.question, currentCat: cat })} className="w-7 h-7 flex items-center justify-center text-slate-300 hover:text-brand-500 rounded-lg transition-all" title="移動到其他分類">
+                                                                                                            <FolderInput size={13} />
+                                                                                                        </button>
+                                                                                                        <button onClick={() => openConfirm({ title: '刪除 FAQ', message: `確定要刪除 FAQ「${faq.question || ''}」嗎？儲存後才會生效。`, confirmText: '確定刪除', onConfirm: () => { setEditingFaqs(editingFaqs.filter((_, i) => i !== idx)); closeConfirm(); } })} className="w-7 h-7 flex items-center justify-center text-slate-300 hover:text-red-500 rounded-lg transition-all" title="刪除">
+                                                                                                            <Trash2 size={13} />
+                                                                                                        </button>
                                                                                                     </div>
-                                                                                                    {analysisReport && analysisReport.suggestions.find(s => s.id.toString() === (faq.id || idx.toString()).toString()) && (
-                                                                                                        <div className="p-3 bg-amber-50 border border-amber-100 rounded-xl">
-                                                                                                            <div className="flex items-start gap-2 mb-2">
-                                                                                                                <AlertCircle size={14} className="text-amber-500 mt-0.5" />
-                                                                                                                <p className="text-xs text-amber-700 italic">{analysisReport.suggestions.find(s => s.id.toString() === (faq.id || idx.toString()).toString()).suggestion}</p>
-                                                                                                            </div>
-                                                                                                            <div className="flex items-center gap-2">
-                                                                                                                <div className="flex-1 p-2 bg-white/80 border border-amber-200 rounded-lg text-xs text-amber-800">
-                                                                                                                    <div className="font-bold mb-0.5">Q: {analysisReport.suggestions.find(s => s.id.toString() === (faq.id || idx.toString()).toString()).optimized_q}</div>
-                                                                                                                    <div className="line-clamp-2">A: {analysisReport.suggestions.find(s => s.id.toString() === (faq.id || idx.toString()).toString()).optimized_a}</div>
+                                                                                                    <ChevronDown size={14} className={`text-slate-400 flex-shrink-0 transition-transform duration-200 ${isItemExpanded ? 'rotate-180' : ''}`} />
+                                                                                                </div>
+                                                                                                {isItemExpanded && (
+                                                                                                    <div className="px-4 sm:px-6 pb-5 pt-3 space-y-4 border-t border-slate-100 bg-white">
+                                                                                                        <div>
+                                                                                                            <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Question</div>
+                                                                                                            <input type="text" value={faq.question} maxLength={100} onChange={(e) => { const f = [...editingFaqs]; f[idx] = { ...f[idx], question: e.target.value }; setEditingFaqs(f); }} placeholder="輸入常見問題..." className="w-full bg-transparent text-base font-bold text-slate-800 placeholder:text-slate-300 outline-none p-0" />
+                                                                                                            <div className="text-[10px] text-slate-300 text-right mt-1">{faq.question?.length || 0}/100</div>
+                                                                                                        </div>
+                                                                                                        {analysisReport && analysisReport.suggestions.find(s => s.id.toString() === (faq.id || idx.toString()).toString()) && (
+                                                                                                            <div className="p-3 bg-amber-50 border border-amber-100 rounded-xl">
+                                                                                                                <div className="flex items-start gap-2 mb-2">
+                                                                                                                    <AlertCircle size={14} className="text-amber-500 mt-0.5" />
+                                                                                                                    <p className="text-xs text-amber-700 italic">{analysisReport.suggestions.find(s => s.id.toString() === (faq.id || idx.toString()).toString()).suggestion}</p>
                                                                                                                 </div>
-                                                                                                                <button onClick={() => { const s = analysisReport.suggestions.find(s => s.id.toString() === (faq.id || idx.toString()).toString()); applySuggestion(idx, s.optimized_q, s.optimized_a); }} className="flex items-center gap-1 px-3 py-2 bg-white border border-amber-300 text-amber-600 rounded-lg text-xs font-bold hover:bg-amber-50 whitespace-nowrap"><RotateCcw size={12} />快速取代</button>
+                                                                                                                <div className="flex items-center gap-2">
+                                                                                                                    <div className="flex-1 p-2 bg-white/80 border border-amber-200 rounded-lg text-xs text-amber-800">
+                                                                                                                        <div className="font-bold mb-0.5">Q: {analysisReport.suggestions.find(s => s.id.toString() === (faq.id || idx.toString()).toString()).optimized_q}</div>
+                                                                                                                        <div className="line-clamp-2">A: {analysisReport.suggestions.find(s => s.id.toString() === (faq.id || idx.toString()).toString()).optimized_a}</div>
+                                                                                                                    </div>
+                                                                                                                    <button onClick={() => { const s = analysisReport.suggestions.find(s => s.id.toString() === (faq.id || idx.toString()).toString()); applySuggestion(idx, s.optimized_q, s.optimized_a); }} className="flex items-center gap-1 px-3 py-2 bg-white border border-amber-300 text-amber-600 rounded-lg text-xs font-bold hover:bg-amber-50 whitespace-nowrap"><RotateCcw size={12} />快速取代</button>
+                                                                                                                </div>
                                                                                                             </div>
-                                                                                                        </div>
-                                                                                                    )}
-                                                                                                    <div>
-                                                                                                        <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Answer</div>
-                                                                                                        <textarea value={faq.answer} maxLength={500} onChange={(e) => { const f = [...editingFaqs]; f[idx] = { ...f[idx], answer: e.target.value }; setEditingFaqs(f); }} placeholder="輸入預設回覆回答內容..." className="w-full bg-white border border-slate-200 rounded-xl p-4 text-slate-600 text-sm leading-relaxed min-h-[100px] focus:ring-2 focus:ring-brand-500/10 focus:border-brand-500 outline-none transition-all shadow-inner resize-none" />
-                                                                                                        <div className="text-[10px] text-slate-300 text-right mt-1">{faq.answer?.length || 0}/500</div>
-                                                                                                    </div>
-                                                                                                    <div>
-                                                                                                        <div className="flex items-center gap-2 text-slate-400 mb-1">
-                                                                                                            <span className="text-[10px] font-black uppercase tracking-widest">Image</span>
-                                                                                                            <span className="text-[10px] text-slate-300">(選填)</span>
-                                                                                                        </div>
-                                                                                                        {faq.image_id ? (
-                                                                                                            <div className="flex items-center gap-3">
-                                                                                                                <img src={faq._preview_url || faq.preview_url || ''} alt="FAQ 附圖" className="w-16 h-16 object-cover rounded-xl border border-slate-200 cursor-zoom-in hover:opacity-90" onClick={() => setLightboxSrc(faq._preview_url || faq.preview_url || '')} onError={(e) => { e.target.style.display = 'none'; }} />
-                                                                                                                <button onClick={() => openConfirm({ title: '移除附圖', message: '確定要移除這張 FAQ 附圖嗎？此操作無法復原。', confirmText: '確定移除', onConfirm: () => { handleFaqImageDelete(idx); closeConfirm(); } })} className="flex items-center gap-1.5 px-3 py-2 bg-white border border-red-200 text-red-500 rounded-xl text-xs font-bold hover:bg-red-50"><Trash2 size={14} />移除圖片</button>
-                                                                                                            </div>
-                                                                                                        ) : (
-                                                                                                            <label className="flex items-center gap-2 px-4 py-3 bg-white border border-dashed border-slate-200 rounded-xl cursor-pointer hover:border-brand-300 hover:bg-brand-50/50 transition-all">
-                                                                                                                {uploadingFaqIdx === idx ? <Loader2 size={16} className="animate-spin text-brand-500" /> : <Upload size={16} className="text-slate-400" />}
-                                                                                                                <span className="text-xs text-slate-500">{uploadingFaqIdx === idx ? '上傳中...' : '上傳附圖 (jpg/png/webp, 2MB)'}</span>
-                                                                                                                <input type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={(e) => handleFaqImageUpload(idx, e.target.files[0])} disabled={uploadingFaqIdx === idx} />
-                                                                                                            </label>
                                                                                                         )}
+                                                                                                        <div>
+                                                                                                            <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Answer</div>
+                                                                                                            <textarea value={faq.answer} maxLength={500} onChange={(e) => { const f = [...editingFaqs]; f[idx] = { ...f[idx], answer: e.target.value }; setEditingFaqs(f); }} placeholder="輸入預設回覆回答內容..." className="w-full bg-white border border-slate-200 rounded-xl p-4 text-slate-600 text-sm leading-relaxed min-h-[100px] focus:ring-2 focus:ring-brand-500/10 focus:border-brand-500 outline-none transition-all shadow-inner resize-none" />
+                                                                                                            <div className="text-[10px] text-slate-300 text-right mt-1">{faq.answer?.length || 0}/500</div>
+                                                                                                        </div>
+                                                                                                        <div>
+                                                                                                            <div className="flex items-center gap-2 text-slate-400 mb-1">
+                                                                                                                <span className="text-[10px] font-black uppercase tracking-widest">Image</span>
+                                                                                                                <span className="text-[10px] text-slate-300">(選填)</span>
+                                                                                                            </div>
+                                                                                                            {faq.image_id ? (
+                                                                                                                <div className="flex items-center gap-3">
+                                                                                                                    <img src={faq._preview_url || faq.preview_url || ''} alt="FAQ 附圖" className="w-16 h-16 object-cover rounded-xl border border-slate-200 cursor-zoom-in hover:opacity-90" onClick={() => setLightboxSrc(faq._preview_url || faq.preview_url || '')} onError={(e) => { e.target.style.display = 'none'; }} />
+                                                                                                                    <button onClick={() => openConfirm({ title: '移除附圖', message: '確定要移除這張 FAQ 附圖嗎？此操作無法復原。', confirmText: '確定移除', onConfirm: () => { handleFaqImageDelete(idx); closeConfirm(); } })} className="flex items-center gap-1.5 px-3 py-2 bg-white border border-red-200 text-red-500 rounded-xl text-xs font-bold hover:bg-red-50"><Trash2 size={14} />移除圖片</button>
+                                                                                                                </div>
+                                                                                                            ) : (
+                                                                                                                <label className="flex items-center gap-2 px-4 py-3 bg-white border border-dashed border-slate-200 rounded-xl cursor-pointer hover:border-brand-300 hover:bg-brand-50/50 transition-all">
+                                                                                                                    {uploadingFaqIdx === idx ? <Loader2 size={16} className="animate-spin text-brand-500" /> : <Upload size={16} className="text-slate-400" />}
+                                                                                                                    <span className="text-xs text-slate-500">{uploadingFaqIdx === idx ? '上傳中...' : '上傳附圖 (jpg/png/webp, 2MB)'}</span>
+                                                                                                                    <input type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={(e) => handleFaqImageUpload(idx, e.target.files[0])} disabled={uploadingFaqIdx === idx} />
+                                                                                                                </label>
+                                                                                                            )}
+                                                                                                        </div>
                                                                                                     </div>
-                                                                                                </div>
-                                                                                            )}
-                                                                                        </div>
+                                                                                                )}
+                                                                                            </div>
                                                                                         );
                                                                                     })}
                                                                                 </div>
@@ -2209,142 +2238,142 @@ const BackendDashboard = () => {
                                                                 const pid = product.id || `prod_${idx}`;
                                                                 const isExpanded = expandedProductItems.has(pid);
                                                                 return (
-                                                                <div key={pid} className="border border-slate-200 rounded-2xl overflow-hidden hover:border-green-200 transition-all duration-200">
-                                                                    {/* Collapsed Header */}
-                                                                    <div
-                                                                        className="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-slate-50/70 transition-colors select-none"
-                                                                        onClick={() => setExpandedProductItems(prev => { const next = new Set(prev); next.has(pid) ? next.delete(pid) : next.add(pid); return next; })}
-                                                                    >
-                                                                        <span className="text-[10px] font-black text-green-500 uppercase tracking-widest bg-white border border-slate-100 px-2.5 py-0.5 rounded-full shadow-sm flex-shrink-0">P{idx + 1}</span>
-                                                                        <span className="flex-1 text-sm font-semibold text-slate-700 truncate min-w-0">
-                                                                            {product.name ? product.name : <span className="text-slate-300 font-normal italic">未填寫商品名稱...</span>}
-                                                                        </span>
-                                                                        {product.image_id && (
-                                                                            <img src={product._preview_url || product.preview_url || ''} alt="" className="w-6 h-6 rounded object-cover border border-slate-200 flex-shrink-0" onError={(e) => { e.target.style.display = 'none'; }} />
-                                                                        )}
-                                                                        <div className="flex items-center gap-1 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
-                                                                            <button
-                                                                                onClick={() => openConfirm({
-                                                                                    title: '刪除商品',
-                                                                                    message: `確定要刪除商品「${product.name || ''}」嗎？儲存後才會生效。`,
-                                                                                    onConfirm: () => { setEditingProducts(editingProducts.filter((_, i) => i !== idx)); closeConfirm(); },
-                                                                                })}
-                                                                                className="w-7 h-7 flex items-center justify-center text-slate-300 hover:text-red-500 rounded-lg transition-all"
-                                                                                title="刪除"
-                                                                            >
-                                                                                <Trash2 size={13} />
-                                                                            </button>
-                                                                        </div>
-                                                                        <ChevronDown size={14} className={`text-slate-400 flex-shrink-0 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`} />
-                                                                    </div>
-
-                                                                    {/* Expanded Edit Area */}
-                                                                    {isExpanded && (
-                                                                        <div className="px-4 sm:px-6 pb-5 pt-3 space-y-4 border-t border-slate-100 bg-white">
-                                                                            <div>
-                                                                                <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">商品名稱</div>
-                                                                                <input
-                                                                                    type="text"
-                                                                                    value={product.name}
-                                                                                    maxLength={50}
-                                                                                    onChange={(e) => {
-                                                                                        const newProducts = [...editingProducts];
-                                                                                        newProducts[idx] = { ...newProducts[idx], name: e.target.value };
-                                                                                        setEditingProducts(newProducts);
-                                                                                    }}
-                                                                                    placeholder="輸入商品名稱..."
-                                                                                    className="w-full bg-transparent text-base font-bold text-slate-800 placeholder:text-slate-300 outline-none p-0"
-                                                                                />
-                                                                                <div className="text-[10px] text-slate-300 text-right mt-1">{product.name?.length || 0}/50</div>
-                                                                            </div>
-                                                                            <div>
-                                                                                <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">菜單/規格說明</div>
-                                                                                <textarea
-                                                                                    value={product.description}
-                                                                                    maxLength={400}
-                                                                                    onChange={(e) => {
-                                                                                        const newProducts = [...editingProducts];
-                                                                                        newProducts[idx] = { ...newProducts[idx], description: e.target.value };
-                                                                                        setEditingProducts(newProducts);
-                                                                                    }}
-                                                                                    placeholder="輸入商品說明、規格、價格等..."
-                                                                                    className="w-full bg-white border border-slate-200 rounded-xl p-4 text-slate-600 text-sm leading-relaxed min-h-[100px] focus:ring-2 focus:ring-green-500/10 focus:border-green-500 outline-none transition-all shadow-inner resize-none"
-                                                                                />
-                                                                                <div className="text-[10px] text-slate-300 text-right mt-1">{product.description?.length || 0}/400</div>
-                                                                            </div>
-                                                                            {keywordsEnabled && (
-                                                                            <div>
-                                                                                <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">關鍵字/別名 <span className="text-slate-300 normal-case font-normal">(選填)</span></div>
-                                                                                <input
-                                                                                    type="text"
-                                                                                    value={product.keywords || ''}
-                                                                                    maxLength={100}
-                                                                                    onChange={(e) => {
-                                                                                        const newProducts = [...editingProducts];
-                                                                                        newProducts[idx] = { ...newProducts[idx], keywords: e.target.value };
-                                                                                        setEditingProducts(newProducts);
-                                                                                    }}
-                                                                                    placeholder="例：珍奶、波霸、大杯紅茶..."
-                                                                                    className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-slate-600 text-sm focus:ring-2 focus:ring-green-500/10 focus:border-green-500 outline-none transition-all shadow-inner"
-                                                                                />
-                                                                                <div className="text-[10px] text-slate-300 text-right mt-1">{(product.keywords || '').length}/100</div>
-                                                                            </div>
+                                                                    <div key={pid} className="border border-slate-200 rounded-2xl overflow-hidden hover:border-green-200 transition-all duration-200">
+                                                                        {/* Collapsed Header */}
+                                                                        <div
+                                                                            className="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-slate-50/70 transition-colors select-none"
+                                                                            onClick={() => setExpandedProductItems(prev => { const next = new Set(prev); next.has(pid) ? next.delete(pid) : next.add(pid); return next; })}
+                                                                        >
+                                                                            <span className="text-[10px] font-black text-green-500 uppercase tracking-widest bg-white border border-slate-100 px-2.5 py-0.5 rounded-full shadow-sm flex-shrink-0">P{idx + 1}</span>
+                                                                            <span className="flex-1 text-sm font-semibold text-slate-700 truncate min-w-0">
+                                                                                {product.name ? product.name : <span className="text-slate-300 font-normal italic">未填寫商品名稱...</span>}
+                                                                            </span>
+                                                                            {product.image_id && (
+                                                                                <img src={product._preview_url || product.preview_url || ''} alt="" className="w-6 h-6 rounded object-cover border border-slate-200 flex-shrink-0" onError={(e) => { e.target.style.display = 'none'; }} />
                                                                             )}
-                                                                            {/* 自訂欄位 */}
-                                                                            {productFieldSchema.map(f => (
-                                                                                <div key={f.key}>
-                                                                                    <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">{f.label} <span className="text-slate-300 normal-case font-normal">(選填)</span></div>
+                                                                            <div className="flex items-center gap-1 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+                                                                                <button
+                                                                                    onClick={() => openConfirm({
+                                                                                        title: '刪除商品',
+                                                                                        message: `確定要刪除商品「${product.name || ''}」嗎？儲存後才會生效。`,
+                                                                                        onConfirm: () => { setEditingProducts(editingProducts.filter((_, i) => i !== idx)); closeConfirm(); },
+                                                                                    })}
+                                                                                    className="w-7 h-7 flex items-center justify-center text-slate-300 hover:text-red-500 rounded-lg transition-all"
+                                                                                    title="刪除"
+                                                                                >
+                                                                                    <Trash2 size={13} />
+                                                                                </button>
+                                                                            </div>
+                                                                            <ChevronDown size={14} className={`text-slate-400 flex-shrink-0 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`} />
+                                                                        </div>
+
+                                                                        {/* Expanded Edit Area */}
+                                                                        {isExpanded && (
+                                                                            <div className="px-4 sm:px-6 pb-5 pt-3 space-y-4 border-t border-slate-100 bg-white">
+                                                                                <div>
+                                                                                    <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">商品名稱</div>
                                                                                     <input
                                                                                         type="text"
-                                                                                        value={(product.custom_fields || {})[f.key] || ''}
-                                                                                        maxLength={f.max_length}
+                                                                                        value={product.name}
+                                                                                        maxLength={50}
                                                                                         onChange={(e) => {
                                                                                             const newProducts = [...editingProducts];
-                                                                                            newProducts[idx] = { ...newProducts[idx], custom_fields: { ...(newProducts[idx].custom_fields || {}), [f.key]: e.target.value } };
+                                                                                            newProducts[idx] = { ...newProducts[idx], name: e.target.value };
                                                                                             setEditingProducts(newProducts);
                                                                                         }}
-                                                                                        placeholder={`輸入${f.label}...`}
-                                                                                        className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-slate-600 text-sm focus:ring-2 focus:ring-green-500/10 focus:border-green-500 outline-none transition-all shadow-inner"
+                                                                                        placeholder="輸入商品名稱..."
+                                                                                        className="w-full bg-transparent text-base font-bold text-slate-800 placeholder:text-slate-300 outline-none p-0"
                                                                                     />
-                                                                                    <div className="text-[10px] text-slate-300 text-right mt-1">{((product.custom_fields || {})[f.key] || '').length}/{f.max_length}</div>
+                                                                                    <div className="text-[10px] text-slate-300 text-right mt-1">{product.name?.length || 0}/50</div>
                                                                                 </div>
-                                                                            ))}
-                                                                            <div>
-                                                                                <div className="flex items-center gap-2 text-slate-400 mb-1">
-                                                                                    <span className="text-[10px] font-black uppercase tracking-widest">Image</span>
-                                                                                    <span className="text-[10px] text-slate-300">(選填)</span>
+                                                                                <div>
+                                                                                    <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">菜單/規格說明</div>
+                                                                                    <textarea
+                                                                                        value={product.description}
+                                                                                        maxLength={400}
+                                                                                        onChange={(e) => {
+                                                                                            const newProducts = [...editingProducts];
+                                                                                            newProducts[idx] = { ...newProducts[idx], description: e.target.value };
+                                                                                            setEditingProducts(newProducts);
+                                                                                        }}
+                                                                                        placeholder="輸入商品說明、規格、價格等..."
+                                                                                        className="w-full bg-white border border-slate-200 rounded-xl p-4 text-slate-600 text-sm leading-relaxed min-h-[100px] focus:ring-2 focus:ring-green-500/10 focus:border-green-500 outline-none transition-all shadow-inner resize-none"
+                                                                                    />
+                                                                                    <div className="text-[10px] text-slate-300 text-right mt-1">{product.description?.length || 0}/400</div>
                                                                                 </div>
-                                                                                {product.image_id ? (
-                                                                                    <div className="flex items-center gap-3">
-                                                                                        <img
-                                                                                            src={product._preview_url || product.preview_url || ''}
-                                                                                            alt="商品附圖"
-                                                                                            className="w-16 h-16 object-cover rounded-xl border border-slate-200 cursor-zoom-in hover:opacity-90 transition-opacity"
-                                                                                            onClick={() => setLightboxSrc(product._preview_url || product.preview_url || '')}
-                                                                                            onError={(e) => { e.target.style.display = 'none'; }}
+                                                                                {keywordsEnabled && (
+                                                                                    <div>
+                                                                                        <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">關鍵字/別名 <span className="text-slate-300 normal-case font-normal">(選填)</span></div>
+                                                                                        <input
+                                                                                            type="text"
+                                                                                            value={product.keywords || ''}
+                                                                                            maxLength={100}
+                                                                                            onChange={(e) => {
+                                                                                                const newProducts = [...editingProducts];
+                                                                                                newProducts[idx] = { ...newProducts[idx], keywords: e.target.value };
+                                                                                                setEditingProducts(newProducts);
+                                                                                            }}
+                                                                                            placeholder="例：珍奶、波霸、大杯紅茶..."
+                                                                                            className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-slate-600 text-sm focus:ring-2 focus:ring-green-500/10 focus:border-green-500 outline-none transition-all shadow-inner"
                                                                                         />
-                                                                                        <button
-                                                                                            onClick={() => openConfirm({
-                                                                                                title: '移除附圖',
-                                                                                                message: '確定要移除這張商品附圖嗎？此操作無法復原。',
-                                                                                                onConfirm: () => { handleProductImageDelete(idx); closeConfirm(); },
-                                                                                            })}
-                                                                                            className="flex items-center gap-1.5 px-3 py-2 bg-white border border-red-200 text-red-500 rounded-xl text-xs font-bold hover:bg-red-50"
-                                                                                        >
-                                                                                            <Trash2 size={14} />移除圖片
-                                                                                        </button>
+                                                                                        <div className="text-[10px] text-slate-300 text-right mt-1">{(product.keywords || '').length}/100</div>
                                                                                     </div>
-                                                                                ) : (
-                                                                                    <label className="flex items-center gap-2 px-4 py-3 bg-white border border-dashed border-slate-200 rounded-xl cursor-pointer hover:border-green-300 hover:bg-green-50/50 transition-all">
-                                                                                        {uploadingProductIdx === idx ? <Loader2 size={16} className="animate-spin text-green-500" /> : <Upload size={16} className="text-slate-400" />}
-                                                                                        <span className="text-xs text-slate-500">{uploadingProductIdx === idx ? '上傳中...' : '上傳附圖 (jpg/png/webp, 2MB)'}</span>
-                                                                                        <input type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={(e) => handleProductImageUpload(idx, e.target.files[0])} disabled={uploadingProductIdx === idx} />
-                                                                                    </label>
                                                                                 )}
+                                                                                {/* 自訂欄位 */}
+                                                                                {productFieldSchema.map(f => (
+                                                                                    <div key={f.key}>
+                                                                                        <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">{f.label} <span className="text-slate-300 normal-case font-normal">(選填)</span></div>
+                                                                                        <input
+                                                                                            type="text"
+                                                                                            value={(product.custom_fields || {})[f.key] || ''}
+                                                                                            maxLength={f.max_length}
+                                                                                            onChange={(e) => {
+                                                                                                const newProducts = [...editingProducts];
+                                                                                                newProducts[idx] = { ...newProducts[idx], custom_fields: { ...(newProducts[idx].custom_fields || {}), [f.key]: e.target.value } };
+                                                                                                setEditingProducts(newProducts);
+                                                                                            }}
+                                                                                            placeholder={`輸入${f.label}...`}
+                                                                                            className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-slate-600 text-sm focus:ring-2 focus:ring-green-500/10 focus:border-green-500 outline-none transition-all shadow-inner"
+                                                                                        />
+                                                                                        <div className="text-[10px] text-slate-300 text-right mt-1">{((product.custom_fields || {})[f.key] || '').length}/{f.max_length}</div>
+                                                                                    </div>
+                                                                                ))}
+                                                                                <div>
+                                                                                    <div className="flex items-center gap-2 text-slate-400 mb-1">
+                                                                                        <span className="text-[10px] font-black uppercase tracking-widest">Image</span>
+                                                                                        <span className="text-[10px] text-slate-300">(選填)</span>
+                                                                                    </div>
+                                                                                    {product.image_id ? (
+                                                                                        <div className="flex items-center gap-3">
+                                                                                            <img
+                                                                                                src={product._preview_url || product.preview_url || ''}
+                                                                                                alt="商品附圖"
+                                                                                                className="w-16 h-16 object-cover rounded-xl border border-slate-200 cursor-zoom-in hover:opacity-90 transition-opacity"
+                                                                                                onClick={() => setLightboxSrc(product._preview_url || product.preview_url || '')}
+                                                                                                onError={(e) => { e.target.style.display = 'none'; }}
+                                                                                            />
+                                                                                            <button
+                                                                                                onClick={() => openConfirm({
+                                                                                                    title: '移除附圖',
+                                                                                                    message: '確定要移除這張商品附圖嗎？此操作無法復原。',
+                                                                                                    onConfirm: () => { handleProductImageDelete(idx); closeConfirm(); },
+                                                                                                })}
+                                                                                                className="flex items-center gap-1.5 px-3 py-2 bg-white border border-red-200 text-red-500 rounded-xl text-xs font-bold hover:bg-red-50"
+                                                                                            >
+                                                                                                <Trash2 size={14} />移除圖片
+                                                                                            </button>
+                                                                                        </div>
+                                                                                    ) : (
+                                                                                        <label className="flex items-center gap-2 px-4 py-3 bg-white border border-dashed border-slate-200 rounded-xl cursor-pointer hover:border-green-300 hover:bg-green-50/50 transition-all">
+                                                                                            {uploadingProductIdx === idx ? <Loader2 size={16} className="animate-spin text-green-500" /> : <Upload size={16} className="text-slate-400" />}
+                                                                                            <span className="text-xs text-slate-500">{uploadingProductIdx === idx ? '上傳中...' : '上傳附圖 (jpg/png/webp, 2MB)'}</span>
+                                                                                            <input type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={(e) => handleProductImageUpload(idx, e.target.files[0])} disabled={uploadingProductIdx === idx} />
+                                                                                        </label>
+                                                                                    )}
+                                                                                </div>
                                                                             </div>
-                                                                        </div>
-                                                                    )}
-                                                                </div>
+                                                                        )}
+                                                                    </div>
                                                                 );
                                                             })}
                                                             <div ref={productsEndRef} />
@@ -2879,164 +2908,164 @@ const BackendDashboard = () => {
                                 }
                                 return (
                                     <>
-                                    <div className="max-w-7xl">
-                                        <div className="mb-10 flex justify-between items-start">
-                                            <div>
-                                                <h1 className="text-3xl font-bold text-slate-900 mb-2">AI 團隊管理</h1>
-                                                <p className="text-slate-500">配置您的 AI 虛擬員工，啟用或停用不同職能的 Agent。</p>
+                                        <div className="max-w-7xl">
+                                            <div className="mb-10 flex justify-between items-start">
+                                                <div>
+                                                    <h1 className="text-3xl font-bold text-slate-900 mb-2">AI 團隊管理</h1>
+                                                    <p className="text-slate-500">配置您的 AI 虛擬員工，啟用或停用不同職能的 Agent。</p>
+                                                </div>
                                             </div>
-                                        </div>
 
-                                        <div className="mb-12">
-                                            <div className="flex items-center gap-2 text-slate-400 text-xs font-bold uppercase tracking-widest mb-4">
-                                                <div className="w-2 h-2 bg-slate-300 rounded-full"></div>
-                                                管理核心 (MANAGEMENT CORE)
-                                            </div>
-                                            <div className="bg-[#1a1f2e] rounded-[32px] p-8 text-white flex flex-col md:flex-row items-center justify-between gap-8 relative overflow-hidden group border border-white/5">
-                                                <div className="absolute top-0 right-0 w-96 h-96 bg-white/5 rounded-full -mr-32 -mt-32 blur-[80px] pointer-events-none"></div>
-                                                <div className="flex items-center gap-6 z-10 w-full md:w-auto">
-                                                    <div className="w-20 h-20 bg-white/5 border border-white/10 rounded-3xl flex items-center justify-center shadow-2xl relative overflow-hidden group/icon">
-                                                        <div className="absolute inset-0 bg-gradient-to-br from-yellow-400/20 to-transparent opacity-0 group-hover/icon:opacity-100 transition-opacity"></div>
-                                                        <Crown className="text-yellow-400 relative z-10" size={36} />
-                                                    </div>
-                                                    <div>
-                                                        <div className="flex items-center gap-3 mb-1.5 focus-within:ring-0">
-                                                            <h3 className="text-2xl font-bold tracking-tight">營運總監 (Root Admin)</h3>
-                                                            <span className="bg-yellow-400/10 text-yellow-400 text-[11px] font-bold px-2 py-0.5 rounded-md border border-yellow-400/20">核心</span>
+                                            <div className="mb-12">
+                                                <div className="flex items-center gap-2 text-slate-400 text-xs font-bold uppercase tracking-widest mb-4">
+                                                    <div className="w-2 h-2 bg-slate-300 rounded-full"></div>
+                                                    管理核心 (MANAGEMENT CORE)
+                                                </div>
+                                                <div className="bg-[#1a1f2e] rounded-[32px] p-8 text-white flex flex-col md:flex-row items-center justify-between gap-8 relative overflow-hidden group border border-white/5">
+                                                    <div className="absolute top-0 right-0 w-96 h-96 bg-white/5 rounded-full -mr-32 -mt-32 blur-[80px] pointer-events-none"></div>
+                                                    <div className="flex items-center gap-6 z-10 w-full md:w-auto">
+                                                        <div className="w-20 h-20 bg-white/5 border border-white/10 rounded-3xl flex items-center justify-center shadow-2xl relative overflow-hidden group/icon">
+                                                            <div className="absolute inset-0 bg-gradient-to-br from-yellow-400/20 to-transparent opacity-0 group-hover/icon:opacity-100 transition-opacity"></div>
+                                                            <Crown className="text-yellow-400 relative z-10" size={36} />
                                                         </div>
-                                                        <p className="text-slate-400 text-sm font-medium">掌管品牌設定、計費與全域規則。</p>
+                                                        <div>
+                                                            <div className="flex items-center gap-3 mb-1.5 focus-within:ring-0">
+                                                                <h3 className="text-2xl font-bold tracking-tight">營運總監 (Root Admin)</h3>
+                                                                <span className="bg-yellow-400/10 text-yellow-400 text-[11px] font-bold px-2 py-0.5 rounded-md border border-yellow-400/20">核心</span>
+                                                            </div>
+                                                            <p className="text-slate-400 text-sm font-medium">掌管品牌設定、計費與全域規則。</p>
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="flex items-center gap-4 z-10 w-full md:w-auto">
+                                                        <div className="bg-white/5 border border-white/10 rounded-2xl p-4 flex items-center gap-10 flex-1 md:flex-none">
+                                                            <div className="px-2">
+                                                                <div className="text-slate-500 text-[11px] font-bold uppercase tracking-wider mb-1">今日對話</div>
+                                                                <div className="text-2xl font-bold tracking-tight">
+                                                                    {isStatsLoading ? '...' : (tokenStats?.daily_stats?.today_chats ?? 0)}
+                                                                </div>
+                                                            </div>
+                                                            <div className="w-px h-10 bg-white/10 hidden md:block"></div>
+                                                            <div className="px-2">
+                                                                <div className="text-slate-500 text-[11px] font-bold uppercase tracking-wider mb-1">健康度</div>
+                                                                <div className="text-2xl font-bold text-[#4ade80] tracking-tight">
+                                                                    {isStatsLoading ? '...' : (tokenStats?.daily_stats?.health_score ?? 0)}%
+                                                                </div>
+                                                            </div>
+                                                        </div>
+
+                                                        <button
+                                                            onClick={() => navigate('/agent/' + routeAgentId + '/agents/root-admin')}
+                                                            className="w-14 h-14 bg-white/5 hover:bg-white/10 border border-white/10 rounded-2xl flex items-center justify-center transition-all hover:scale-105 active:scale-95 group/settings shadow-xl"
+                                                        >
+                                                            <Settings size={22} className="text-slate-300 group-hover:rotate-90 transition-transform duration-500" />
+                                                        </button>
                                                     </div>
                                                 </div>
+                                            </div>
 
-                                                <div className="flex items-center gap-4 z-10 w-full md:w-auto">
-                                                    <div className="bg-white/5 border border-white/10 rounded-2xl p-4 flex items-center gap-10 flex-1 md:flex-none">
-                                                        <div className="px-2">
-                                                            <div className="text-slate-500 text-[11px] font-bold uppercase tracking-wider mb-1">今日對話</div>
-                                                            <div className="text-2xl font-bold tracking-tight">
-                                                                {isStatsLoading ? '...' : (tokenStats?.daily_stats?.today_chats ?? 0)}
+                                            {/* Your Team Members */}
+                                            <div className="mb-20">
+                                                <div className="flex items-center gap-2 text-slate-400 text-xs font-bold uppercase tracking-widest mb-6">
+                                                    <div className="w-2 h-2 bg-brand-400 rounded-full"></div>
+                                                    您的團隊成員 (YOUR TEAM)
+                                                </div>
+                                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                                    {teamSubagents.map((sub, idx) => (
+                                                        <div
+                                                            key={idx}
+                                                            ref={idx === 0 ? kbCardRef : idx === 1 ? escalationCardRef : idx === 2 ? analystCardRef : null}
+                                                            onClick={() => {
+                                                                const sub_path = EDITING_TO_SUB[sub.name];
+                                                                if (sub_path) navigate('/agent/' + routeAgentId + '/agents/' + sub_path);
+                                                            }}
+                                                            className={`bg-white rounded-[32px] p-8 border ${sub.enabled ? 'border-slate-100' : 'border-slate-50 opacity-60'} shadow-sm flex flex-col h-full relative group cursor-pointer hover:border-brand-200 hover:shadow-2xl hover:shadow-brand-500/5 transition-all duration-500`}
+                                                        >
+                                                            <div className="flex items-start justify-between mb-8">
+                                                                <div className={`w-14 h-14 ${sub.bgColor} rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform duration-500 shadow-sm`}>
+                                                                    {sub.icon}
+                                                                </div>
+                                                                <div className="flex items-center gap-2">
+                                                                    <div className={`flex items-center gap-2 ${sub.enabled ? 'bg-green-50 text-green-600' : 'bg-slate-50 text-slate-400'} px-3 py-1.5 rounded-full border ${sub.enabled ? 'border-green-100/50' : 'border-slate-200'}`}>
+                                                                        <div className={`w-1.5 h-1.5 ${sub.enabled ? 'bg-green-500' : 'bg-slate-300'} rounded-full ${sub.enabled ? 'animate-pulse' : ''}`}></div>
+                                                                        <span className="text-[11px] font-bold">{sub.enabled ? 'Enabled' : 'Disabled'}</span>
+                                                                    </div>
+                                                                    <button
+                                                                        onClick={(e) => {
+                                                                            e.stopPropagation();
+                                                                            handleToggleSubagent(sub._id, sub.enabled, sub.name);
+                                                                        }}
+                                                                        className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${sub.enabled ? 'bg-brand-50 text-brand-600 border border-brand-100 hover:bg-brand-100' : 'bg-slate-50 text-slate-400 border border-slate-100 hover:bg-slate-200'}`}
+                                                                    >
+                                                                        <Power size={14} className={sub.enabled ? 'text-brand-600' : 'text-slate-400'} />
+                                                                    </button>
+                                                                </div>
+                                                            </div>
+
+                                                            <div className="mb-4">
+                                                                <h4 className="text-xl font-bold text-slate-900 mb-1 group-hover:text-brand-600 transition-colors">{sub.title}</h4>
+                                                                <div className="text-[16px] font-black text-brand-600 tracking-[0.15em] uppercase opacity-70">{sub.name}</div>
+                                                            </div>
+
+                                                            <p className="text-slate-500 text-[13px] leading-relaxed mb-8 flex-1 line-clamp-3">
+                                                                {sub.description}
+                                                            </p>
+
+                                                            <div className="pt-6 border-t border-slate-50 flex items-center justify-between mt-auto">
+                                                                <button className="text-[11px] font-bold text-slate-400 group-hover:text-brand-600 transition-colors">設定與詳情</button>
+                                                                <div className="w-9 h-9 bg-slate-50 text-slate-400 rounded-full flex items-center justify-center transition-all group-hover:translate-x-1 group-hover:bg-brand-50 group-hover:text-brand-600 border border-slate-100">
+                                                                    <ChevronRight size={18} />
+                                                                </div>
                                                             </div>
                                                         </div>
-                                                        <div className="w-px h-10 bg-white/10 hidden md:block"></div>
-                                                        <div className="px-2">
-                                                            <div className="text-slate-500 text-[11px] font-bold uppercase tracking-wider mb-1">健康度</div>
-                                                            <div className="text-2xl font-bold text-[#4ade80] tracking-tight">
-                                                                {isStatsLoading ? '...' : (tokenStats?.daily_stats?.health_score ?? 0)}%
-                                                            </div>
-                                                        </div>
-                                                    </div>
+                                                    ))}
 
+                                                    {/* Add Agent Button */}
                                                     <button
-                                                        onClick={() => navigate('/agent/' + routeAgentId + '/agents/root-admin')}
-                                                        className="w-14 h-14 bg-white/5 hover:bg-white/10 border border-white/10 rounded-2xl flex items-center justify-center transition-all hover:scale-105 active:scale-95 group/settings shadow-xl"
+                                                        onClick={() => setIsModalOpen(true)}
+                                                        className="bg-white/30 border-2 border-dashed border-slate-200 rounded-[32px] p-8 flex flex-col items-center justify-center gap-5 hover:border-brand-300 hover:bg-brand-50/20 transition-all duration-500 group min-h-[340px]"
                                                     >
-                                                        <Settings size={22} className="text-slate-300 group-hover:rotate-90 transition-transform duration-500" />
+                                                        <div className="w-16 h-16 border border-slate-100 bg-slate-50 rounded-full flex items-center justify-center group-hover:bg-brand-50 group-hover:scale-110 transition-all duration-500 shadow-sm">
+                                                            <Plus size={32} className="text-slate-300 group-hover:text-brand-500" />
+                                                        </div>
+                                                        <div className="text-center">
+                                                            <div className="text-xl font-bold text-slate-800 mb-2">新增 Agent</div>
+                                                            <p className="text-[13px] text-slate-400 max-w-[200px] leading-relaxed">瀏覽 Agent 市場，擴充您的 AI 團隊能力</p>
+                                                        </div>
                                                     </button>
                                                 </div>
                                             </div>
                                         </div>
-
-                                        {/* Your Team Members */}
-                                        <div className="mb-20">
-                                            <div className="flex items-center gap-2 text-slate-400 text-xs font-bold uppercase tracking-widest mb-6">
-                                                <div className="w-2 h-2 bg-brand-400 rounded-full"></div>
-                                                您的團隊成員 (YOUR TEAM)
-                                            </div>
-                                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                                                {teamSubagents.map((sub, idx) => (
-                                                    <div
-                                                        key={idx}
-                                                        ref={idx === 0 ? kbCardRef : idx === 1 ? escalationCardRef : idx === 2 ? analystCardRef : null}
-                                                        onClick={() => {
-                                                            const sub_path = EDITING_TO_SUB[sub.name];
-                                                            if (sub_path) navigate('/agent/' + routeAgentId + '/agents/' + sub_path);
-                                                        }}
-                                                        className={`bg-white rounded-[32px] p-8 border ${sub.enabled ? 'border-slate-100' : 'border-slate-50 opacity-60'} shadow-sm flex flex-col h-full relative group cursor-pointer hover:border-brand-200 hover:shadow-2xl hover:shadow-brand-500/5 transition-all duration-500`}
-                                                    >
-                                                        <div className="flex items-start justify-between mb-8">
-                                                            <div className={`w-14 h-14 ${sub.bgColor} rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform duration-500 shadow-sm`}>
-                                                                {sub.icon}
-                                                            </div>
-                                                            <div className="flex items-center gap-2">
-                                                                <div className={`flex items-center gap-2 ${sub.enabled ? 'bg-green-50 text-green-600' : 'bg-slate-50 text-slate-400'} px-3 py-1.5 rounded-full border ${sub.enabled ? 'border-green-100/50' : 'border-slate-200'}`}>
-                                                                    <div className={`w-1.5 h-1.5 ${sub.enabled ? 'bg-green-500' : 'bg-slate-300'} rounded-full ${sub.enabled ? 'animate-pulse' : ''}`}></div>
-                                                                    <span className="text-[11px] font-bold">{sub.enabled ? 'Enabled' : 'Disabled'}</span>
-                                                                </div>
-                                                                <button
-                                                                    onClick={(e) => {
-                                                                        e.stopPropagation();
-                                                                        handleToggleSubagent(sub._id, sub.enabled, sub.name);
-                                                                    }}
-                                                                    className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${sub.enabled ? 'bg-brand-50 text-brand-600 border border-brand-100 hover:bg-brand-100' : 'bg-slate-50 text-slate-400 border border-slate-100 hover:bg-slate-200'}`}
-                                                                >
-                                                                    <Power size={14} className={sub.enabled ? 'text-brand-600' : 'text-slate-400'} />
-                                                                </button>
-                                                            </div>
-                                                        </div>
-
-                                                        <div className="mb-4">
-                                                            <h4 className="text-xl font-bold text-slate-900 mb-1 group-hover:text-brand-600 transition-colors">{sub.title}</h4>
-                                                            <div className="text-[16px] font-black text-brand-600 tracking-[0.15em] uppercase opacity-70">{sub.name}</div>
-                                                        </div>
-
-                                                        <p className="text-slate-500 text-[13px] leading-relaxed mb-8 flex-1 line-clamp-3">
-                                                            {sub.description}
-                                                        </p>
-
-                                                        <div className="pt-6 border-t border-slate-50 flex items-center justify-between mt-auto">
-                                                            <button className="text-[11px] font-bold text-slate-400 group-hover:text-brand-600 transition-colors">設定與詳情</button>
-                                                            <div className="w-9 h-9 bg-slate-50 text-slate-400 rounded-full flex items-center justify-center transition-all group-hover:translate-x-1 group-hover:bg-brand-50 group-hover:text-brand-600 border border-slate-100">
-                                                                <ChevronRight size={18} />
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                ))}
-
-                                                {/* Add Agent Button */}
-                                                <button
-                                                    onClick={() => setIsModalOpen(true)}
-                                                    className="bg-white/30 border-2 border-dashed border-slate-200 rounded-[32px] p-8 flex flex-col items-center justify-center gap-5 hover:border-brand-300 hover:bg-brand-50/20 transition-all duration-500 group min-h-[340px]"
-                                                >
-                                                    <div className="w-16 h-16 border border-slate-100 bg-slate-50 rounded-full flex items-center justify-center group-hover:bg-brand-50 group-hover:scale-110 transition-all duration-500 shadow-sm">
-                                                        <Plus size={32} className="text-slate-300 group-hover:text-brand-500" />
-                                                    </div>
-                                                    <div className="text-center">
-                                                        <div className="text-xl font-bold text-slate-800 mb-2">新增 Agent</div>
-                                                        <p className="text-[13px] text-slate-400 max-w-[200px] leading-relaxed">瀏覽 Agent 市場，擴充您的 AI 團隊能力</p>
-                                                    </div>
-                                                </button>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <SpotlightTour
-                                        isOpen={showTeamTour && teamSubagents.length > 0}
-                                        onClose={() => {
-                                            localStorage.setItem('kefu_team_tour_done_v1', '1');
-                                            setShowTeamTour(false);
-                                        }}
-                                        steps={[
-                                            {
-                                                targetRef: kbCardRef,
-                                                title: '客服專員（Knowledge Base）',
-                                                description: '管理 FAQ 知識庫與商品目錄，是 AI 回答客戶問題的核心依據。先在這裡新增您的常見問答，AI 才能準確回覆客戶。',
-                                            },
-                                            {
-                                                targetRef: escalationCardRef,
-                                                title: '協作專員（Escalation Manager）',
-                                                description: '設定轉人工的觸發條件，並指定通知接收者。當顧客需要真人協助時，系統會自動通知指定的團隊成員。',
-                                            },
-                                            {
-                                                targetRef: analystCardRef,
-                                                title: '數據分析師（Conversation Analyst）',
-                                                description: '自動分析對話紀錄，找出 FAQ 覆蓋不足的問題並生成改善建議，幫助您持續優化 AI 客服品質。',
-                                                ctaLabel: '開始設定客服專員',
-                                                onCta: () => {
-                                                    localStorage.setItem('kefu_team_tour_done_v1', '1');
-                                                    setShowTeamTour(false);
-                                                    navigate(`/agent/${routeAgentId}/agents/knowledge-base`);
+                                        <SpotlightTour
+                                            isOpen={showTeamTour && teamSubagents.length > 0}
+                                            onClose={() => {
+                                                localStorage.setItem('kefu_team_tour_done_v1', '1');
+                                                setShowTeamTour(false);
+                                            }}
+                                            steps={[
+                                                {
+                                                    targetRef: kbCardRef,
+                                                    title: '客服專員（Knowledge Base）',
+                                                    description: '管理 FAQ 知識庫與商品目錄，是 AI 回答客戶問題的核心依據。先在這裡新增您的常見問答，AI 才能準確回覆客戶。',
                                                 },
-                                            },
-                                        ]}
-                                    />
+                                                {
+                                                    targetRef: escalationCardRef,
+                                                    title: '協作專員（Escalation Manager）',
+                                                    description: '設定轉人工的觸發條件，並指定通知接收者。當顧客需要真人協助時，系統會自動通知指定的團隊成員。',
+                                                },
+                                                {
+                                                    targetRef: analystCardRef,
+                                                    title: '數據分析師（Conversation Analyst）',
+                                                    description: '自動分析對話紀錄，找出 FAQ 覆蓋不足的問題並生成改善建議，幫助您持續優化 AI 客服品質。',
+                                                    ctaLabel: '開始設定客服專員',
+                                                    onCta: () => {
+                                                        localStorage.setItem('kefu_team_tour_done_v1', '1');
+                                                        setShowTeamTour(false);
+                                                        navigate(`/agent/${routeAgentId}/agents/knowledge-base`);
+                                                    },
+                                                },
+                                            ]}
+                                        />
                                     </>
                                 );
                             case 'crm':
@@ -3384,9 +3413,18 @@ const BackendDashboard = () => {
                             case 'channels':
                                 return (
                                     <div className="max-w-6xl">
-                                        <div className="mb-10">
-                                            <h1 className="text-3xl font-bold text-slate-900 mb-2">渠道串接 (Channels)</h1>
-                                            <p className="text-slate-500">選擇您要部署 AI 客服的通訊平台。</p>
+                                        <div className="mb-10 flex items-start justify-between">
+                                            <div>
+                                                <h1 className="text-3xl font-bold text-slate-900 mb-2">渠道串接 (Channels)</h1>
+                                                <p className="text-slate-500">選擇您要部署 AI 客服的通訊平台。</p>
+                                            </div>
+                                            <button
+                                                onClick={() => setIsChannelManageOverlayOpen(true)}
+                                                className="flex items-center gap-2 px-5 py-2.5 bg-white border border-slate-200 rounded-2xl text-sm font-bold text-slate-700 hover:border-brand-300 hover:text-brand-600 shadow-sm transition-all"
+                                            >
+                                                <SlidersHorizontal size={16} />
+                                                管理渠道
+                                            </button>
                                         </div>
 
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
@@ -3407,10 +3445,17 @@ const BackendDashboard = () => {
                                                 </p>
                                                 {(currentAgent?.deploy_config?.line || currentAgent?.deploy_type === 'line') ? (
                                                     <div className="flex flex-col items-center gap-2">
-                                                        <div className="bg-blue-50 text-blue-600 px-5 py-2 rounded-full text-[13px] font-bold border border-blue-100 flex items-center gap-2">
-                                                            <span className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></span>
-                                                            已連接
-                                                        </div>
+                                                        {currentAgent?.deploy_config?.line?.enabled === false ? (
+                                                            <div className="bg-slate-100 text-slate-500 px-5 py-2 rounded-full text-[13px] font-bold border border-slate-200 flex items-center gap-2">
+                                                                <span className="w-2 h-2 bg-slate-400 rounded-full"></span>
+                                                                已暫停
+                                                            </div>
+                                                        ) : (
+                                                            <div className="bg-blue-50 text-blue-600 px-5 py-2 rounded-full text-[13px] font-bold border border-blue-100 flex items-center gap-2">
+                                                                <span className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></span>
+                                                                已連接
+                                                            </div>
+                                                        )}
                                                         {(currentAgent?.deploy_config?.line?.display_name || currentAgent?.deploy_config?.display_name) && (
                                                             <span className="text-xs text-slate-400">{currentAgent?.deploy_config?.line?.display_name || currentAgent?.deploy_config?.display_name}</span>
                                                         )}
@@ -3472,10 +3517,17 @@ const BackendDashboard = () => {
                                                 </p>
                                                 {(currentAgent?.deploy_config?.telegram || currentAgent?.deploy_type === 'telegram') ? (
                                                     <div className="flex flex-col items-center gap-2">
-                                                        <div className="bg-blue-50 text-blue-600 px-5 py-2 rounded-full text-[13px] font-bold border border-blue-100 flex items-center gap-2">
-                                                            <span className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></span>
-                                                            已連接
-                                                        </div>
+                                                        {currentAgent?.deploy_config?.telegram?.enabled === false ? (
+                                                            <div className="bg-slate-100 text-slate-500 px-5 py-2 rounded-full text-[13px] font-bold border border-slate-200 flex items-center gap-2">
+                                                                <span className="w-2 h-2 bg-slate-400 rounded-full"></span>
+                                                                已暫停
+                                                            </div>
+                                                        ) : (
+                                                            <div className="bg-blue-50 text-blue-600 px-5 py-2 rounded-full text-[13px] font-bold border border-blue-100 flex items-center gap-2">
+                                                                <span className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></span>
+                                                                已連接
+                                                            </div>
+                                                        )}
                                                         {(currentAgent?.deploy_config?.telegram?.bot_username || currentAgent?.deploy_config?.bot_username) && (
                                                             <span className="text-xs text-slate-400">@{currentAgent?.deploy_config?.telegram?.bot_username || currentAgent?.deploy_config?.bot_username}</span>
                                                         )}
@@ -3884,6 +3936,20 @@ const BackendDashboard = () => {
 
                             {/* Modal Body */}
                             <div className="p-10 space-y-8">
+                                {currentAgent?.deploy_config?.line && (
+                                    <div className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                                        <div className="flex-1 min-w-0 pr-4">
+                                            <p className="font-bold text-slate-700 text-sm">渠道啟用</p>
+                                            <p className="text-xs text-slate-400 mt-0.5 truncate">關閉後 LINE Bot 將停止回應訊息</p>
+                                        </div>
+                                        <button
+                                            onClick={() => handleToggleChannel('line', currentAgent.deploy_config.line.enabled === false)}
+                                            className={`relative w-12 h-6 flex-none rounded-full transition-colors ${currentAgent.deploy_config.line.enabled !== false ? 'bg-[#06C755]' : 'bg-slate-300'}`}
+                                        >
+                                            <span className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full shadow transition-transform ${currentAgent.deploy_config.line.enabled !== false ? 'translate-x-6' : 'translate-x-0'}`} />
+                                        </button>
+                                    </div>
+                                )}
                                 <div className="space-y-4">
                                     <div>
                                         <label className="text-[11px] font-bold text-slate-400 uppercase tracking-[0.1em] mb-2 block">Channel Access Token</label>
@@ -3970,6 +4036,20 @@ const BackendDashboard = () => {
 
                             {/* Modal Body */}
                             <div className="p-10 space-y-8">
+                                {currentAgent?.deploy_config?.telegram && (
+                                    <div className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                                        <div className="flex-1 min-w-0 pr-4">
+                                            <p className="font-bold text-slate-700 text-sm">渠道啟用</p>
+                                            <p className="text-xs text-slate-400 mt-0.5 truncate">關閉後 Telegram Bot 將停止回應訊息</p>
+                                        </div>
+                                        <button
+                                            onClick={() => handleToggleChannel('telegram', currentAgent.deploy_config.telegram.enabled === false)}
+                                            className={`relative w-12 h-6 flex-none rounded-full transition-colors ${currentAgent.deploy_config.telegram.enabled !== false ? 'bg-[#0088cc]' : 'bg-slate-300'}`}
+                                        >
+                                            <span className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full shadow transition-transform ${currentAgent.deploy_config.telegram.enabled !== false ? 'translate-x-6' : 'translate-x-0'}`} />
+                                        </button>
+                                    </div>
+                                )}
                                 <div>
                                     <label className="text-[11px] font-bold text-slate-400 uppercase tracking-[0.1em] mb-2 block">Bot Token</label>
                                     <input
@@ -4003,6 +4083,120 @@ const BackendDashboard = () => {
                                     )}
                                     確認部署
                                 </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* Channel Management Overlay */}
+                {isChannelManageOverlayOpen && (
+                    <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
+                        <div
+                            className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
+                            onClick={() => setIsChannelManageOverlayOpen(false)}
+                        />
+                        <div className="relative bg-white w-full max-w-md rounded-[32px] overflow-hidden shadow-2xl animate-in fade-in zoom-in duration-300">
+                            <div className="p-8 border-b border-slate-100 flex items-center justify-between">
+                                <div className="flex items-center gap-3">
+                                    <div className="w-10 h-10 bg-slate-100 rounded-xl flex items-center justify-center text-slate-600">
+                                        <SlidersHorizontal size={20} />
+                                    </div>
+                                    <h2 className="text-xl font-bold text-slate-800">管理渠道開關</h2>
+                                </div>
+                                <button
+                                    onClick={() => setIsChannelManageOverlayOpen(false)}
+                                    className="w-10 h-10 flex items-center justify-center text-slate-400 hover:text-slate-600 hover:bg-slate-50 rounded-full transition-all"
+                                >
+                                    <X size={24} />
+                                </button>
+                            </div>
+                            <div className="p-6 space-y-3">
+                                {/* LINE */}
+                                {(() => {
+                                    const lineConnected = !!(currentAgent?.deploy_config?.line || currentAgent?.deploy_type === 'line');
+                                    const lineEnabled = currentAgent?.deploy_config?.line?.enabled !== false;
+                                    return (
+                                        <div className="flex items-center justify-between p-4 rounded-2xl border border-slate-100 bg-slate-50/50">
+                                            <div className="flex items-center gap-3 flex-1 min-w-0">
+                                                <div className="w-9 h-9 bg-[#06C755]/10 rounded-xl flex-none flex items-center justify-center">
+                                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="#06C755"><path d="M24 10.304c0-5.369-5.383-9.738-12-9.738-6.616 0-12 4.369-12 9.738 0 4.814 4.269 8.846 10.036 9.608.391.084.922.258 1.057.592.121.303.079.778.039 1.085l-.171 1.027c-.052.303-.242 1.186 1.039.647 1.281-.54 6.911-4.069 9.428-6.967 1.739-1.907 2.572-3.893 2.572-5.992z" /></svg>
+                                                </div>
+                                                <div className="min-w-0">
+                                                    <p className="font-bold text-slate-800 text-sm truncate">LINE</p>
+                                                    <p className="text-xs text-slate-400">{lineConnected ? (lineEnabled ? '已啟用' : '已暫停') : '尚未設定'}</p>
+                                                </div>
+                                            </div>
+                                            {lineConnected ? (
+                                                <button
+                                                    onClick={() => handleToggleChannel('line', !lineEnabled)}
+                                                    className={`relative w-12 h-6 flex-none rounded-full transition-colors ${lineEnabled ? 'bg-[#06C755]' : 'bg-slate-300'}`}
+                                                >
+                                                    <span className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full shadow transition-transform ${lineEnabled ? 'translate-x-6' : 'translate-x-0'}`} />
+                                                </button>
+                                            ) : (
+                                                <span className="text-xs flex-none text-slate-400 bg-slate-100 px-3 py-1 rounded-full">請先設定</span>
+                                            )}
+                                        </div>
+                                    );
+                                })()}
+                                {/* Messenger - unavailable */}
+                                <div className="flex items-center justify-between p-4 rounded-2xl border border-slate-100 opacity-50">
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-9 h-9 bg-blue-50 rounded-xl flex items-center justify-center">
+                                            <svg width="20" height="20" viewBox="0 0 24 24" fill="#0084FF"><path d="M12 2C6.47715 2 2 6.145 2 11.257c0 2.913 1.45 5.514 3.714 7.222V22l3.39-1.858c.905.251 1.868.388 2.896.388 5.52285 0 10-4.145 10-9.257C22 6.145 17.52285 2 12 2zm1.09 12.338l-2.607-2.78-5.084 2.78 5.587-5.93 2.67 2.78 5.022-2.78-5.588 5.93z" /></svg>
+                                        </div>
+                                        <div>
+                                            <p className="font-bold text-slate-800 text-sm">Messenger</p>
+                                            <p className="text-xs text-slate-400">暫未開放</p>
+                                        </div>
+                                    </div>
+                                    <button disabled className="relative w-12 h-6 rounded-full shrink-0 bg-slate-200 cursor-not-allowed">
+                                        <span className="absolute top-1 translate-x-1 w-4 h-4 bg-white rounded-full shadow" />
+                                    </button>
+                                </div>
+                                {/* Instagram - unavailable */}
+                                <div className="flex items-center justify-between p-4 rounded-2xl border border-slate-100 opacity-50">
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-9 h-9 bg-pink-50 rounded-xl flex items-center justify-center">
+                                            <svg width="20" height="20" viewBox="0 0 24 24" fill="#E4405F"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.052.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0zm0 5.838a6.162 6.162 0 100 12.324 6.162 6.162 0 000-12.324zM12 16a4 4 0 110-8 4 4 0 010 8zm6.406-11.845a1.44 1.44 0 100 2.881 1.44 1.44 0 000-2.881z" /></svg>
+                                        </div>
+                                        <div>
+                                            <p className="font-bold text-slate-800 text-sm">Instagram</p>
+                                            <p className="text-xs text-slate-400">暫未開放</p>
+                                        </div>
+                                    </div>
+                                    <button disabled className="relative w-12 h-6 rounded-full shrink-0 bg-slate-200 cursor-not-allowed">
+                                        <span className="absolute top-1 translate-x-1 w-4 h-4 bg-white rounded-full shadow" />
+                                    </button>
+                                </div>
+                                {/* Telegram */}
+                                {(() => {
+                                    const tgConnected = !!(currentAgent?.deploy_config?.telegram || currentAgent?.deploy_type === 'telegram');
+                                    const tgEnabled = currentAgent?.deploy_config?.telegram?.enabled !== false;
+                                    return (
+                                        <div className="flex items-center justify-between p-4 rounded-2xl border border-slate-100 bg-slate-50/50">
+                                            <div className="flex items-center gap-3 flex-1 min-w-0">
+                                                <div className="w-9 h-9 bg-sky-50 rounded-xl flex-none flex items-center justify-center">
+                                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="#0088cc"><path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.562 8.161l-1.87 8.818c-.141.621-.51.772-1.033.479l-2.85-2.099-1.375 1.322c-.153.153-.281.281-.575.281l.204-2.895 5.272-4.762c.229-.204-.05-.316-.356-.113l-6.516 4.103-2.801-.875c-.61-.19-.621-.61.127-.905l10.94-4.217c.507-.187.951.116.833.103v.203z" /></svg>
+                                                </div>
+                                                <div className="min-w-0">
+                                                    <p className="font-bold text-slate-800 text-sm truncate">Telegram</p>
+                                                    <p className="text-xs text-slate-400">{tgConnected ? (tgEnabled ? '已啟用' : '已暫停') : '尚未設定'}</p>
+                                                </div>
+                                            </div>
+                                            {tgConnected ? (
+                                                <button
+                                                    onClick={() => handleToggleChannel('telegram', !tgEnabled)}
+                                                    className={`relative w-12 h-6 flex-none rounded-full transition-colors ${tgEnabled ? 'bg-[#0088cc]' : 'bg-slate-300'}`}
+                                                >
+                                                    <span className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full shadow transition-transform ${tgEnabled ? 'translate-x-6' : 'translate-x-0'}`} />
+                                                </button>
+                                            ) : (
+                                                <span className="text-xs flex-none text-slate-400 bg-slate-100 px-3 py-1 rounded-full">請先設定</span>
+                                            )}
+                                        </div>
+                                    );
+                                })()}
                             </div>
                         </div>
                     </div>

@@ -171,6 +171,15 @@ const StepDeploy = ({ formData, sessionId, agentId, onHome }) => {
                                     </>
                                 )}
                             </button>
+                            <button
+                                onClick={onHome}
+                                className="w-full mt-3 py-4 bg-slate-50 border border-slate-200 rounded-2xl text-slate-500 hover:bg-slate-100 hover:text-slate-700 text-sm font-bold transition-all active:scale-95"
+                            >
+                                略過，稍後設定
+                            </button>
+                            <p className="text-xs text-slate-400 text-center mt-1">
+                                可稍後在後台 → 渠道串接 頁面完成設定
+                            </p>
                         </div>
 
                         <div className="bg-slate-800 rounded-3xl p-6 text-white overflow-hidden relative">
