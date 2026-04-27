@@ -67,6 +67,7 @@ import ImageLightbox from './ImageLightbox';
 import LineDeployGuide from './LineDeployGuide';
 import NotifyBanner from './NotifyBanner';
 import SpotlightTour from './SpotlightTour';
+import OnboardingChecklist from './OnboardingChecklist';
 import { useAuth } from '../context/AuthContext';
 
 const SUB_SECTION_MAP = {
@@ -4843,6 +4844,12 @@ const BackendDashboard = () => {
                     </div>
                 </div>
             )}
+
+            <OnboardingChecklist
+                agentId={routeAgentId}
+                navigate={navigate}
+                isDeployed={!!currentAgent?.line_channel_id}
+            />
         </div>
     );
 };
