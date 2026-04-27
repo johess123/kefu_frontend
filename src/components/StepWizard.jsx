@@ -5,7 +5,7 @@ import Cookies from 'js-cookie';
 import config from '../config';
 import { ToneType, DEFAULT_HANDOFF_OPTIONS } from '../types';
 
-const StepWizard = ({ formData, setFormData, onComplete }) => {
+const StepWizard = ({ formData, setFormData, agentId, onComplete }) => {
     const [qIndex, setQIndex] = useState(0);
     const [isGeneratingFaqs, setIsGeneratingFaqs] = useState(false);
     const [urlError, setUrlError] = useState('');
@@ -197,7 +197,8 @@ const StepWizard = ({ formData, setFormData, onComplete }) => {
                 const response = await axios.post(`${config.API_URL}/api/generate_faqs`, {
                     brandDescription: formData.brandDescription,
                     websiteUrl: formData.websiteUrl || '',
-                    line_user_id: line_user_id
+                    line_user_id: line_user_id,
+                    agent_id: agentId
                 });
 
                 if (response.data && response.data.faqs) {
@@ -234,7 +235,8 @@ const StepWizard = ({ formData, setFormData, onComplete }) => {
                 const response = await axios.post(`${config.API_URL}/api/optimize_faq`, {
                     question: faq.question,
                     answer: faq.answer,
-                    line_user_id: line_user_id
+                    line_user_id: line_user_id,
+                    agent_id: agentId
                 });
 
                 if (response.data && !response.data.error) {
@@ -292,7 +294,8 @@ const StepWizard = ({ formData, setFormData, onComplete }) => {
                 const response = await axios.post(`${config.API_URL}/api/analyze_faqs`, {
                     brandDescription: formData.brandDescription,
                     faqs: formData.faqs,
-                    line_user_id: line_user_id
+                    line_user_id: line_user_id,
+                    agent_id: agentId
                 });
 
                 if (response.data && !response.data.error) {

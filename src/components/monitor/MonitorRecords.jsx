@@ -5,6 +5,28 @@ import { useAuth } from '../../context/AuthContext';
 const API = `${config.API_URL}/api/monitor`;
 const LIMIT = 10;
 
+const SOURCE_LABELS = {
+    LINE: 'LINE',
+    Telegram: 'Telegram',
+    test: '商家測試',
+    build: '建置',
+    analysis: '數據分析',
+};
+
+const BUILD_ACTION_LABELS = {
+    faq_generated: 'FAQ 生成',
+    faq_optimized: 'FAQ 優化',
+    faq_health_checked: 'FAQ 健檢',
+    website_crawled: '網站爬取',
+    form_parsed: '表單解析',
+    analysis_completed: '對話分析',
+    faq_matched: 'FAQ 匹配',
+    faq_no_match: 'FAQ 未匹配',
+    product_matched: '商品匹配',
+    handoff_triggered: '觸發轉接',
+    handoff_not_triggered: '未觸發轉接',
+};
+
 const PROMPT_TABS = [
     { key: 'router_instruction', label: 'Router 指令', match: null },
     { key: 'faq_instruction', label: 'FAQ 助手指令', match: '客服專員' },
@@ -112,6 +134,7 @@ const MonitorRecords = () => {
 
 const RecordCard = ({ rec }) => {
     const [showPrompt, setShowPrompt] = useState(false);
+    const [showEvents, setShowEvents] = useState(false);
     const [activeTab, setActiveTab] = useState('router_instruction');
     const [copyFeedback, setCopyFeedback] = useState('');
 
@@ -160,6 +183,12 @@ const RecordCard = ({ rec }) => {
                 </div>
             </div>
             <div className="token-info">
+                {rec.source && (
+                    <span className="badge badge-source">📡 {SOURCE_LABELS[rec.source] || rec.source}</span>
+                )}
+                {rec.duration_ms != null && (
+                    <span className="badge">⏱️ {rec.duration_ms.toLocaleString()} ms</span>
+                )}
                 {hasTokens ? (
                     <>
                         <span className="badge badge-token-in">📥 In: {tokens.input_token || 0}</span>
@@ -179,6 +208,14 @@ const RecordCard = ({ rec }) => {
                     ))
                     : <span className="badge">無使用 Subagent</span>
                 }
+                {rec.events && rec.events.length > 0 && (
+                    <button
+                        className="badge badge-prompt-btn"
+                        onClick={() => setShowEvents(prev => !prev)}
+                    >
+                        {showEvents ? '收合思維鏈' : '🧠 查看思維鏈'}
+                    </button>
+                )}
                 {prompts && (
                     <button
                         className="badge badge-prompt-btn"
@@ -188,6 +225,22 @@ const RecordCard = ({ rec }) => {
                     </button>
                 )}
             </div>
+
+            {showEvents && rec.events && rec.events.length > 0 && (
+                <div className="prompt-section">
+                    {rec.events.map((evt, i) => (
+                        <div key={i} style={{ marginBottom: '0.5rem' }}>
+                            <span className="badge badge-subagent">{evt.subagent_title || evt.subagent}</span>
+                            <span className="badge">{BUILD_ACTION_LABELS[evt.action] || evt.action}</span>
+                            {evt.detail && Object.keys(evt.detail).length > 0 && (
+                                <div className="prompt-display" style={{ marginTop: '0.25rem' }}>
+                                    {JSON.stringify(evt.detail, null, 2)}
+                                </div>
+                            )}
+                        </div>
+                    ))}
+                </div>
+            )}
 
             {showPrompt && prompts && (
                 <div className="prompt-section">

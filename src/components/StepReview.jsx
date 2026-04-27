@@ -18,7 +18,8 @@ const StepReview = ({ onNext, onEdit, formData, setFormData, sessionId, agentId,
             const line_user_id = Cookies.get('google_user_id');
             const response = await axios.post(`${config.API_URL}/api/generate_prompt`, {
                 ...formData,
-                line_user_id
+                line_user_id,
+                agent_id: agentId
             });
             setReviewData(response.data);
             if (response.data.faqs && response.data.faqs.length > 0) {
