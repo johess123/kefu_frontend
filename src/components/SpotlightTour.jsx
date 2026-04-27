@@ -47,13 +47,13 @@ const SpotlightTour = ({ isOpen, onClose, steps = [] }) => {
         });
     }, [currentStep]);
 
-    // On step change: scroll target into view, then compute position after scroll settles
+    // On step change: clear ring immediately, scroll, then recompute position
     useEffect(() => {
         if (!isOpen) return;
         const el = currentStep?.targetRef?.current;
         if (!el) return;
 
-        // Scroll target to center of viewport, then wait for scroll animation
+        setHighlightRect(null); // hide old ring instantly before scroll
         el.scrollIntoView({ behavior: 'smooth', block: 'center' });
 
         const timer = setTimeout(computePos, 380); // ~300ms for smooth scroll
