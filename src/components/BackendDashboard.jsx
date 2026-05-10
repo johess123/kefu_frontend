@@ -406,6 +406,7 @@ const BackendDashboard = () => {
     const [isPlaygroundLoading, setIsPlaygroundLoading] = useState(false);
     const [playgroundInput, setPlaygroundInput] = useState('');
     const [playgroundLeftTab, setPlaygroundLeftTab] = useState('faq');
+    const [playgroundCollapsedCats, setPlaygroundCollapsedCats] = useState(new Set());
     const [playgroundAttachedFile, setPlaygroundAttachedFile] = useState(null); // File object
     const [playgroundImagePreview, setPlaygroundImagePreview] = useState('');   // local object URL
     const [playgroundImageUploading, setPlaygroundImageUploading] = useState(false);
@@ -3651,31 +3652,60 @@ const BackendDashboard = () => {
                                                 </div>
                                                 <div className="flex-1 overflow-y-auto p-4 space-y-3">
                                                     {playgroundLeftTab === 'faq' ? (
-                                                        <>
-                                                            {(currentAgent?.config?.raw_config?.faqs || []).map((faq, idx) => (
-                                                                <button
-                                                                    key={idx}
-                                                                    onClick={() => handlePlaygroundFaqClick(faq.question)}
-                                                                    disabled={isPlaygroundLoading}
-                                                                    className="w-full text-left p-4 rounded-2xl border border-slate-100 hover:border-brand-300 hover:bg-brand-50/50 transition-all group"
-                                                                >
-                                                                    <div className="flex items-start gap-2">
-                                                                        {faq.preview_url && (
-                                                                            <img src={faq.preview_url} alt="" className="w-10 h-10 object-cover rounded-lg flex-shrink-0 border border-slate-100" />
-                                                                        )}
-                                                                        <div className="flex-1 min-w-0">
-                                                                            <div className="text-[10px] font-bold text-slate-400 mb-0.5 group-hover:text-brand-500 uppercase tracking-widest">FAQ {idx + 1}</div>
-                                                                            <p className="text-xs font-semibold text-slate-600 group-hover:text-slate-900 leading-relaxed line-clamp-2">
-                                                                                {faq.question}
-                                                                            </p>
-                                                                        </div>
+                                                        (() => {
+                                                            const faqs = currentAgent?.config?.raw_config?.faqs || [];
+                                                            if (faqs.length === 0) {
+                                                                return <div className="text-center py-10 text-slate-400 text-xs italic">尚未設定任何 FAQ</div>;
+                                                            }
+                                                            const grouped = {};
+                                                            faqs.forEach(faq => {
+                                                                const cat = faq.category || '常見問題';
+                                                                if (!grouped[cat]) grouped[cat] = [];
+                                                                grouped[cat].push(faq);
+                                                            });
+                                                            const cats = [...new Set(faqs.map(f => f.category || '常見問題'))];
+                                                            let counter = 0;
+                                                            return cats.map(cat => {
+                                                                const catFaqs = grouped[cat];
+                                                                const isCollapsed = playgroundCollapsedCats.has(cat);
+                                                                const startIdx = counter;
+                                                                counter += catFaqs.length;
+                                                                return (
+                                                                    <div key={cat} className="mb-1">
+                                                                        <button
+                                                                            className="w-full flex items-center justify-between px-2 py-1.5 rounded-lg hover:bg-slate-50 transition-colors"
+                                                                            onClick={() => setPlaygroundCollapsedCats(prev => { const n = new Set(prev); n.has(cat) ? n.delete(cat) : n.add(cat); return n; })}
+                                                                        >
+                                                                            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest truncate">{cat}</span>
+                                                                            <div className="flex items-center gap-1 flex-shrink-0">
+                                                                                <span className="text-[10px] text-slate-300">{catFaqs.length}</span>
+                                                                                <ChevronDown size={10} className={`text-slate-300 transition-transform duration-200 ${isCollapsed ? '-rotate-90' : ''}`} />
+                                                                            </div>
+                                                                        </button>
+                                                                        {!isCollapsed && catFaqs.map((faq, i) => (
+                                                                            <button
+                                                                                key={i}
+                                                                                onClick={() => handlePlaygroundFaqClick(faq.question)}
+                                                                                disabled={isPlaygroundLoading}
+                                                                                className="w-full text-left p-3 rounded-xl border border-slate-100 hover:border-brand-300 hover:bg-brand-50/50 transition-all group mb-2"
+                                                                            >
+                                                                                <div className="flex items-start gap-2">
+                                                                                    {faq.preview_url && (
+                                                                                        <img src={faq.preview_url} alt="" className="w-8 h-8 object-cover rounded-lg flex-shrink-0 border border-slate-100" />
+                                                                                    )}
+                                                                                    <div className="flex-1 min-w-0">
+                                                                                        <div className="text-[10px] font-bold text-slate-400 mb-0.5 group-hover:text-brand-500 uppercase tracking-widest">FAQ {startIdx + i + 1}</div>
+                                                                                        <p className="text-xs font-semibold text-slate-600 group-hover:text-slate-900 leading-relaxed line-clamp-2">
+                                                                                            {faq.question}
+                                                                                        </p>
+                                                                                    </div>
+                                                                                </div>
+                                                                            </button>
+                                                                        ))}
                                                                     </div>
-                                                                </button>
-                                                            ))}
-                                                            {(!currentAgent?.config?.raw_config?.faqs || currentAgent.config.raw_config.faqs.length === 0) && (
-                                                                <div className="text-center py-10 text-slate-400 text-xs italic">尚未設定任何 FAQ</div>
-                                                            )}
-                                                        </>
+                                                                );
+                                                            });
+                                                        })()
                                                     ) : (
                                                         <>
                                                             {(currentAgent?.config?.raw_config?.products || []).map((product, idx) => (
