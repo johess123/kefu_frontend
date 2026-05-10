@@ -1258,7 +1258,7 @@ const BackendDashboard = () => {
             title: '刪除分類',
             message: `確定要刪除分類「${cat}」及其所有 FAQ 嗎？儲存後才會生效。`,
             onConfirm: () => {
-                setEditingFaqs(prev => prev.filter(f => f.category !== cat));
+                setEditingFaqs(prev => prev.filter(f => (f.category || '常見問題') !== cat));
                 setExpandedCategories(prev => { const next = new Set(prev); next.delete(cat); return next; });
                 setCategoryOrder(prev => prev.filter(c => c !== cat));
                 closeConfirm();
