@@ -708,36 +708,32 @@ const ConversationAnalystView = ({ agentId, adminId, onFaqUpdated, faqCategories
                             {/* Category */}
                             <div>
                                 <label className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-2 block">分類</label>
-                                {faqCategories.length > 0 ? (
-                                    <div className="flex flex-wrap gap-2">
-                                        {faqCategories.map(cat => (
-                                            <button
-                                                key={cat}
-                                                onClick={() => setAddFaqModal(prev => ({ ...prev, category: cat }))}
-                                                className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-all ${
-                                                    addFaqModal.category === cat
-                                                        ? 'bg-purple-600 text-white border-purple-600 shadow-sm'
-                                                        : 'bg-white text-slate-600 border-slate-200 hover:border-purple-300 hover:bg-purple-50'
-                                                }`}
-                                            >
-                                                {cat}
-                                            </button>
-                                        ))}
-                                        {/* Custom input if typed value not in list */}
-                                        {!faqCategories.includes(addFaqModal.category) && addFaqModal.category && (
-                                            <span className="px-3 py-1.5 rounded-xl text-xs font-bold bg-purple-600 text-white border border-purple-600 shadow-sm">
-                                                {addFaqModal.category}
-                                            </span>
-                                        )}
-                                    </div>
-                                ) : null}
-                                <input
-                                    type="text"
-                                    value={addFaqModal.category}
-                                    onChange={(e) => setAddFaqModal(prev => ({ ...prev, category: e.target.value }))}
-                                    placeholder="輸入或選擇分類名稱"
-                                    className="mt-2 w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-purple-200"
-                                />
+                                <select
+                                    value={faqCategories.includes(addFaqModal.category) ? addFaqModal.category : '__new__'}
+                                    onChange={(e) => {
+                                        if (e.target.value !== '__new__') {
+                                            setAddFaqModal(prev => ({ ...prev, category: e.target.value }));
+                                        } else {
+                                            setAddFaqModal(prev => ({ ...prev, category: '' }));
+                                        }
+                                    }}
+                                    className="w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-purple-200 bg-white"
+                                >
+                                    {faqCategories.map(cat => (
+                                        <option key={cat} value={cat}>{cat}</option>
+                                    ))}
+                                    <option value="__new__">＋ 新增分類...</option>
+                                </select>
+                                {!faqCategories.includes(addFaqModal.category) && (
+                                    <input
+                                        autoFocus
+                                        type="text"
+                                        value={addFaqModal.category}
+                                        onChange={(e) => setAddFaqModal(prev => ({ ...prev, category: e.target.value }))}
+                                        placeholder="輸入新分類名稱"
+                                        className="mt-2 w-full px-4 py-2.5 border border-purple-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-purple-200"
+                                    />
+                                )}
                             </div>
                             {/* Question */}
                             <div>
