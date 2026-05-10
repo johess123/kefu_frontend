@@ -19,6 +19,12 @@ const StepWizard = ({ formData, setFormData, agentId, onComplete }) => {
     const [expandedCategories, setExpandedCategories] = useState(new Set(['常見問題']));
     const [newFieldLabel, setNewFieldLabel] = useState('');
     const [schemaInputVisible, setSchemaInputVisible] = useState(false);
+    const [showWizardFaqImportModal, setShowWizardFaqImportModal] = useState(false);
+    const [wizardFaqImportTab, setWizardFaqImportTab] = useState('file');
+    const [wizardFaqImportText, setWizardFaqImportText] = useState('');
+    const wizardFaqImportFileRef = useRef(null);
+    const [isParsingWizardFaqs, setIsParsingWizardFaqs] = useState(false);
+    const [parsedWizardFaqPreview, setParsedWizardFaqPreview] = useState(null);
 
     const totalQuestions = 5;
 
@@ -363,13 +369,64 @@ const StepWizard = ({ formData, setFormData, agentId, onComplete }) => {
             updateField('faqs', formData.faqs.map(f =>
                 f.id === faqId ? { ...f, question: optimizedQ, answer: optimizedA } : f
             ));
-            // Remove suggestion from report after applying
             if (analysisReport) {
                 setAnalysisReport(prev => ({
                     ...prev,
                     suggestions: prev.suggestions.filter(s => s.id !== faqId)
                 }));
             }
+        };
+
+        const handleWizardImportFaqs = async (source) => {
+            setIsParsingWizardFaqs(true);
+            try {
+                const fd = new FormData();
+                fd.append('brandDescription', formData.brandDescription || '');
+                fd.append('line_user_id', Cookies.get('google_user_id') || '');
+                if (source === 'file') {
+                    const file = wizardFaqImportFileRef.current?.files?.[0];
+                    if (!file) { alert('請選擇檔案'); setIsParsingWizardFaqs(false); return; }
+                    if (file.size > 512 * 1024) { alert('檔案大小不得超過 500KB'); setIsParsingWizardFaqs(false); return; }
+                    const ext = file.name.toLowerCase().split('.').pop();
+                    if (!['xlsx', 'csv'].includes(ext)) { alert('僅支援 .xlsx 或 .csv 格式'); setIsParsingWizardFaqs(false); return; }
+                    fd.append('file', file);
+                } else {
+                    if (!wizardFaqImportText.trim()) { alert('請貼上 FAQ 文字內容'); setIsParsingWizardFaqs(false); return; }
+                    fd.append('text', wizardFaqImportText);
+                }
+                const res = await axios.post(`${config.API_URL}/api/parse_faqs`, fd, {
+                    headers: { 'Content-Type': 'multipart/form-data' }
+                });
+                if (res.data.error) {
+                    alert('解析失敗：' + res.data.error);
+                } else if (res.data.faqs) {
+                    setParsedWizardFaqPreview(res.data.faqs);
+                    if (wizardFaqImportFileRef.current) wizardFaqImportFileRef.current.value = '';
+                }
+            } catch (err) {
+                console.error('FAQ import failed:', err);
+                alert('解析失敗，請稍後再試');
+            } finally {
+                setIsParsingWizardFaqs(false);
+            }
+        };
+
+        const handleConfirmWizardImportFaqs = () => {
+            if (!parsedWizardFaqPreview?.length) return;
+            const newFaqs = parsedWizardFaqPreview.map(f => ({
+                id: Math.random().toString(36).substr(2, 9),
+                question: f.question,
+                answer: f.answer,
+                image_id: '',
+                category: f.category || '常見問題',
+            }));
+            updateField('faqs', [...formData.faqs, ...newFaqs]);
+            const newCats = new Set(newFaqs.map(f => f.category));
+            setExpandedCategories(prev => new Set([...prev, ...newCats]));
+            setShowWizardFaqImportModal(false);
+            setParsedWizardFaqPreview(null);
+            setWizardFaqImportText('');
+            setWizardFaqImportTab('file');
         };
 
         return (
@@ -518,10 +575,10 @@ const StepWizard = ({ formData, setFormData, agentId, onComplete }) => {
                     </div>
                 )}
 
-                <div className="flex gap-3">
+                <div className="flex gap-3 flex-wrap">
                     <button
                         onClick={() => addFAQ()}
-                        className="flex-1 py-3 flex items-center justify-center space-x-2 border-2 border-dashed border-brand-300 text-brand-600 rounded-xl hover:bg-brand-50 hover:border-brand-500 transition-colors"
+                        className="flex-1 min-w-[100px] py-3 flex items-center justify-center space-x-2 border-2 border-dashed border-brand-300 text-brand-600 rounded-xl hover:bg-brand-50 hover:border-brand-500 transition-colors"
                     >
                         <Plus size={18} />
                         <span>新增問答</span>
@@ -532,6 +589,13 @@ const StepWizard = ({ formData, setFormData, agentId, onComplete }) => {
                     >
                         <Plus size={18} />
                         <span>新增分類</span>
+                    </button>
+                    <button
+                        onClick={() => { setShowWizardFaqImportModal(true); setParsedWizardFaqPreview(null); setWizardFaqImportText(''); setWizardFaqImportTab('file'); }}
+                        className="px-4 py-3 flex items-center justify-center space-x-2 border border-slate-200 text-slate-600 rounded-xl hover:bg-slate-50 transition-colors"
+                    >
+                        <Upload size={18} className="text-brand-500" />
+                        <span>匯入 FAQ</span>
                     </button>
                     <button
                         onClick={handleAnalyzeFaqs}
@@ -546,6 +610,85 @@ const StepWizard = ({ formData, setFormData, agentId, onComplete }) => {
                         <span>AI 智能健檢</span>
                     </button>
                 </div>
+
+                {showWizardFaqImportModal && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setShowWizardFaqImportModal(false)}>
+                        <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
+                        <div className="relative bg-white rounded-2xl shadow-xl w-full max-w-lg flex flex-col max-h-[85vh]" onClick={(e) => e.stopPropagation()}>
+                            <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-slate-100 flex-shrink-0">
+                                <div>
+                                    <h3 className="text-base font-bold text-slate-800">匯入 FAQ</h3>
+                                    <p className="text-xs text-slate-400 mt-0.5">AI 自動解析並整理為知識庫格式</p>
+                                </div>
+                                <button onClick={() => setShowWizardFaqImportModal(false)} className="p-1 text-slate-400 hover:text-slate-600 transition-colors"><X size={16} /></button>
+                            </div>
+                            <div className="flex border-b border-slate-100 flex-shrink-0">
+                                <button onClick={() => { setWizardFaqImportTab('file'); setParsedWizardFaqPreview(null); }} className={`flex-1 py-3 text-sm font-semibold transition-colors ${wizardFaqImportTab === 'file' ? 'text-brand-600 border-b-2 border-brand-500' : 'text-slate-400 hover:text-slate-600'}`}>上傳檔案</button>
+                                <button onClick={() => { setWizardFaqImportTab('text'); setParsedWizardFaqPreview(null); }} className={`flex-1 py-3 text-sm font-semibold transition-colors ${wizardFaqImportTab === 'text' ? 'text-brand-600 border-b-2 border-brand-500' : 'text-slate-400 hover:text-slate-600'}`}>貼上文字</button>
+                            </div>
+                            <div className="flex-1 overflow-y-auto p-6 space-y-4">
+                                {wizardFaqImportTab === 'file' && !parsedWizardFaqPreview && (
+                                    <div>
+                                        <label className="flex flex-col items-center justify-center w-full h-36 border-2 border-dashed border-slate-200 rounded-2xl cursor-pointer hover:border-brand-300 hover:bg-brand-50/30 transition-colors">
+                                            <Upload size={28} className="text-slate-300 mb-2" />
+                                            <span className="text-sm font-semibold text-slate-500">點擊選擇或拖放檔案</span>
+                                            <span className="text-xs text-slate-400 mt-1">支援 .xlsx / .csv，最大 500KB</span>
+                                            <input ref={wizardFaqImportFileRef} type="file" accept=".xlsx,.csv" className="hidden" onChange={() => setParsedWizardFaqPreview(null)} />
+                                        </label>
+                                        <p className="text-xs text-slate-400 mt-3 text-center">AI 會自動識別問題與回答欄位，每次最多解析 50 組</p>
+                                    </div>
+                                )}
+                                {wizardFaqImportTab === 'text' && !parsedWizardFaqPreview && (
+                                    <div>
+                                        <textarea
+                                            value={wizardFaqImportText}
+                                            onChange={(e) => setWizardFaqImportText(e.target.value)}
+                                            placeholder={'請貼上網站 FAQ 內容...\n\n例如：\nQ: 如何退換貨？\nA: 商品到貨 7 天內可申請退換。\n\nQ: 運費怎麼計算？\nA: 滿 500 元免運。'}
+                                            className="w-full h-52 text-sm text-slate-700 bg-slate-50 border border-slate-200 rounded-xl p-4 resize-none outline-none focus:border-brand-400 focus:bg-white transition-colors"
+                                        />
+                                        <p className="text-xs text-slate-400 mt-2">AI 會自動識別問答結構，支援 Q&A、數字編號、中文標點等各種格式</p>
+                                    </div>
+                                )}
+                                {parsedWizardFaqPreview && (
+                                    <div>
+                                        <p className="text-sm font-semibold text-slate-700 mb-3">解析結果：共 {parsedWizardFaqPreview.length} 組 FAQ</p>
+                                        <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+                                            {parsedWizardFaqPreview.map((f, i) => (
+                                                <div key={i} className="bg-slate-50 border border-slate-100 rounded-xl px-4 py-3">
+                                                    <div className="flex items-center gap-2 mb-1">
+                                                        <span className="text-[10px] font-bold text-brand-500 bg-brand-50 px-2 py-0.5 rounded-full">{f.category || '常見問題'}</span>
+                                                    </div>
+                                                    <p className="text-sm font-semibold text-slate-800 leading-snug">{f.question}</p>
+                                                    <p className="text-xs text-slate-500 mt-1 leading-relaxed line-clamp-2">{f.answer}</p>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                            <div className="px-6 py-4 border-t border-slate-100 flex items-center justify-between gap-3 flex-shrink-0">
+                                <button onClick={() => setShowWizardFaqImportModal(false)} className="px-4 py-2.5 text-sm font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors">取消</button>
+                                {!parsedWizardFaqPreview ? (
+                                    <button
+                                        onClick={() => handleWizardImportFaqs(wizardFaqImportTab)}
+                                        disabled={isParsingWizardFaqs}
+                                        className="flex items-center gap-2 px-5 py-2.5 bg-brand-600 text-white rounded-xl text-sm font-bold hover:bg-brand-700 transition-all disabled:opacity-50"
+                                    >
+                                        {isParsingWizardFaqs ? <Loader2 size={16} className="animate-spin" /> : <Upload size={16} />}
+                                        {isParsingWizardFaqs ? 'AI 解析中...' : '開始解析'}
+                                    </button>
+                                ) : (
+                                    <div className="flex gap-2">
+                                        <button onClick={() => setParsedWizardFaqPreview(null)} className="px-4 py-2.5 text-sm font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors">重新解析</button>
+                                        <button onClick={handleConfirmWizardImportFaqs} className="px-5 py-2.5 bg-brand-600 text-white rounded-xl text-sm font-bold hover:bg-brand-700 transition-all">
+                                            加入知識庫（{parsedWizardFaqPreview.length} 組）
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                )}
 
                 {analysisReport && (
                     <div className="mt-4 p-5 bg-emerald-50 border border-emerald-100 rounded-2xl relative">
