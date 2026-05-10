@@ -406,7 +406,7 @@ const BackendDashboard = () => {
     const [isPlaygroundLoading, setIsPlaygroundLoading] = useState(false);
     const [playgroundInput, setPlaygroundInput] = useState('');
     const [playgroundLeftTab, setPlaygroundLeftTab] = useState('faq');
-    const [playgroundCollapsedCats, setPlaygroundCollapsedCats] = useState(new Set());
+    const [playgroundExpandedCats, setPlaygroundExpandedCats] = useState(new Set());
     const [playgroundAttachedFile, setPlaygroundAttachedFile] = useState(null); // File object
     const [playgroundImagePreview, setPlaygroundImagePreview] = useState('');   // local object URL
     const [playgroundImageUploading, setPlaygroundImageUploading] = useState(false);
@@ -3667,22 +3667,22 @@ const BackendDashboard = () => {
                                                             let counter = 0;
                                                             return cats.map(cat => {
                                                                 const catFaqs = grouped[cat];
-                                                                const isCollapsed = playgroundCollapsedCats.has(cat);
+                                                                const isExpanded = playgroundExpandedCats.has(cat);
                                                                 const startIdx = counter;
                                                                 counter += catFaqs.length;
                                                                 return (
                                                                     <div key={cat} className="mb-1">
                                                                         <button
-                                                                            className="w-full flex items-center justify-between px-2 py-1.5 rounded-lg hover:bg-slate-50 transition-colors"
-                                                                            onClick={() => setPlaygroundCollapsedCats(prev => { const n = new Set(prev); n.has(cat) ? n.delete(cat) : n.add(cat); return n; })}
+                                                                            className="w-full flex items-center justify-between px-2 py-2 rounded-lg hover:bg-slate-50 transition-colors"
+                                                                            onClick={() => setPlaygroundExpandedCats(prev => { const n = new Set(prev); n.has(cat) ? n.delete(cat) : n.add(cat); return n; })}
                                                                         >
-                                                                            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest truncate">{cat}</span>
-                                                                            <div className="flex items-center gap-1 flex-shrink-0">
-                                                                                <span className="text-[10px] text-slate-300">{catFaqs.length}</span>
-                                                                                <ChevronDown size={10} className={`text-slate-300 transition-transform duration-200 ${isCollapsed ? '-rotate-90' : ''}`} />
+                                                                            <span className="text-sm font-semibold text-slate-700 truncate text-left">{cat}</span>
+                                                                            <div className="flex items-center gap-1.5 flex-shrink-0 ml-2">
+                                                                                <span className="text-xs text-slate-400">{catFaqs.length}</span>
+                                                                                <ChevronRight size={12} className={`text-slate-300 transition-transform duration-200 ${isExpanded ? 'rotate-90' : ''}`} />
                                                                             </div>
                                                                         </button>
-                                                                        {!isCollapsed && catFaqs.map((faq, i) => (
+                                                                        {isExpanded && catFaqs.map((faq, i) => (
                                                                             <button
                                                                                 key={i}
                                                                                 onClick={() => handlePlaygroundFaqClick(faq.question)}
