@@ -429,6 +429,17 @@ const StepWizard = ({ formData, setFormData, agentId, onComplete }) => {
             setWizardFaqImportTab('file');
         };
 
+        const updateWizardPreviewFaq = (i, field, val) =>
+            setParsedWizardFaqPreview(prev => prev.map((f, idx) => idx === i ? { ...f, [field]: val } : f));
+
+        const removeWizardPreviewFaq = (i) =>
+            setParsedWizardFaqPreview(prev => prev.filter((_, idx) => idx !== i));
+
+        const availableWizardCategories = [...new Set([
+            ...[...new Set(formData.faqs.map(f => f.category || '常見問題'))],
+            ...(parsedWizardFaqPreview || []).map(f => f.category || '常見問題')
+        ])];
+
         return (
             <div className="space-y-4">
                 {/* AI suggestion block */}
@@ -651,15 +662,47 @@ const StepWizard = ({ formData, setFormData, agentId, onComplete }) => {
                                 )}
                                 {parsedWizardFaqPreview && (
                                     <div>
-                                        <p className="text-sm font-semibold text-slate-700 mb-3">解析結果：共 {parsedWizardFaqPreview.length} 組 FAQ</p>
-                                        <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+                                        <p className="text-sm font-semibold text-slate-700 mb-3">解析結果：共 {parsedWizardFaqPreview.length} 組 FAQ <span className="text-xs font-normal text-slate-400">（可直接編輯或刪除）</span></p>
+                                        <datalist id="wizard-faq-import-cats">
+                                            {availableWizardCategories.map(c => <option key={c} value={c} />)}
+                                        </datalist>
+                                        <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
                                             {parsedWizardFaqPreview.map((f, i) => (
-                                                <div key={i} className="bg-slate-50 border border-slate-100 rounded-xl px-4 py-3">
-                                                    <div className="flex items-center gap-2 mb-1">
-                                                        <span className="text-[10px] font-bold text-brand-500 bg-brand-50 px-2 py-0.5 rounded-full">{f.category || '常見問題'}</span>
+                                                <div key={i} className="bg-white border border-slate-200 rounded-xl px-4 py-3 space-y-2">
+                                                    <div className="flex items-center gap-2">
+                                                        <input
+                                                            list="wizard-faq-import-cats"
+                                                            value={f.category || '常見問題'}
+                                                            onChange={(e) => updateWizardPreviewFaq(i, 'category', e.target.value)}
+                                                            className="flex-1 text-[11px] font-bold text-brand-600 bg-brand-50 border border-brand-100 rounded-full px-2.5 py-0.5 outline-none focus:border-brand-400 focus:bg-white transition-colors min-w-0"
+                                                            placeholder="分類名稱"
+                                                        />
+                                                        <button onClick={() => removeWizardPreviewFaq(i)} className="flex-shrink-0 w-5 h-5 flex items-center justify-center text-slate-300 hover:text-red-400 transition-colors" title="移除此 FAQ">
+                                                            <X size={13} />
+                                                        </button>
                                                     </div>
-                                                    <p className="text-sm font-semibold text-slate-800 leading-snug">{f.question}</p>
-                                                    <p className="text-xs text-slate-500 mt-1 leading-relaxed line-clamp-2">{f.answer}</p>
+                                                    <div>
+                                                        <input
+                                                            type="text"
+                                                            value={f.question}
+                                                            maxLength={100}
+                                                            onChange={(e) => updateWizardPreviewFaq(i, 'question', e.target.value)}
+                                                            className="w-full text-sm font-semibold text-slate-800 bg-transparent border-b border-slate-100 focus:border-brand-400 outline-none py-0.5 transition-colors"
+                                                            placeholder="問題..."
+                                                        />
+                                                        <div className="text-[10px] text-slate-300 text-right">{f.question?.length || 0}/100</div>
+                                                    </div>
+                                                    <div>
+                                                        <textarea
+                                                            rows={2}
+                                                            value={f.answer}
+                                                            maxLength={500}
+                                                            onChange={(e) => updateWizardPreviewFaq(i, 'answer', e.target.value)}
+                                                            className="w-full text-xs text-slate-500 bg-slate-50 rounded-lg px-2 py-1.5 resize-none outline-none focus:bg-white focus:ring-1 focus:ring-brand-200 transition-colors"
+                                                            placeholder="回答..."
+                                                        />
+                                                        <div className="text-[10px] text-slate-300 text-right">{f.answer?.length || 0}/500</div>
+                                                    </div>
                                                 </div>
                                             ))}
                                         </div>
@@ -680,8 +723,8 @@ const StepWizard = ({ formData, setFormData, agentId, onComplete }) => {
                                 ) : (
                                     <div className="flex gap-2">
                                         <button onClick={() => setParsedWizardFaqPreview(null)} className="px-4 py-2.5 text-sm font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors">重新解析</button>
-                                        <button onClick={handleConfirmWizardImportFaqs} className="px-5 py-2.5 bg-brand-600 text-white rounded-xl text-sm font-bold hover:bg-brand-700 transition-all">
-                                            加入知識庫（{parsedWizardFaqPreview.length} 組）
+                                        <button onClick={handleConfirmWizardImportFaqs} disabled={!parsedWizardFaqPreview?.length} className="px-5 py-2.5 bg-brand-600 text-white rounded-xl text-sm font-bold hover:bg-brand-700 transition-all disabled:opacity-40">
+                                            {parsedWizardFaqPreview?.length ? `加入知識庫（${parsedWizardFaqPreview.length} 組）` : '已無可加入的 FAQ'}
                                         </button>
                                     </div>
                                 )}
