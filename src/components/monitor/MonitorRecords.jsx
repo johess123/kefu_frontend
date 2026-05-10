@@ -19,6 +19,7 @@ const BUILD_ACTION_LABELS = {
     faq_health_checked: 'FAQ 健檢',
     website_crawled: '網站爬取',
     form_parsed: '表單解析',
+    services_optimized: '商家服務內容優化',
     analysis_completed: '對話分析',
     faq_matched: 'FAQ 匹配',
     faq_no_match: 'FAQ 未匹配',
@@ -103,6 +104,7 @@ const MonitorRecords = () => {
                         <option value="生成 FAQ">生成 FAQ</option>
                         <option value="優化 FAQ">優化 FAQ</option>
                         <option value="AI 健檢 FAQ">AI 健檢 FAQ</option>
+                        <option value="優化商家服務內容">優化商家服務內容</option>
                         <option value="聊天">聊天</option>
                     </select>
                     <button onClick={handleSearch}>重新整理</button>

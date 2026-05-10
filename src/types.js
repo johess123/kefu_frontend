@@ -22,7 +22,8 @@ export const TONE_PROMPTS = {
 };
 
 export const DEFAULT_FORM_DATA = {
-    brandDescription: '',
+    businessName: '',
+    servicesDescription: '',
     websiteUrl: '',
     tone: ToneType.WARM,
     toneAvoid: '',
