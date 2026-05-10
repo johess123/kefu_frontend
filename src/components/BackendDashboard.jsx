@@ -1142,7 +1142,8 @@ const BackendDashboard = () => {
         try {
             const line_user_id = Cookies.get('google_user_id');
             const response = await axios.post(`${config.API_URL}/api/analyze_faqs`, {
-                brandDescription: currentAgent?.config?.raw_config?.services || currentAgent?.name || '',
+                businessName: currentAgent?.config?.raw_config?.merchant_name || currentAgent?.name || '',
+                servicesDescription: currentAgent?.config?.raw_config?.services || '',
                 faqs: editingFaqs.map((f, i) => ({ ...f, id: f.id || i.toString() })),
                 line_user_id: line_user_id,
                 agent_id: currentAgent?._id

@@ -68,7 +68,8 @@ const WizardPage = () => {
             }
         }
         setFormData({
-            brandDescription: rawConfig.merchant_name + ' ' + (rawConfig.services || ''),
+            businessName: rawConfig.merchant_name || '',
+            servicesDescription: rawConfig.services || '',
             websiteUrl: rawConfig.website_url || '',
             tone: rawConfig.tone || '親切自然',
             toneAvoid: rawConfig.tone_avoid || '',

@@ -11,6 +11,7 @@ const StepWizard = ({ formData, setFormData, agentId, onComplete }) => {
     const [urlError, setUrlError] = useState('');
     const [optimizingFaqIds, setOptimizingFaqIds] = useState(new Set());
     const [isAnalyzing, setIsAnalyzing] = useState(false);
+    const [isOptimizingServices, setIsOptimizingServices] = useState(false);
     const [analysisReport, setAnalysisReport] = useState(null);
     const [uploadingFaqId, setUploadingFaqId] = useState(null);
     const [isParsingProducts, setIsParsingProducts] = useState(false);
@@ -91,6 +92,30 @@ const StepWizard = ({ formData, setFormData, agentId, onComplete }) => {
         setFormData(prev => ({ ...prev, [field]: value }));
     };
 
+    const handleOptimizeServices = async () => {
+        if (!formData.servicesDescription.trim()) return;
+        setIsOptimizingServices(true);
+        try {
+            const line_user_id = Cookies.get('google_user_id');
+            const response = await axios.post(`${config.API_URL}/api/optimize_services`, {
+                businessName: formData.businessName,
+                servicesDescription: formData.servicesDescription,
+                line_user_id,
+                agent_id: agentId
+            });
+            if (response.data && !response.data.error) {
+                updateField('servicesDescription', response.data.services);
+            } else {
+                alert('優化失敗：' + (response.data.error || '未知錯誤'));
+            }
+        } catch (error) {
+            console.error('Failed to optimize services:', error);
+            alert('優化過程中發生錯誤');
+        } finally {
+            setIsOptimizingServices(false);
+        }
+    };
+
     const validateUrl = (url) => {
         if (!url) {
             setUrlError('');
@@ -106,15 +131,43 @@ const StepWizard = ({ formData, setFormData, agentId, onComplete }) => {
 
     const renderQ1 = () => (
         <div className="space-y-4">
-            <div className="relative">
-                <textarea
-                    className="w-full p-4 border border-slate-300 rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-brand-500 min-h-[120px]"
-                    placeholder="例如：手機維修｜甜點工作室｜健身教練｜塔羅占卜｜餐酒館…"
-                    value={formData.brandDescription}
-                    maxLength={200}
-                    onChange={(e) => updateField('brandDescription', e.target.value)}
-                />
-                <div className="text-[10px] text-slate-300 text-right pr-2">{formData.brandDescription.length}/200</div>
+            <div>
+                <label className="block text-sm font-medium text-slate-600 mb-2">商家名稱（必填，20 字以內）</label>
+                <div className="relative">
+                    <input
+                        type="text"
+                        className="w-full p-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-brand-500"
+                        placeholder="例如：手機維修、甜點工作室、塔羅占卜…"
+                        value={formData.businessName}
+                        maxLength={20}
+                        onChange={(e) => updateField('businessName', e.target.value)}
+                    />
+                    <div className="text-[10px] text-slate-300 text-right pr-2 mt-1">{formData.businessName.length}/20</div>
+                </div>
+            </div>
+            <div>
+                <div className="flex items-center justify-between mb-2">
+                    <label className="text-sm font-medium text-slate-600">服務內容（必填，200 字以內）</label>
+                    <button
+                        type="button"
+                        onClick={handleOptimizeServices}
+                        disabled={isOptimizingServices || !formData.servicesDescription.trim()}
+                        className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-brand-600 border border-brand-300 rounded-lg hover:bg-brand-50 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                        {isOptimizingServices ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
+                        AI 優化
+                    </button>
+                </div>
+                <div className="relative">
+                    <textarea
+                        className="w-full p-4 border border-slate-300 rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-brand-500 min-h-[100px]"
+                        placeholder="例如：提供 iPhone / Android 手機螢幕、電池、主機板維修，備有現貨零件可當日取件…"
+                        value={formData.servicesDescription}
+                        maxLength={200}
+                        onChange={(e) => updateField('servicesDescription', e.target.value)}
+                    />
+                    <div className="text-[10px] text-slate-300 text-right pr-2">{formData.servicesDescription.length}/200</div>
+                </div>
             </div>
             <div className="mt-4">
                 <label className="block text-sm font-medium text-slate-600 mb-2 flex items-center gap-2">
@@ -262,8 +315,8 @@ const StepWizard = ({ formData, setFormData, agentId, onComplete }) => {
         };
 
         const handleGenerateFaqs = async () => {
-            if (!formData.brandDescription.trim()) {
-                alert('請先填寫第一題的品牌描述');
+            if (!formData.businessName.trim() || !formData.servicesDescription.trim()) {
+                alert('請先填寫第一題的商家名稱與服務內容');
                 setQIndex(0);
                 return;
             }
@@ -272,7 +325,8 @@ const StepWizard = ({ formData, setFormData, agentId, onComplete }) => {
             try {
                 const line_user_id = Cookies.get('google_user_id');
                 const response = await axios.post(`${config.API_URL}/api/generate_faqs`, {
-                    brandDescription: formData.brandDescription,
+                    businessName: formData.businessName,
+                    servicesDescription: formData.servicesDescription,
                     websiteUrl: formData.websiteUrl || '',
                     line_user_id: line_user_id,
                     agent_id: agentId
@@ -292,6 +346,8 @@ const StepWizard = ({ formData, setFormData, agentId, onComplete }) => {
                     if (response.data.mode === 'extracted') {
                         alert(`已從網站擷取 ${newFaqs.length} 筆 FAQ，共 ${newCats.size} 個分類`);
                     }
+                } else if (response.data && response.data.error) {
+                    alert('自動產生失敗：' + response.data.error);
                 }
             } catch (error) {
                 console.error('Failed to generate FAQs:', error);
@@ -360,8 +416,8 @@ const StepWizard = ({ formData, setFormData, agentId, onComplete }) => {
                 return;
             }
 
-            if (!formData.brandDescription.trim()) {
-                alert('請先填寫品牌描述');
+            if (!formData.businessName.trim() || !formData.servicesDescription.trim()) {
+                alert('請先填寫第一題的商家名稱與服務內容');
                 setQIndex(0);
                 return;
             }
@@ -370,7 +426,8 @@ const StepWizard = ({ formData, setFormData, agentId, onComplete }) => {
             try {
                 const line_user_id = Cookies.get('google_user_id');
                 const response = await axios.post(`${config.API_URL}/api/analyze_faqs`, {
-                    brandDescription: formData.brandDescription,
+                    businessName: formData.businessName,
+                    servicesDescription: formData.servicesDescription,
                     faqs: formData.faqs,
                     line_user_id: line_user_id,
                     agent_id: agentId
@@ -893,7 +950,7 @@ const StepWizard = ({ formData, setFormData, agentId, onComplete }) => {
             try {
                 const fd = new FormData();
                 fd.append('file', file);
-                fd.append('brandDescription', formData.brandDescription || '');
+                fd.append('brandDescription', `${formData.businessName} ${formData.servicesDescription}`.trim());
                 fd.append('line_user_id', Cookies.get('google_user_id') || '');
                 if (fieldSchema.length > 0) {
                     fd.append('field_schema', JSON.stringify(fieldSchema));
@@ -1148,7 +1205,7 @@ const StepWizard = ({ formData, setFormData, agentId, onComplete }) => {
     };
 
     const questions = [
-        { title: '品牌基礎', render: renderQ1, prompt: '第一題，請用一句話介紹你的品牌/店家：你提供什麼服務或商品？（必填）' },
+        { title: '品牌基礎', render: renderQ1, prompt: '第一題，請填寫你的商家名稱與服務內容。（必填）' },
         { title: '品牌口吻', render: renderQ2, prompt: '第二題，你希望 AI 用什麼口吻回覆客人？' },
         { title: '常見問題 FAQ', render: renderQ3, prompt: '第三題，請新增至少 3 組「常見問題」與「你的回答」（越多越準）。' },
         { title: '商品目錄', render: renderQ4, prompt: '第四題，上傳你的商品資料，AI 會自動整理成目錄來回覆客戶的商品問題。（可跳過）' },
@@ -1212,8 +1269,8 @@ const StepWizard = ({ formData, setFormData, agentId, onComplete }) => {
                         )}
                         <button
                             onClick={handleNext}
-                            disabled={(qIndex === 0 && !formData.brandDescription.trim()) || (qIndex === 0 && !!urlError)}
-                            className={`flex items-center space-x-2 px-6 py-2.5 rounded-xl transition-all transform active:scale-95 ${(qIndex === 0 && !formData.brandDescription.trim()) || (qIndex === 0 && !!urlError)
+                            disabled={(qIndex === 0 && (!formData.businessName.trim() || !formData.servicesDescription.trim())) || (qIndex === 0 && !!urlError)}
+                            className={`flex items-center space-x-2 px-6 py-2.5 rounded-xl transition-all transform active:scale-95 ${(qIndex === 0 && (!formData.businessName.trim() || !formData.servicesDescription.trim())) || (qIndex === 0 && !!urlError)
                                 ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
                                 : 'bg-brand-600 text-white hover:bg-brand-700 shadow-md shadow-brand-200'
                                 }`}

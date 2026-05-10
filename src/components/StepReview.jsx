@@ -21,14 +21,20 @@ const StepReview = ({ onNext, onEdit, formData, setFormData, sessionId, agentId,
                 line_user_id,
                 agent_id: agentId
             });
-            setReviewData(response.data);
-            if (response.data.faqs && response.data.faqs.length > 0) {
-                setSelectedFaqIndex(0);
-                setEditingFaq(response.data.faqs[0]);
+            if (response.data && !response.data.error) {
+                setReviewData(response.data);
+                if (response.data.faqs && response.data.faqs.length > 0) {
+                    setSelectedFaqIndex(0);
+                    setEditingFaq(response.data.faqs[0]);
+                }
+            } else {
+                alert('生成失敗：' + (response.data.error || '未知錯誤'));
+                if (onEdit) onEdit();
             }
         } catch (error) {
             console.error('Error generating data:', error);
             alert('生成失敗，請稍後再試');
+            if (onEdit) onEdit();
         } finally {
             setIsLoading(false);
         }
