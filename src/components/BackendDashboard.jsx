@@ -2684,7 +2684,7 @@ const BackendDashboard = () => {
                                 }
 
                                 if (editingSubagent === 'Conversation Analyst') {
-                                    return <ConversationAnalystView agentId={routeAgentId} adminId={currentAgent?.admin_id} onFaqUpdated={fetchAgentData} />;
+                                    return <ConversationAnalystView agentId={routeAgentId} adminId={currentAgent?.admin_id} onFaqUpdated={fetchAgentData} faqCategories={[...new Set((currentAgent?.config?.raw_config?.faqs || []).map(f => f.category || '常見問題'))]} />;
                                 }
 
                                 if (editingSubagent === 'Root Admin') {

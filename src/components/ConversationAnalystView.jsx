@@ -25,7 +25,7 @@ import {
     Bot
 } from 'lucide-react';
 
-const ConversationAnalystView = ({ agentId, adminId, onFaqUpdated }) => {
+const ConversationAnalystView = ({ agentId, adminId, onFaqUpdated, faqCategories = [] }) => {
     const [stats, setStats] = useState(null);
     const [suggestions, setSuggestions] = useState([]);
     const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -42,6 +42,7 @@ const ConversationAnalystView = ({ agentId, adminId, onFaqUpdated }) => {
     const [isLoadingPreview, setIsLoadingPreview] = useState(false);
     const [expandedUserId, setExpandedUserId] = useState(null);
     const [selectedTheme, setSelectedTheme] = useState('all');
+    const [addFaqModal, setAddFaqModal] = useState({ open: false, suggestionId: null, question: '', answer: '', category: '常見問題' });
 
     const fetchPreview = useCallback(async (previewDays) => {
         if (!agentId) return;
@@ -115,11 +116,24 @@ const ConversationAnalystView = ({ agentId, adminId, onFaqUpdated }) => {
         }
     };
 
-    const handleAccept = async (suggestionId) => {
+    const openAddFaqModal = (suggestion) => {
+        setAddFaqModal({
+            open: true,
+            suggestionId: suggestion._id,
+            question: suggestion.suggested_question,
+            answer: suggestion.suggested_answer,
+            category: faqCategories[0] || '常見問題'
+        });
+    };
+
+    const handleAccept = async () => {
+        const { suggestionId, question, answer, category } = addFaqModal;
         setAcceptingId(suggestionId);
+        setAddFaqModal(prev => ({ ...prev, open: false }));
         try {
             await axios.post(
-                `${config.API_URL}/api/analysis/${agentId}/suggestions/${suggestionId}/accept?userId=${adminId}`
+                `${config.API_URL}/api/analysis/${agentId}/suggestions/${suggestionId}/accept?userId=${adminId}`,
+                { category, edited_question: question, edited_answer: answer }
             );
             await fetchSuggestions(activeTab);
             await fetchStats();
@@ -556,7 +570,7 @@ const ConversationAnalystView = ({ agentId, adminId, onFaqUpdated }) => {
                                                 {suggestion.status === 'pending' && (
                                                     <>
                                                         <button
-                                                            onClick={(e) => { e.stopPropagation(); handleAccept(suggestion._id); }}
+                                                            onClick={(e) => { e.stopPropagation(); openAddFaqModal(suggestion); }}
                                                             disabled={acceptingId === suggestion._id}
                                                             className="flex items-center gap-1.5 px-3 py-2 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white rounded-xl text-xs font-bold transition-all"
                                                         >
@@ -670,6 +684,106 @@ const ConversationAnalystView = ({ agentId, adminId, onFaqUpdated }) => {
                     )}
                 </div>
             </div>
+
+            {/* Add FAQ Modal */}
+            {addFaqModal.open && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
+                    onClick={() => setAddFaqModal(prev => ({ ...prev, open: false }))}>
+                    <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
+                    <div className="relative bg-white rounded-2xl shadow-xl w-full max-w-lg flex flex-col max-h-[90vh]"
+                        onClick={(e) => e.stopPropagation()}>
+                        {/* Header */}
+                        <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-slate-100 flex-shrink-0">
+                            <div>
+                                <h3 className="text-base font-bold text-slate-800">加入 FAQ 知識庫</h3>
+                                <p className="text-xs text-slate-400 mt-0.5">確認或修改後加入，選擇所屬分類</p>
+                            </div>
+                            <button onClick={() => setAddFaqModal(prev => ({ ...prev, open: false }))}
+                                className="p-1 text-slate-400 hover:text-slate-600 transition-colors">
+                                <X size={16} />
+                            </button>
+                        </div>
+                        {/* Body */}
+                        <div className="flex-1 overflow-y-auto p-6 space-y-5">
+                            {/* Category */}
+                            <div>
+                                <label className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-2 block">分類</label>
+                                {faqCategories.length > 0 ? (
+                                    <div className="flex flex-wrap gap-2">
+                                        {faqCategories.map(cat => (
+                                            <button
+                                                key={cat}
+                                                onClick={() => setAddFaqModal(prev => ({ ...prev, category: cat }))}
+                                                className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-all ${
+                                                    addFaqModal.category === cat
+                                                        ? 'bg-purple-600 text-white border-purple-600 shadow-sm'
+                                                        : 'bg-white text-slate-600 border-slate-200 hover:border-purple-300 hover:bg-purple-50'
+                                                }`}
+                                            >
+                                                {cat}
+                                            </button>
+                                        ))}
+                                        {/* Custom input if typed value not in list */}
+                                        {!faqCategories.includes(addFaqModal.category) && addFaqModal.category && (
+                                            <span className="px-3 py-1.5 rounded-xl text-xs font-bold bg-purple-600 text-white border border-purple-600 shadow-sm">
+                                                {addFaqModal.category}
+                                            </span>
+                                        )}
+                                    </div>
+                                ) : null}
+                                <input
+                                    type="text"
+                                    value={addFaqModal.category}
+                                    onChange={(e) => setAddFaqModal(prev => ({ ...prev, category: e.target.value }))}
+                                    placeholder="輸入或選擇分類名稱"
+                                    className="mt-2 w-full px-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-purple-200"
+                                />
+                            </div>
+                            {/* Question */}
+                            <div>
+                                <label className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-2 block">問題 (Q)</label>
+                                <input
+                                    type="text"
+                                    value={addFaqModal.question}
+                                    maxLength={100}
+                                    onChange={(e) => setAddFaqModal(prev => ({ ...prev, question: e.target.value }))}
+                                    className="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-purple-200"
+                                    placeholder="FAQ 問題..."
+                                />
+                                <div className="text-[10px] text-slate-300 text-right mt-1">{addFaqModal.question.length}/100</div>
+                            </div>
+                            {/* Answer */}
+                            <div>
+                                <label className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-2 block">回答 (A)</label>
+                                <textarea
+                                    value={addFaqModal.answer}
+                                    maxLength={500}
+                                    rows={5}
+                                    onChange={(e) => setAddFaqModal(prev => ({ ...prev, answer: e.target.value }))}
+                                    className="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-purple-200 resize-none"
+                                    placeholder="FAQ 回答..."
+                                />
+                                <div className="text-[10px] text-slate-300 text-right mt-1">{addFaqModal.answer.length}/500</div>
+                            </div>
+                        </div>
+                        {/* Footer */}
+                        <div className="px-6 py-4 border-t border-slate-100 flex items-center justify-between gap-3 flex-shrink-0">
+                            <button
+                                onClick={() => setAddFaqModal(prev => ({ ...prev, open: false }))}
+                                className="px-4 py-2.5 text-sm font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors">
+                                取消
+                            </button>
+                            <button
+                                onClick={handleAccept}
+                                disabled={!addFaqModal.question.trim() || !addFaqModal.answer.trim()}
+                                className="flex items-center gap-2 px-5 py-2.5 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white rounded-xl text-sm font-bold transition-all shadow-md shadow-purple-200">
+                                <Plus size={16} />
+                                確認加入 FAQ
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
