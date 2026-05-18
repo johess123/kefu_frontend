@@ -5086,7 +5086,7 @@ const BackendDashboard = () => {
                                         <span className="text-xs text-slate-400 mt-1">支援 .xlsx / .csv，最大 500KB</span>
                                         <input ref={faqImportFileRef} type="file" accept=".xlsx,.csv" className="hidden" onChange={() => setParsedFaqPreview(null)} />
                                     </label>
-                                    <p className="text-xs text-slate-400 mt-3 text-center">AI 會自動識別問題與回答欄位，每次最多解析 50 組</p>
+                                    <p className="text-xs text-slate-400 mt-3 text-center">AI 會自動識別問題與回答欄位，每次最多解析 200 組</p>
                                 </div>
                             )}
                             {faqImportTab === 'text' && !parsedFaqPreview && (

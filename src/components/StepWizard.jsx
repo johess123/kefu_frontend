@@ -704,7 +704,7 @@ const StepWizard = ({ formData, setFormData, agentId, onComplete }) => {
                                             <span className="text-xs text-slate-400 mt-1">支援 .xlsx / .csv，最大 500KB</span>
                                             <input ref={wizardFaqImportFileRef} type="file" accept=".xlsx,.csv" className="hidden" onChange={() => setParsedWizardFaqPreview(null)} />
                                         </label>
-                                        <p className="text-xs text-slate-400 mt-3 text-center">AI 會自動識別問題與回答欄位，每次最多解析 50 組</p>
+                                        <p className="text-xs text-slate-400 mt-3 text-center">AI 會自動識別問題與回答欄位，每次最多解析 200 組</p>
                                     </div>
                                 )}
                                 {wizardFaqImportTab === 'text' && !parsedWizardFaqPreview && (
