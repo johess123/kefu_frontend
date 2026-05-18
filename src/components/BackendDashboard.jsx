@@ -1393,6 +1393,11 @@ const BackendDashboard = () => {
             category: f.category || '常見問題',
         }));
         setEditingFaqs(prev => [...prev, ...newFaqs]);
+        const newCats = [...new Set(newFaqs.map(f => f.category))];
+        setCategoryOrder(prev => {
+            const toAdd = newCats.filter(c => !prev.includes(c));
+            return toAdd.length > 0 ? [...prev, ...toAdd] : prev;
+        });
         setShowFaqImportModal(false);
         setParsedFaqPreview(null);
         setFaqImportText('');
