@@ -3763,7 +3763,7 @@ const BackendDashboard = () => {
                                                                             onClick={() => setLightboxSrc(msg.imagePreview)}
                                                                         />
                                                                     )}
-                                                                    <div className={`p-4 ${!msg.text && msg.imagePreview ? 'hidden' : ''}`}>
+                                                                    <div className={`p-4 whitespace-pre-wrap ${!msg.text && msg.imagePreview ? 'hidden' : ''}`}>
                                                                         {msg.text}
                                                                         {msg.storefront_url && (
                                                                             <a

@@ -186,7 +186,7 @@ const StepDemo = ({ formData, sessionId, setSessionId, agentId, onNext, setCurre
                                         }`}>
                                         {msg.role === 'user' ? <User size={18} /> : <Bot size={18} />}
                                     </div>
-                                    <div className={`p-4 rounded-2xl shadow-sm text-sm leading-relaxed ${msg.role === 'user'
+                                    <div className={`p-4 rounded-2xl shadow-sm text-sm leading-relaxed whitespace-pre-wrap ${msg.role === 'user'
                                         ? 'bg-brand-600 text-white rounded-tr-none'
                                         : 'bg-white text-slate-800 rounded-tl-none border border-slate-100'
                                         }`}>
