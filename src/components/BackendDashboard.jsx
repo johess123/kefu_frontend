@@ -391,6 +391,19 @@ const BackendDashboard = () => {
     const [isTelegramModalOpen, setIsTelegramModalOpen] = useState(false);
     const [telegramBotToken, setTelegramBotToken] = useState('');
     const [isTelegramDeploying, setIsTelegramDeploying] = useState(false);
+
+    // Meta (FB + IG) Integration states
+    const [isMetaModalOpen, setIsMetaModalOpen] = useState(false);
+    const [metaPageAccessToken, setMetaPageAccessToken] = useState('');
+    const [metaVerifyToken, setMetaVerifyToken] = useState('');
+    const [metaFbEnabled, setMetaFbEnabled] = useState(true);
+    const [metaIgDmEnabled, setMetaIgDmEnabled] = useState(true);
+    const [metaIgCommentEnabled, setMetaIgCommentEnabled] = useState(false);
+    const [metaIgTriggers, setMetaIgTriggers] = useState([]);
+    const [isMetaDeploying, setIsMetaDeploying] = useState(false);
+    const [metaDeployResult, setMetaDeployResult] = useState(null);
+    const [metaCopied, setMetaCopied] = useState('');
+    const [metaPostValidation, setMetaPostValidation] = useState({});  // { [idx]: {status, caption, media_id} }
     const [lineConfig, setLineConfig] = useState({
         accessToken: currentAgent?.deploy_config?.line?.access_token || currentAgent?.deploy_config?.access_token || '',
         channelSecret: currentAgent?.deploy_config?.line?.channel_secret || currentAgent?.deploy_config?.channel_secret || ''
@@ -469,6 +482,7 @@ const BackendDashboard = () => {
     const [showFaqImportModal, setShowFaqImportModal] = useState(false);
     const [faqImportTab, setFaqImportTab] = useState('file');
     const [faqImportText, setFaqImportText] = useState('');
+    const [faqImportFileName, setFaqImportFileName] = useState('');
     const faqImportFileRef = React.useRef(null);
     const [isParsingFaqs, setIsParsingFaqs] = useState(false);
     const [parsedFaqPreview, setParsedFaqPreview] = useState(null);
@@ -850,6 +864,15 @@ const BackendDashboard = () => {
                 channelSecret: dc.line?.channel_secret || dc.channel_secret || '',
             });
             setTelegramBotToken(dc.telegram?.bot_token || dc.bot_token || '');
+            // Meta
+            if (dc.meta) {
+                setMetaPageAccessToken(dc.meta.page_access_token || '');
+                setMetaVerifyToken(dc.meta.verify_token || '');
+                setMetaFbEnabled(dc.meta.fb_messenger_enabled !== false);
+                setMetaIgDmEnabled(dc.meta.ig_dm_enabled !== false);
+                setMetaIgCommentEnabled(!!dc.meta.ig_comment_enabled);
+                setMetaIgTriggers(dc.meta.ig_comment_triggers || []);
+            }
         }
     }, [currentAgent]);
 
@@ -983,6 +1006,95 @@ const BackendDashboard = () => {
             alert('部署過程中發生錯誤: ' + detail);
         } finally {
             setIsTelegramDeploying(false);
+        }
+    };
+
+    const handleDeployMeta = async () => {
+        if (!currentAgent?._id) {
+            alert('Agent 資料尚未載入，請重新整理頁面後再試。');
+            return;
+        }
+        if (!metaPageAccessToken) {
+            alert('請輸入 Page Access Token');
+            return;
+        }
+        if (!metaVerifyToken) {
+            alert('請輸入 Verify Token');
+            return;
+        }
+
+        try {
+            setIsMetaDeploying(true);
+            const response = await axios.post(`${config.API_URL}/api/deploy_meta`, {
+                agent_id: currentAgent._id,
+                page_access_token: metaPageAccessToken,
+                verify_token: metaVerifyToken,
+                fb_messenger_enabled: metaFbEnabled,
+                ig_dm_enabled: metaIgDmEnabled,
+                ig_comment_enabled: metaIgCommentEnabled,
+                ig_comment_triggers: metaIgTriggers,
+            });
+
+            if (response.data.status === 'ok') {
+                setMetaDeployResult({
+                    webhookUrl: response.data.webhook_url,
+                    verifyToken: response.data.verify_token,
+                    pageName: response.data.page_name,
+                });
+                const agentRes = await axios.get(`${config.API_URL}/api/admin/agent/${currentAgent._id}`, {
+                    params: { userId: currentAgent.admin_id }
+                });
+                setCurrentAgent(agentRes.data);
+            } else {
+                alert('部署失敗: ' + (response.data.message || '未知錯誤'));
+            }
+        } catch (error) {
+            console.error('Failed to deploy Meta:', error);
+            const detail = error?.response?.data?.detail || error?.response?.data?.message || error?.message || '未知錯誤';
+            alert('部署過程中發生錯誤: ' + detail);
+        } finally {
+            setIsMetaDeploying(false);
+        }
+    };
+
+    const extractShortcode = (url) => {
+        const m = url.match(/instagram\.com\/(?:p|reel)\/([A-Za-z0-9_-]+)/);
+        return m ? m[1] : url.trim();
+    };
+
+    const handleValidatePost = async (idx) => {
+        const trigger = metaIgTriggers[idx];
+        const raw = trigger.post_url || '';
+        if (!raw.trim()) return;
+        const shortcode = extractShortcode(raw);
+
+        setMetaPostValidation(prev => ({ ...prev, [idx]: { status: 'loading' } }));
+        try {
+            const res = await axios.post(`${config.API_URL}/api/meta/validate_post`, {
+                agent_id: currentAgent._id,
+                post_shortcode: shortcode,
+            });
+            const data = res.data;
+            if (data.status === 'ok') {
+                setMetaPostValidation(prev => ({
+                    ...prev,
+                    [idx]: { status: 'ok', caption: data.caption_preview, media_id: data.media_id },
+                }));
+                // 把解析到的 post_id 寫回 trigger
+                const updated = [...metaIgTriggers];
+                updated[idx] = { ...updated[idx], post_shortcode: shortcode, post_id: data.media_id };
+                setMetaIgTriggers(updated);
+            } else {
+                setMetaPostValidation(prev => ({
+                    ...prev,
+                    [idx]: { status: 'error', message: data.message },
+                }));
+            }
+        } catch (e) {
+            setMetaPostValidation(prev => ({
+                ...prev,
+                [idx]: { status: 'error', message: '驗證失敗，請稍後再試' },
+            }));
         }
     };
 
@@ -1402,6 +1514,7 @@ const BackendDashboard = () => {
         setParsedFaqPreview(null);
         setFaqImportText('');
         setFaqImportTab('file');
+        setFaqImportFileName('');
     };
 
     const updatePreviewFaq = (i, field, val) =>
@@ -2049,7 +2162,7 @@ const BackendDashboard = () => {
                                                                     <span className="hidden sm:inline">AI 智能健檢</span>
                                                                 </button>
                                                                 <button
-                                                                    onClick={() => { setShowFaqImportModal(true); setParsedFaqPreview(null); setFaqImportText(''); setFaqImportTab('file'); }}
+                                                                    onClick={() => { setShowFaqImportModal(true); setParsedFaqPreview(null); setFaqImportText(''); setFaqImportTab('file'); setFaqImportFileName(''); }}
                                                                     className="flex items-center gap-2 px-3 sm:px-5 py-2.5 bg-white border border-slate-200 text-slate-600 rounded-xl text-sm font-bold hover:bg-slate-50 transition-all shadow-sm"
                                                                 >
                                                                     <Upload size={18} className="text-brand-500" />
@@ -3544,35 +3657,83 @@ const BackendDashboard = () => {
                                             </div>
 
                                             {/* Messenger */}
-                                            <div className="bg-white rounded-[32px] p-10 border border-slate-100 opacity-60 flex flex-col items-center text-center grayscale">
-                                                <div className="w-20 h-20 bg-blue-50 rounded-3xl flex items-center justify-center mb-6">
+                                            <div
+                                                onClick={() => { setMetaDeployResult(null); setIsMetaModalOpen(true); }}
+                                                className="bg-white rounded-[32px] p-10 border border-slate-200 shadow-sm hover:shadow-xl hover:border-blue-200 transition-all cursor-pointer group flex flex-col items-center text-center relative overflow-hidden"
+                                            >
+                                                <div className="absolute top-0 right-0 w-32 h-32 bg-[#0084FF]/5 rounded-full -mr-16 -mt-16 blur-2xl group-hover:bg-[#0084FF]/10 transition-colors"></div>
+                                                <div className="relative w-20 h-20 bg-blue-50 rounded-3xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform duration-300">
                                                     <svg width="48" height="48" viewBox="0 0 24 24" fill="#0084FF">
                                                         <path d="M12 2C6.47715 2 2 6.145 2 11.257c0 2.913 1.45 5.514 3.714 7.222V22l3.39-1.858c.905.251 1.868.388 2.896.388 5.52285 0 10-4.145 10-9.257C22 6.145 17.52285 2 12 2zm1.09 12.338l-2.607-2.78-5.084 2.78 5.587-5.93 2.67 2.78 5.022-2.78-5.588 5.93z" />
                                                     </svg>
                                                 </div>
-                                                <h3 className="text-2xl font-bold text-slate-400 mb-3">Messenger</h3>
-                                                <p className="text-slate-400 text-sm mb-8 leading-relaxed max-w-[280px]">
+                                                <h3 className="text-2xl font-bold text-slate-900 mb-3">Messenger</h3>
+                                                <p className="text-slate-500 text-sm mb-8 leading-relaxed max-w-[280px]">
                                                     Allow your users to talk to your AI Agent via Facebook.
                                                 </p>
-                                                <div className="bg-slate-50 text-slate-400 px-5 py-2 rounded-full text-[13px] font-bold border border-slate-100">
-                                                    即將推出
-                                                </div>
+                                                {currentAgent?.deploy_config?.meta?.fb_messenger_enabled ? (
+                                                    <div className="flex flex-col items-center gap-2">
+                                                        {currentAgent?.deploy_config?.meta?.enabled === false ? (
+                                                            <div className="bg-slate-100 text-slate-500 px-5 py-2 rounded-full text-[13px] font-bold border border-slate-200 flex items-center gap-2">
+                                                                <span className="w-2 h-2 bg-slate-400 rounded-full"></span>
+                                                                已暫停
+                                                            </div>
+                                                        ) : (
+                                                            <div className="bg-blue-50 text-blue-600 px-5 py-2 rounded-full text-[13px] font-bold border border-blue-100 flex items-center gap-2">
+                                                                <span className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></span>
+                                                                已連接
+                                                            </div>
+                                                        )}
+                                                        {currentAgent?.deploy_config?.meta?.page_name && (
+                                                            <span className="text-xs text-slate-400">{currentAgent.deploy_config.meta.page_name}</span>
+                                                        )}
+                                                    </div>
+                                                ) : (
+                                                    <div className="bg-green-50 text-green-600 px-5 py-2 rounded-full text-[13px] font-bold border border-green-100 flex items-center gap-2 group-hover:bg-green-100 transition-colors">
+                                                        <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
+                                                        可串接
+                                                    </div>
+                                                )}
                                             </div>
 
                                             {/* Instagram */}
-                                            <div className="bg-white rounded-[32px] p-10 border border-slate-100 opacity-60 flex flex-col items-center text-center grayscale">
-                                                <div className="w-20 h-20 bg-pink-50 rounded-3xl flex items-center justify-center mb-6">
+                                            <div
+                                                onClick={() => { setMetaDeployResult(null); setIsMetaModalOpen(true); }}
+                                                className="bg-white rounded-[32px] p-10 border border-slate-200 shadow-sm hover:shadow-xl hover:border-pink-200 transition-all cursor-pointer group flex flex-col items-center text-center relative overflow-hidden"
+                                            >
+                                                <div className="absolute top-0 right-0 w-32 h-32 bg-[#E4405F]/5 rounded-full -mr-16 -mt-16 blur-2xl group-hover:bg-[#E4405F]/10 transition-colors"></div>
+                                                <div className="relative w-20 h-20 bg-pink-50 rounded-3xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform duration-300">
                                                     <svg width="48" height="48" viewBox="0 0 24 24" fill="#E4405F">
                                                         <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.052.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0zm0 5.838a6.162 6.162 0 100 12.324 6.162 6.162 0 000-12.324zM12 16a4 4 0 110-8 4 4 0 010 8zm6.406-11.845a1.44 1.44 0 100 2.881 1.44 1.44 0 000-2.881z" />
                                                     </svg>
                                                 </div>
-                                                <h3 className="text-2xl font-bold text-slate-400 mb-3">Instagram</h3>
-                                                <p className="text-slate-400 text-sm mb-8 leading-relaxed max-w-[280px]">
-                                                    Automate replies for your Instagram Business account.
+                                                <h3 className="text-2xl font-bold text-slate-900 mb-3">Instagram</h3>
+                                                <p className="text-slate-500 text-sm mb-8 leading-relaxed max-w-[280px]">
+                                                    Automate DMs and comment keyword triggers for your IG Business account.
                                                 </p>
-                                                <div className="bg-slate-50 text-slate-400 px-5 py-2 rounded-full text-[13px] font-bold border border-slate-100">
-                                                    即將推出
-                                                </div>
+                                                {(currentAgent?.deploy_config?.meta?.ig_dm_enabled || currentAgent?.deploy_config?.meta?.ig_comment_enabled) ? (
+                                                    <div className="flex flex-col items-center gap-2">
+                                                        {currentAgent?.deploy_config?.meta?.enabled === false ? (
+                                                            <div className="bg-slate-100 text-slate-500 px-5 py-2 rounded-full text-[13px] font-bold border border-slate-200 flex items-center gap-2">
+                                                                <span className="w-2 h-2 bg-slate-400 rounded-full"></span>
+                                                                已暫停
+                                                            </div>
+                                                        ) : (
+                                                            <div className="bg-pink-50 text-pink-600 px-5 py-2 rounded-full text-[13px] font-bold border border-pink-100 flex items-center gap-2">
+                                                                <span className="w-2 h-2 bg-pink-500 rounded-full animate-pulse"></span>
+                                                                已連接
+                                                            </div>
+                                                        )}
+                                                        {currentAgent?.deploy_config?.meta?.page_name && (
+                                                            <span className="text-xs text-slate-400">{currentAgent.deploy_config.meta.page_name}</span>
+                                                        )}
+                                                    </div>
+                                                ) : (
+                                                    <div className="bg-green-50 text-green-600 px-5 py-2 rounded-full text-[13px] font-bold border border-green-100 flex items-center gap-2 group-hover:bg-green-100 transition-colors">
+                                                        <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
+                                                        可串接
+                                                    </div>
+                                                )}
                                             </div>
 
                                             {/* Telegram */}
@@ -4192,6 +4353,434 @@ const BackendDashboard = () => {
                     </div>
                 )}
 
+                {/* Meta (FB + IG) Modal */}
+                {isMetaModalOpen && (
+                    <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
+                        <div
+                            className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
+                            onClick={() => setIsMetaModalOpen(false)}
+                        />
+                        <div className="relative bg-white w-full max-w-2xl rounded-[32px] overflow-hidden shadow-2xl animate-in fade-in zoom-in duration-300 max-h-[90vh] flex flex-col">
+                            {/* Header */}
+                            <div className="p-8 border-b border-slate-100 flex items-center justify-between shrink-0">
+                                <div className="flex items-center gap-4">
+                                    <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #0084FF 0%, #E4405F 100%)' }}>
+                                        <svg width="22" height="22" viewBox="0 0 24 24" fill="white">
+                                            <path d="M12 2C6.47715 2 2 6.145 2 11.257c0 2.913 1.45 5.514 3.714 7.222V22l3.39-1.858c.905.251 1.868.388 2.896.388 5.52285 0 10-4.145 10-9.257C22 6.145 17.52285 2 12 2zm1.09 12.338l-2.607-2.78-5.084 2.78 5.587-5.93 2.67 2.78 5.022-2.78-5.588 5.93z" />
+                                        </svg>
+                                    </div>
+                                    <h2 className="text-xl font-bold text-slate-800">串接 Facebook & Instagram</h2>
+                                </div>
+                                <button
+                                    onClick={() => setIsMetaModalOpen(false)}
+                                    className="w-10 h-10 flex items-center justify-center text-slate-400 hover:text-slate-600 hover:bg-slate-50 rounded-full transition-all"
+                                >
+                                    <X size={24} />
+                                </button>
+                            </div>
+
+                            {/* Body */}
+                            <div className="p-8 space-y-6 overflow-y-auto flex-1">
+                                {/* 已連接：顯示 toggle */}
+                                {currentAgent?.deploy_config?.meta && (
+                                    <div className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                                        <div className="flex-1 min-w-0 pr-4">
+                                            <p className="font-bold text-slate-700 text-sm">渠道啟用</p>
+                                            <p className="text-xs text-slate-400 mt-0.5">關閉後 FB / IG 訊息將停止自動回覆</p>
+                                        </div>
+                                        <button
+                                            onClick={() => handleToggleChannel('meta', currentAgent.deploy_config.meta.enabled === false)}
+                                            className={`relative w-12 h-6 flex-none rounded-full transition-colors ${currentAgent.deploy_config.meta.enabled !== false ? 'bg-blue-500' : 'bg-slate-300'}`}
+                                        >
+                                            <span className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full shadow transition-transform ${currentAgent.deploy_config.meta.enabled !== false ? 'translate-x-6' : 'translate-x-0'}`} />
+                                        </button>
+                                    </div>
+                                )}
+
+                                {/* Page Access Token */}
+                                <div>
+                                    <label className="text-[11px] font-bold text-slate-400 uppercase tracking-[0.1em] mb-2 block">Page Access Token</label>
+                                    <textarea
+                                        value={metaPageAccessToken}
+                                        onChange={(e) => setMetaPageAccessToken(e.target.value)}
+                                        placeholder="EAAxxxxxxxxxx..."
+                                        rows={3}
+                                        className="w-full px-5 py-4 bg-white border border-slate-200 rounded-2xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all text-slate-700 font-mono text-sm placeholder:text-slate-300 resize-none"
+                                    />
+                                    <p className="text-xs text-slate-400 mt-1.5">從 Meta for Developers → 您的粉絲專頁 → 取得 Page Access Token</p>
+                                </div>
+
+                                {/* Verify Token */}
+                                <div>
+                                    <label className="text-[11px] font-bold text-slate-400 uppercase tracking-[0.1em] mb-2 block">Webhook Verify Token</label>
+                                    <div className="flex gap-2">
+                                        <input
+                                            type="text"
+                                            value={metaVerifyToken}
+                                            onChange={(e) => setMetaVerifyToken(e.target.value)}
+                                            placeholder="自訂一組驗證密碼..."
+                                            className="flex-1 px-5 py-4 bg-white border border-slate-200 rounded-2xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all text-slate-700 font-mono text-sm placeholder:text-slate-300"
+                                        />
+                                        <button
+                                            onClick={() => setMetaVerifyToken(Math.random().toString(36).slice(2, 18))}
+                                            className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 text-sm font-bold rounded-2xl transition-all whitespace-nowrap"
+                                        >
+                                            自動產生
+                                        </button>
+                                    </div>
+                                    <p className="text-xs text-slate-400 mt-1.5">部署後將顯示 Webhook URL，請至 Meta App Dashboard 填入此 Token 完成驗證</p>
+                                </div>
+
+                                {/* 功能開關 */}
+                                <div className="space-y-3">
+                                    <p className="text-[11px] font-bold text-slate-400 uppercase tracking-[0.1em]">功能設定</p>
+                                    {[
+                                        { label: 'Facebook Messenger 自動回覆', desc: '粉絲專頁訊息 → AI 自動回覆', value: metaFbEnabled, setter: setMetaFbEnabled, color: 'bg-blue-500' },
+                                        { label: 'Instagram DM 自動回覆', desc: 'IG 私訊 → AI 自動回覆', value: metaIgDmEnabled, setter: setMetaIgDmEnabled, color: 'bg-pink-500' },
+                                        { label: 'IG 留言關鍵字觸發 DM', desc: '用戶在貼文留言指定關鍵字 → 自動傳送 DM', value: metaIgCommentEnabled, setter: setMetaIgCommentEnabled, color: 'bg-purple-500' },
+                                    ].map(({ label, desc, value, setter, color }) => (
+                                        <div key={label} className="flex items-center justify-between p-4 rounded-2xl border border-slate-100 bg-slate-50/50">
+                                            <div className="flex-1 min-w-0 pr-4">
+                                                <p className="font-bold text-slate-700 text-sm">{label}</p>
+                                                <p className="text-xs text-slate-400 mt-0.5">{desc}</p>
+                                            </div>
+                                            <button
+                                                onClick={() => setter(!value)}
+                                                className={`relative w-12 h-6 flex-none rounded-full transition-colors ${value ? color : 'bg-slate-300'}`}
+                                            >
+                                                <span className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full shadow transition-transform ${value ? 'translate-x-6' : 'translate-x-0'}`} />
+                                            </button>
+                                        </div>
+                                    ))}
+                                </div>
+
+                                {/* IG 留言關鍵字規則 */}
+                                {metaIgCommentEnabled && (
+                                    <div className="space-y-3">
+                                        {/* 標題列 */}
+                                        <div className="flex items-center justify-between">
+                                            <div>
+                                                <p className="text-[11px] font-bold text-slate-400 uppercase tracking-[0.1em]">關鍵字觸發規則</p>
+                                                <p className="text-[10px] text-slate-400 mt-0.5">指定貼文規則優先比對，再比對全部貼文規則</p>
+                                            </div>
+                                            <button
+                                                onClick={() => {
+                                                    setMetaIgTriggers(prev => [...prev, {
+                                                        keyword: '', match_type: 'contains',
+                                                        post_scope: 'all', post_url: '', post_shortcode: '', post_id: '',
+                                                        public_reply: '', reply_message: '',
+                                                    }]);
+                                                }}
+                                                className="text-xs font-bold text-blue-600 hover:text-blue-700 flex items-center gap-1 shrink-0"
+                                            >
+                                                <Plus size={14} />
+                                                新增規則
+                                            </button>
+                                        </div>
+
+                                        {metaIgTriggers.length === 0 && (
+                                            <p className="text-xs text-slate-400 text-center py-4 bg-slate-50 rounded-2xl">
+                                                尚未新增規則，點擊「新增規則」開始設定
+                                            </p>
+                                        )}
+
+                                        {/* 指定貼文規則（優先） */}
+                                        {metaIgTriggers.some(t => t.post_scope === 'specific') && (
+                                            <p className="text-[10px] font-bold text-purple-500 uppercase tracking-wider flex items-center gap-1">
+                                                <span className="w-4 h-4 bg-purple-100 rounded-full flex items-center justify-center text-purple-600 font-black text-[9px]">1</span>
+                                                指定貼文規則（優先）
+                                            </p>
+                                        )}
+
+                                        {metaIgTriggers.map((trigger, idx) => {
+                                            if (trigger.post_scope !== 'specific') return null;
+                                            const validation = metaPostValidation[idx] || {};
+                                            return (
+                                                <div key={idx} className="p-4 rounded-2xl border border-purple-100 bg-purple-50/30 space-y-3">
+                                                    {/* 標頭：適用範圍 + 刪除 */}
+                                                    <div className="flex items-center justify-between">
+                                                        <div className="flex gap-2">
+                                                            {['all', 'specific'].map(scope => (
+                                                                <button
+                                                                    key={scope}
+                                                                    onClick={() => {
+                                                                        const updated = [...metaIgTriggers];
+                                                                        updated[idx] = { ...updated[idx], post_scope: scope };
+                                                                        setMetaIgTriggers(updated);
+                                                                        if (scope === 'all') {
+                                                                            setMetaPostValidation(prev => { const n = { ...prev }; delete n[idx]; return n; });
+                                                                        }
+                                                                    }}
+                                                                    className={`text-xs font-bold px-3 py-1.5 rounded-lg transition-all ${trigger.post_scope === scope ? 'bg-purple-600 text-white' : 'bg-white text-slate-500 border border-slate-200 hover:border-purple-300'}`}
+                                                                >
+                                                                    {scope === 'all' ? '🌐 全部貼文' : '📄 指定貼文'}
+                                                                </button>
+                                                            ))}
+                                                        </div>
+                                                        <button
+                                                            onClick={() => {
+                                                                setMetaIgTriggers(prev => prev.filter((_, i) => i !== idx));
+                                                                setMetaPostValidation(prev => { const n = { ...prev }; delete n[idx]; return n; });
+                                                            }}
+                                                            className="w-8 h-8 flex items-center justify-center text-slate-300 hover:text-red-400 hover:bg-red-50 rounded-lg transition-all"
+                                                        >
+                                                            <Trash2 size={15} />
+                                                        </button>
+                                                    </div>
+
+                                                    {/* 貼文 URL */}
+                                                    <div>
+                                                        <label className="text-[10px] font-bold text-slate-500 uppercase mb-1 block">IG 貼文網址</label>
+                                                        <div className="flex gap-2">
+                                                            <input
+                                                                type="text"
+                                                                value={trigger.post_url || ''}
+                                                                onChange={(e) => {
+                                                                    const updated = [...metaIgTriggers];
+                                                                    updated[idx] = { ...updated[idx], post_url: e.target.value, post_id: '', post_shortcode: '' };
+                                                                    setMetaIgTriggers(updated);
+                                                                    setMetaPostValidation(prev => { const n = { ...prev }; delete n[idx]; return n; });
+                                                                }}
+                                                                placeholder="https://www.instagram.com/p/Cxxxxxxxx/"
+                                                                className="flex-1 px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs text-slate-700 outline-none focus:border-purple-400 transition-colors font-mono"
+                                                            />
+                                                            <button
+                                                                onClick={() => handleValidatePost(idx)}
+                                                                disabled={!trigger.post_url || validation.status === 'loading'}
+                                                                className="px-3 py-2 bg-purple-600 hover:bg-purple-700 disabled:opacity-40 text-white text-xs font-bold rounded-xl transition-all flex items-center gap-1 shrink-0"
+                                                            >
+                                                                {validation.status === 'loading'
+                                                                    ? <Loader2 size={13} className="animate-spin" />
+                                                                    : <Check size={13} />}
+                                                                驗證
+                                                            </button>
+                                                        </div>
+                                                        {validation.status === 'ok' && (
+                                                            <p className="text-[11px] text-green-600 mt-1 flex items-center gap-1">
+                                                                <CheckCircle2 size={12} />
+                                                                驗證成功｜「{validation.caption || '（無說明文字）'}」
+                                                            </p>
+                                                        )}
+                                                        {validation.status === 'error' && (
+                                                            <p className="text-[11px] text-red-500 mt-1">❌ {validation.message}</p>
+                                                        )}
+                                                        {!validation.status && trigger.post_id && (
+                                                            <p className="text-[11px] text-green-600 mt-1 flex items-center gap-1">
+                                                                <CheckCircle2 size={12} />
+                                                                已驗證（media_id: {trigger.post_id.slice(0, 8)}...）
+                                                            </p>
+                                                        )}
+                                                    </div>
+
+                                                    {/* 關鍵字 + 比對方式 */}
+                                                    <div className="flex gap-2">
+                                                        <div className="flex-1">
+                                                            <label className="text-[10px] font-bold text-slate-500 uppercase mb-1 block">關鍵字</label>
+                                                            <input
+                                                                type="text"
+                                                                value={trigger.keyword}
+                                                                onChange={(e) => { const u = [...metaIgTriggers]; u[idx] = { ...u[idx], keyword: e.target.value }; setMetaIgTriggers(u); }}
+                                                                placeholder="例：報名"
+                                                                className="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-sm text-slate-700 outline-none focus:border-purple-400 transition-colors"
+                                                            />
+                                                        </div>
+                                                        <div className="w-28">
+                                                            <label className="text-[10px] font-bold text-slate-500 uppercase mb-1 block">比對方式</label>
+                                                            <select
+                                                                value={trigger.match_type}
+                                                                onChange={(e) => { const u = [...metaIgTriggers]; u[idx] = { ...u[idx], match_type: e.target.value }; setMetaIgTriggers(u); }}
+                                                                className="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-sm text-slate-700 outline-none focus:border-purple-400 transition-colors"
+                                                            >
+                                                                <option value="contains">包含</option>
+                                                                <option value="exact">完全符合</option>
+                                                            </select>
+                                                        </div>
+                                                    </div>
+
+                                                    {/* 公開留言回覆 */}
+                                                    <div>
+                                                        <label className="text-[10px] font-bold text-slate-500 uppercase mb-1 block">
+                                                            公開留言回覆 <span className="text-slate-300 font-normal normal-case">（選填，所有人可見）</span>
+                                                        </label>
+                                                        <input
+                                                            type="text"
+                                                            value={trigger.public_reply || ''}
+                                                            onChange={(e) => { const u = [...metaIgTriggers]; u[idx] = { ...u[idx], public_reply: e.target.value }; setMetaIgTriggers(u); }}
+                                                            placeholder="謝謝你的留言！已為你發送詳細資訊 😊"
+                                                            className="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-sm text-slate-700 outline-none focus:border-purple-400 transition-colors"
+                                                        />
+                                                    </div>
+
+                                                    {/* 私訊 DM */}
+                                                    <div>
+                                                        <label className="text-[10px] font-bold text-slate-500 uppercase mb-1 block">
+                                                            私訊 DM 內容 <span className="text-red-400">*</span>
+                                                        </label>
+                                                        <textarea
+                                                            value={trigger.reply_message}
+                                                            onChange={(e) => { const u = [...metaIgTriggers]; u[idx] = { ...u[idx], reply_message: e.target.value }; setMetaIgTriggers(u); }}
+                                                            placeholder="您好！活動報名連結在這裡：https://..."
+                                                            rows={2}
+                                                            className="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-sm text-slate-700 outline-none focus:border-purple-400 transition-colors resize-none"
+                                                        />
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+
+                                        {/* 全部貼文規則 */}
+                                        {metaIgTriggers.some(t => t.post_scope !== 'specific') && (
+                                            <p className="text-[10px] font-bold text-blue-500 uppercase tracking-wider flex items-center gap-1 mt-1">
+                                                <span className="w-4 h-4 bg-blue-100 rounded-full flex items-center justify-center text-blue-600 font-black text-[9px]">
+                                                    {metaIgTriggers.some(t => t.post_scope === 'specific') ? '2' : '1'}
+                                                </span>
+                                                全部貼文規則
+                                            </p>
+                                        )}
+
+                                        {metaIgTriggers.map((trigger, idx) => {
+                                            if (trigger.post_scope === 'specific') return null;
+                                            return (
+                                                <div key={idx} className="p-4 rounded-2xl border border-slate-200 bg-white space-y-3">
+                                                    {/* 標頭：適用範圍 + 刪除 */}
+                                                    <div className="flex items-center justify-between">
+                                                        <div className="flex gap-2">
+                                                            {['all', 'specific'].map(scope => (
+                                                                <button
+                                                                    key={scope}
+                                                                    onClick={() => {
+                                                                        const updated = [...metaIgTriggers];
+                                                                        updated[idx] = { ...updated[idx], post_scope: scope };
+                                                                        setMetaIgTriggers(updated);
+                                                                    }}
+                                                                    className={`text-xs font-bold px-3 py-1.5 rounded-lg transition-all ${trigger.post_scope === scope ? 'bg-blue-600 text-white' : 'bg-slate-50 text-slate-500 border border-slate-200 hover:border-blue-300'}`}
+                                                                >
+                                                                    {scope === 'all' ? '🌐 全部貼文' : '📄 指定貼文'}
+                                                                </button>
+                                                            ))}
+                                                        </div>
+                                                        <button
+                                                            onClick={() => setMetaIgTriggers(prev => prev.filter((_, i) => i !== idx))}
+                                                            className="w-8 h-8 flex items-center justify-center text-slate-300 hover:text-red-400 hover:bg-red-50 rounded-lg transition-all"
+                                                        >
+                                                            <Trash2 size={15} />
+                                                        </button>
+                                                    </div>
+
+                                                    {/* 關鍵字 + 比對方式 */}
+                                                    <div className="flex gap-2">
+                                                        <div className="flex-1">
+                                                            <label className="text-[10px] font-bold text-slate-500 uppercase mb-1 block">關鍵字</label>
+                                                            <input
+                                                                type="text"
+                                                                value={trigger.keyword}
+                                                                onChange={(e) => { const u = [...metaIgTriggers]; u[idx] = { ...u[idx], keyword: e.target.value }; setMetaIgTriggers(u); }}
+                                                                placeholder="例：網站"
+                                                                className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-700 outline-none focus:border-blue-400 transition-colors"
+                                                            />
+                                                        </div>
+                                                        <div className="w-28">
+                                                            <label className="text-[10px] font-bold text-slate-500 uppercase mb-1 block">比對方式</label>
+                                                            <select
+                                                                value={trigger.match_type}
+                                                                onChange={(e) => { const u = [...metaIgTriggers]; u[idx] = { ...u[idx], match_type: e.target.value }; setMetaIgTriggers(u); }}
+                                                                className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-700 outline-none focus:border-blue-400 transition-colors"
+                                                            >
+                                                                <option value="contains">包含</option>
+                                                                <option value="exact">完全符合</option>
+                                                            </select>
+                                                        </div>
+                                                    </div>
+
+                                                    {/* 公開留言回覆 */}
+                                                    <div>
+                                                        <label className="text-[10px] font-bold text-slate-500 uppercase mb-1 block">
+                                                            公開留言回覆 <span className="text-slate-300 font-normal normal-case">（選填，所有人可見）</span>
+                                                        </label>
+                                                        <input
+                                                            type="text"
+                                                            value={trigger.public_reply || ''}
+                                                            onChange={(e) => { const u = [...metaIgTriggers]; u[idx] = { ...u[idx], public_reply: e.target.value }; setMetaIgTriggers(u); }}
+                                                            placeholder="謝謝你的留言！已為你發送詳細資訊 😊"
+                                                            className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-700 outline-none focus:border-blue-400 transition-colors"
+                                                        />
+                                                    </div>
+
+                                                    {/* 私訊 DM */}
+                                                    <div>
+                                                        <label className="text-[10px] font-bold text-slate-500 uppercase mb-1 block">
+                                                            私訊 DM 內容 <span className="text-red-400">*</span>
+                                                        </label>
+                                                        <textarea
+                                                            value={trigger.reply_message}
+                                                            onChange={(e) => { const u = [...metaIgTriggers]; u[idx] = { ...u[idx], reply_message: e.target.value }; setMetaIgTriggers(u); }}
+                                                            placeholder="您好！這是我們的官網連結：https://..."
+                                                            rows={2}
+                                                            className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-700 outline-none focus:border-blue-400 transition-colors resize-none"
+                                                        />
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                )}
+
+                                {/* 部署後顯示 Webhook 資訊 */}
+                                {metaDeployResult && (
+                                    <div className="p-5 bg-green-50 border border-green-100 rounded-2xl space-y-4">
+                                        <div className="flex items-center gap-2 text-green-700 font-bold text-sm">
+                                            <CheckCircle2 size={18} />
+                                            部署成功！請至 Meta App Dashboard 完成 Webhook 設定
+                                        </div>
+                                        {[
+                                            { label: 'Webhook URL', value: metaDeployResult.webhookUrl, key: 'url' },
+                                            { label: 'Verify Token', value: metaDeployResult.verifyToken, key: 'token' },
+                                        ].map(({ label, value, key }) => (
+                                            <div key={key}>
+                                                <p className="text-[10px] font-bold text-slate-500 uppercase mb-1">{label}</p>
+                                                <div className="flex items-center gap-2">
+                                                    <code className="flex-1 text-xs bg-white border border-green-100 px-3 py-2 rounded-xl text-slate-700 font-mono break-all">{value}</code>
+                                                    <button
+                                                        onClick={() => { navigator.clipboard.writeText(value); setMetaCopied(key); setTimeout(() => setMetaCopied(''), 2000); }}
+                                                        className="w-8 h-8 flex-none flex items-center justify-center text-slate-400 hover:text-green-600 hover:bg-green-100 rounded-lg transition-all"
+                                                    >
+                                                        {metaCopied === key ? <Check size={15} /> : <Copy size={15} />}
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        ))}
+                                        <p className="text-xs text-slate-500 leading-relaxed">
+                                            前往 <strong>Meta for Developers → 您的 App → Webhooks</strong>，新增上方 URL 並填入 Verify Token，訂閱 <code className="bg-white px-1 rounded">messages</code> 欄位後按儲存。
+                                        </p>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Footer */}
+                            <div className="px-8 py-6 bg-slate-50/50 border-t border-slate-100 flex justify-end items-center gap-4 shrink-0">
+                                <button
+                                    onClick={() => setIsMetaModalOpen(false)}
+                                    className="text-slate-500 hover:text-slate-700 font-bold px-6 py-4 rounded-2xl transition-all"
+                                >
+                                    {metaDeployResult ? '關閉' : '取消'}
+                                </button>
+                                <button
+                                    disabled={isMetaDeploying}
+                                    onClick={handleDeployMeta}
+                                    className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-bold px-10 py-4 rounded-2xl shadow-lg shadow-blue-200 transition-all active:scale-95 flex items-center gap-2"
+                                >
+                                    {isMetaDeploying ? (
+                                        <Loader2 className="animate-spin" size={20} />
+                                    ) : (
+                                        <Check size={20} />
+                                    )}
+                                    {metaDeployResult ? '重新部署' : '確認部署'}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
                 {/* Channel Management Overlay */}
                 {isChannelManageOverlayOpen && (
                     <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
@@ -4243,36 +4832,62 @@ const BackendDashboard = () => {
                                         </div>
                                     );
                                 })()}
-                                {/* Messenger - unavailable */}
-                                <div className="flex items-center justify-between p-4 rounded-2xl border border-slate-100 opacity-50">
-                                    <div className="flex items-center gap-3">
-                                        <div className="w-9 h-9 bg-blue-50 rounded-xl flex items-center justify-center">
-                                            <svg width="20" height="20" viewBox="0 0 24 24" fill="#0084FF"><path d="M12 2C6.47715 2 2 6.145 2 11.257c0 2.913 1.45 5.514 3.714 7.222V22l3.39-1.858c.905.251 1.868.388 2.896.388 5.52285 0 10-4.145 10-9.257C22 6.145 17.52285 2 12 2zm1.09 12.338l-2.607-2.78-5.084 2.78 5.587-5.93 2.67 2.78 5.022-2.78-5.588 5.93z" /></svg>
+                                {/* Messenger */}
+                                {(() => {
+                                    const metaConnected = !!(currentAgent?.deploy_config?.meta?.fb_messenger_enabled);
+                                    const metaEnabled = currentAgent?.deploy_config?.meta?.enabled !== false;
+                                    return (
+                                        <div className="flex items-center justify-between p-4 rounded-2xl border border-slate-100 bg-slate-50/50">
+                                            <div className="flex items-center gap-3 flex-1 min-w-0">
+                                                <div className="w-9 h-9 bg-blue-50 rounded-xl flex-none flex items-center justify-center">
+                                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="#0084FF"><path d="M12 2C6.47715 2 2 6.145 2 11.257c0 2.913 1.45 5.514 3.714 7.222V22l3.39-1.858c.905.251 1.868.388 2.896.388 5.52285 0 10-4.145 10-9.257C22 6.145 17.52285 2 12 2zm1.09 12.338l-2.607-2.78-5.084 2.78 5.587-5.93 2.67 2.78 5.022-2.78-5.588 5.93z" /></svg>
+                                                </div>
+                                                <div className="min-w-0">
+                                                    <p className="font-bold text-slate-800 text-sm truncate">Messenger</p>
+                                                    <p className="text-xs text-slate-400">{metaConnected ? (metaEnabled ? '已啟用' : '已暫停') : '尚未設定'}</p>
+                                                </div>
+                                            </div>
+                                            {metaConnected ? (
+                                                <button
+                                                    onClick={() => handleToggleChannel('meta', !metaEnabled)}
+                                                    className={`relative w-12 h-6 flex-none rounded-full transition-colors ${metaEnabled ? 'bg-blue-500' : 'bg-slate-300'}`}
+                                                >
+                                                    <span className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full shadow transition-transform ${metaEnabled ? 'translate-x-6' : 'translate-x-0'}`} />
+                                                </button>
+                                            ) : (
+                                                <span className="text-xs flex-none text-slate-400 bg-slate-100 px-3 py-1 rounded-full">請先設定</span>
+                                            )}
                                         </div>
-                                        <div>
-                                            <p className="font-bold text-slate-800 text-sm">Messenger</p>
-                                            <p className="text-xs text-slate-400">暫未開放</p>
+                                    );
+                                })()}
+                                {/* Instagram */}
+                                {(() => {
+                                    const igConnected = !!(currentAgent?.deploy_config?.meta?.ig_dm_enabled || currentAgent?.deploy_config?.meta?.ig_comment_enabled);
+                                    const metaEnabled = currentAgent?.deploy_config?.meta?.enabled !== false;
+                                    return (
+                                        <div className="flex items-center justify-between p-4 rounded-2xl border border-slate-100 bg-slate-50/50">
+                                            <div className="flex items-center gap-3 flex-1 min-w-0">
+                                                <div className="w-9 h-9 bg-pink-50 rounded-xl flex-none flex items-center justify-center">
+                                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="#E4405F"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.052.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0zm0 5.838a6.162 6.162 0 100 12.324 6.162 6.162 0 000-12.324zM12 16a4 4 0 110-8 4 4 0 010 8zm6.406-11.845a1.44 1.44 0 100 2.881 1.44 1.44 0 000-2.881z" /></svg>
+                                                </div>
+                                                <div className="min-w-0">
+                                                    <p className="font-bold text-slate-800 text-sm truncate">Instagram</p>
+                                                    <p className="text-xs text-slate-400">{igConnected ? (metaEnabled ? '已啟用' : '已暫停') : '尚未設定'}</p>
+                                                </div>
+                                            </div>
+                                            {igConnected ? (
+                                                <button
+                                                    onClick={() => handleToggleChannel('meta', !metaEnabled)}
+                                                    className={`relative w-12 h-6 flex-none rounded-full transition-colors ${metaEnabled ? 'bg-pink-500' : 'bg-slate-300'}`}
+                                                >
+                                                    <span className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full shadow transition-transform ${metaEnabled ? 'translate-x-6' : 'translate-x-0'}`} />
+                                                </button>
+                                            ) : (
+                                                <span className="text-xs flex-none text-slate-400 bg-slate-100 px-3 py-1 rounded-full">請先設定</span>
+                                            )}
                                         </div>
-                                    </div>
-                                    <button disabled className="relative w-12 h-6 rounded-full shrink-0 bg-slate-200 cursor-not-allowed">
-                                        <span className="absolute top-1 translate-x-1 w-4 h-4 bg-white rounded-full shadow" />
-                                    </button>
-                                </div>
-                                {/* Instagram - unavailable */}
-                                <div className="flex items-center justify-between p-4 rounded-2xl border border-slate-100 opacity-50">
-                                    <div className="flex items-center gap-3">
-                                        <div className="w-9 h-9 bg-pink-50 rounded-xl flex items-center justify-center">
-                                            <svg width="20" height="20" viewBox="0 0 24 24" fill="#E4405F"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.052.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0zm0 5.838a6.162 6.162 0 100 12.324 6.162 6.162 0 000-12.324zM12 16a4 4 0 110-8 4 4 0 010 8zm6.406-11.845a1.44 1.44 0 100 2.881 1.44 1.44 0 000-2.881z" /></svg>
-                                        </div>
-                                        <div>
-                                            <p className="font-bold text-slate-800 text-sm">Instagram</p>
-                                            <p className="text-xs text-slate-400">暫未開放</p>
-                                        </div>
-                                    </div>
-                                    <button disabled className="relative w-12 h-6 rounded-full shrink-0 bg-slate-200 cursor-not-allowed">
-                                        <span className="absolute top-1 translate-x-1 w-4 h-4 bg-white rounded-full shadow" />
-                                    </button>
-                                </div>
+                                    );
+                                })()}
                                 {/* Telegram */}
                                 {(() => {
                                     const tgConnected = !!(currentAgent?.deploy_config?.telegram || currentAgent?.deploy_type === 'telegram');
@@ -5079,17 +5694,29 @@ const BackendDashboard = () => {
                             <button onClick={() => setShowFaqImportModal(false)} className="p-1 text-slate-400 hover:text-slate-600 transition-colors"><X size={16} /></button>
                         </div>
                         <div className="flex border-b border-slate-100 flex-shrink-0">
-                            <button onClick={() => { setFaqImportTab('file'); setParsedFaqPreview(null); }} className={`flex-1 py-3 text-sm font-semibold transition-colors ${faqImportTab === 'file' ? 'text-brand-600 border-b-2 border-brand-500' : 'text-slate-400 hover:text-slate-600'}`}>上傳檔案</button>
-                            <button onClick={() => { setFaqImportTab('text'); setParsedFaqPreview(null); }} className={`flex-1 py-3 text-sm font-semibold transition-colors ${faqImportTab === 'text' ? 'text-brand-600 border-b-2 border-brand-500' : 'text-slate-400 hover:text-slate-600'}`}>貼上文字</button>
+                            <button onClick={() => { setFaqImportTab('file'); setParsedFaqPreview(null); setFaqImportFileName(''); }} className={`flex-1 py-3 text-sm font-semibold transition-colors ${faqImportTab === 'file' ? 'text-brand-600 border-b-2 border-brand-500' : 'text-slate-400 hover:text-slate-600'}`}>上傳檔案</button>
+                            <button onClick={() => { setFaqImportTab('text'); setParsedFaqPreview(null); setFaqImportFileName(''); }} className={`flex-1 py-3 text-sm font-semibold transition-colors ${faqImportTab === 'text' ? 'text-brand-600 border-b-2 border-brand-500' : 'text-slate-400 hover:text-slate-600'}`}>貼上文字</button>
                         </div>
                         <div className="flex-1 overflow-y-auto p-6 space-y-4">
                             {faqImportTab === 'file' && !parsedFaqPreview && (
                                 <div>
-                                    <label className="flex flex-col items-center justify-center w-full h-36 border-2 border-dashed border-slate-200 rounded-2xl cursor-pointer hover:border-brand-300 hover:bg-brand-50/30 transition-colors">
-                                        <Upload size={28} className="text-slate-300 mb-2" />
-                                        <span className="text-sm font-semibold text-slate-500">點擊選擇或拖放檔案</span>
-                                        <span className="text-xs text-slate-400 mt-1">支援 .xlsx / .csv，最大 500KB</span>
-                                        <input ref={faqImportFileRef} type="file" accept=".xlsx,.csv" className="hidden" onChange={() => setParsedFaqPreview(null)} />
+                                    <label className={`flex flex-col items-center justify-center w-full h-36 border-2 border-dashed rounded-2xl cursor-pointer transition-colors ${faqImportFileName ? 'border-brand-400 bg-brand-50/50' : 'border-slate-200 hover:border-brand-300 hover:bg-brand-50/30'}`}>
+                                        {faqImportFileName ? (
+                                            <>
+                                                <div className="w-10 h-10 rounded-full bg-brand-100 flex items-center justify-center mb-2">
+                                                    <Upload size={20} className="text-brand-500" />
+                                                </div>
+                                                <span className="text-sm font-semibold text-brand-600 max-w-[240px] truncate px-2">{faqImportFileName}</span>
+                                                <span className="text-xs text-slate-400 mt-1">點擊可重新選擇</span>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <Upload size={28} className="text-slate-300 mb-2" />
+                                                <span className="text-sm font-semibold text-slate-500">點擊選擇或拖放檔案</span>
+                                                <span className="text-xs text-slate-400 mt-1">支援 .xlsx / .csv，最大 500KB</span>
+                                            </>
+                                        )}
+                                        <input ref={faqImportFileRef} type="file" accept=".xlsx,.csv" className="hidden" onChange={(e) => { setParsedFaqPreview(null); setFaqImportFileName(e.target.files?.[0]?.name || ''); }} />
                                     </label>
                                     <p className="text-xs text-slate-400 mt-3 text-center">AI 會自動識別問題與回答欄位，每次最多解析 200 組</p>
                                 </div>
