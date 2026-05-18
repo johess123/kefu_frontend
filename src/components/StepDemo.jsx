@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import axios from 'axios';
 import config from '../config';
-import { Send, User, Bot, Loader2, RotateCcw, ArrowRight, MessageCircle, Info, ShieldAlert, CheckCircle2, Lightbulb, HelpCircle, Package } from 'lucide-react';
+import { Send, User, Bot, Loader2, RotateCcw, ArrowRight, MessageCircle, Info, ShieldAlert, CheckCircle2, Lightbulb, HelpCircle, Package, ChevronDown, ChevronRight } from 'lucide-react';
 import { AppStep } from '../types';
 
 import Cookies from 'js-cookie';
@@ -14,7 +14,16 @@ const StepDemo = ({ formData, sessionId, setSessionId, agentId, onNext, setCurre
     const [isLoading, setIsLoading] = useState(false);
     const [lastResponseInfo, setLastResponseInfo] = useState(null);
     const [leftTab, setLeftTab] = useState('faq');
+    const [collapsedFaqCats, setCollapsedFaqCats] = useState(new Set());
     const messagesEndRef = useRef(null);
+
+    const toggleFaqCat = (cat) => {
+        setCollapsedFaqCats(prev => {
+            const next = new Set(prev);
+            next.has(cat) ? next.delete(cat) : next.add(cat);
+            return next;
+        });
+    };
 
     const scrollToBottom = () => {
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -132,22 +141,49 @@ const StepDemo = ({ formData, sessionId, setSessionId, agentId, onNext, setCurre
                     <div className="flex-1 overflow-y-auto p-3 space-y-2">
                         {leftTab === 'faq' ? (
                             <>
-                                {formData.faqs.map((faq, idx) => (
-                                    <button
-                                        key={idx}
-                                        onClick={() => handleFaqClick(faq.question)}
-                                        disabled={isLoading}
-                                        className="w-full text-left p-3 rounded-xl border border-slate-100 hover:border-brand-300 hover:bg-brand-50/50 transition-all group"
-                                    >
-                                        <div className="text-[10px] font-bold text-slate-400 mb-1 group-hover:text-brand-500 uppercase tracking-widest">FAQ {idx + 1}</div>
-                                        <p className="text-xs font-semibold text-slate-600 group-hover:text-slate-900 leading-relaxed">
-                                            {faq.question}
-                                        </p>
-                                    </button>
-                                ))}
-                                {formData.faqs.length === 0 && (
-                                    <div className="text-center py-10 text-slate-400 text-xs italic">尚未設定任何 FAQ</div>
-                                )}
+                                {(() => {
+                                    const grouped = {};
+                                    const catOrder = [];
+                                    formData.faqs.forEach((faq, idx) => {
+                                        const cat = faq.category || '常見問題';
+                                        if (!grouped[cat]) { grouped[cat] = []; catOrder.push(cat); }
+                                        grouped[cat].push({ faq, idx });
+                                    });
+                                    if (catOrder.length === 0) return (
+                                        <div className="text-center py-10 text-slate-400 text-xs italic">尚未設定任何 FAQ</div>
+                                    );
+                                    return catOrder.map(cat => {
+                                        const isCollapsed = collapsedFaqCats.has(cat);
+                                        return (
+                                            <div key={cat} className="space-y-1">
+                                                <div
+                                                    onClick={() => toggleFaqCat(cat)}
+                                                    className="flex items-center gap-1.5 px-2 py-1.5 cursor-pointer hover:bg-slate-50 rounded-lg transition-colors select-none"
+                                                >
+                                                    {isCollapsed
+                                                        ? <ChevronRight size={14} className="text-slate-500 flex-shrink-0" />
+                                                        : <ChevronDown size={14} className="text-slate-500 flex-shrink-0" />
+                                                    }
+                                                    <span className="text-sm font-bold text-slate-700 truncate">{cat}</span>
+                                                    <span className="text-[10px] text-slate-400 flex-shrink-0">({grouped[cat].length})</span>
+                                                </div>
+                                                {!isCollapsed && grouped[cat].map(({ faq, idx }) => (
+                                                    <button
+                                                        key={idx}
+                                                        onClick={() => handleFaqClick(faq.question)}
+                                                        disabled={isLoading}
+                                                        className="w-full text-left p-3 rounded-xl border border-slate-100 hover:border-brand-300 hover:bg-brand-50/50 transition-all group"
+                                                    >
+                                                        <div className="text-[10px] font-bold text-slate-400 mb-1 group-hover:text-brand-500 uppercase tracking-widest">FAQ {idx + 1}</div>
+                                                        <p className="text-xs font-semibold text-slate-600 group-hover:text-slate-900 leading-relaxed">
+                                                            {faq.question}
+                                                        </p>
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        );
+                                    });
+                                })()}
                             </>
                         ) : (
                             <>
