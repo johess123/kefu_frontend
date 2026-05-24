@@ -1,8 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
 import axios from 'axios';
 import config from '../config';
-import { Send, User, Bot, Loader2, RotateCcw, ArrowRight, MessageCircle, Info, ShieldAlert, CheckCircle2, Lightbulb, HelpCircle, Package, ChevronDown, ChevronRight } from 'lucide-react';
+import { Send, User, Bot, Loader2, RotateCcw, ArrowRight, MessageCircle, Info, ShieldAlert, CheckCircle2, Lightbulb, HelpCircle, Package, ChevronDown, ChevronRight, Image as ImageIcon } from 'lucide-react';
 import { AppStep } from '../types';
+import ImageLightbox from './ImageLightbox';
 
 import Cookies from 'js-cookie';
 
@@ -16,6 +17,12 @@ const StepDemo = ({ formData, sessionId, setSessionId, agentId, onNext, setCurre
     const [leftTab, setLeftTab] = useState('faq');
     const [collapsedFaqCats, setCollapsedFaqCats] = useState(new Set());
     const messagesEndRef = useRef(null);
+
+    const [attachedFile, setAttachedFile] = useState(null); // File object
+    const [imagePreview, setImagePreview] = useState('');   // local object URL
+    const [imageUploading, setImageUploading] = useState(false);
+    const [lightboxSrc, setLightboxSrc] = useState(null);
+    const fileInputRef = useRef(null);
 
     const toggleFaqCat = (cat) => {
         setCollapsedFaqCats(prev => {
@@ -35,32 +42,57 @@ const StepDemo = ({ formData, sessionId, setSessionId, agentId, onNext, setCurre
 
     const handleSend = async (textToSend = input) => {
         const msgText = textToSend.trim();
-        if (!msgText) return;
+        const hasImage = !!attachedFile;
+        if (!msgText && !hasImage) return;
 
-        setMessages(prev => [...prev, { role: 'user', text: msgText }]);
+        // 立即顯示使用者訊息（含本地圖片預覽）
+        const userMsg = { role: 'user', text: msgText, imagePreview: imagePreview };
+        setMessages(prev => [...prev, userMsg]);
         setInput('');
+        const fileToUpload = attachedFile;
+        setAttachedFile(null);
+        setImagePreview('');
         setIsLoading(true);
         setLastResponseInfo(null);
 
         try {
+            // 若有附圖，先上傳取得 Cloudinary URL
+            let uploadedImageUrl = '';
+            if (fileToUpload) {
+                setImageUploading(true);
+                const formData = new FormData();
+                formData.append('file', fileToUpload);
+                const uploadRes = await axios.post(`${config.API_URL}/api/admin/upload_image`, formData, {
+                    headers: { 'Content-Type': 'multipart/form-data' }
+                });
+                uploadedImageUrl = uploadRes.data.preview_url || '';
+                setImageUploading(false);
+            }
+
             const line_user_id = Cookies.get('google_user_id');
             const line_user_name = Cookies.get('google_user_name');
             const response = await axios.post(`${config.API_URL}/api/chat`, {
-                message: msgText,
+                message: msgText || '（附圖）',
                 line_user_id: line_user_id,
                 user_name: line_user_name,
                 agent_id: agentId,
                 session_id: sessionId,
-                source: 'test'
+                source: 'test',
+                ...(uploadedImageUrl && { image_url: uploadedImageUrl }),
             });
 
-            const { response_text, related_faq_list, handoff_result } = response.data;
+            const { response_text, related_faq_list, related_product_list, handoff_result, faq_image_urls, product_image_urls, storefront_url } = response.data;
+            const allImages = [...(faq_image_urls || []), ...(product_image_urls || [])];
+            const displayImages = storefront_url ? allImages.slice(0, 2) : allImages.slice(0, 4);
 
             const newMessage = {
                 role: 'model',
                 text: response_text,
                 related_faqs: related_faq_list || [],
-                handoff: handoff_result
+                related_products: related_product_list || [],
+                handoff: handoff_result,
+                images: displayImages,
+                storefront_url: storefront_url || '',
             };
 
             setMessages(prev => [...prev, newMessage]);
@@ -71,6 +103,7 @@ const StepDemo = ({ formData, sessionId, setSessionId, agentId, onNext, setCurre
             setMessages(prev => [...prev, { role: 'model', text: '抱歉，發生錯誤，請稍後再試。' }]);
         } finally {
             setIsLoading(false);
+            setImageUploading(false);
         }
     };
 
@@ -84,6 +117,8 @@ const StepDemo = ({ formData, sessionId, setSessionId, agentId, onNext, setCurre
     const resetChat = () => {
         setMessages([{ role: 'model', text: '你好！我是你的 AI 智能客服，有什麼可以幫你的嗎？' }]);
         setLastResponseInfo(null);
+        setAttachedFile(null);
+        setImagePreview('');
         // Refresh session ID to match backend dashboard behavior
         axios.get(`${config.API_URL}/api/init_session`).then(res => {
             if (res.data.session_id) {
@@ -222,14 +257,51 @@ const StepDemo = ({ formData, sessionId, setSessionId, agentId, onNext, setCurre
                                         }`}>
                                         {msg.role === 'user' ? <User size={18} /> : <Bot size={18} />}
                                     </div>
-                                    <div className={`p-4 rounded-2xl shadow-sm text-sm leading-relaxed whitespace-pre-wrap ${msg.role === 'user'
-                                        ? 'bg-brand-600 text-white rounded-tr-none'
-                                        : 'bg-white text-slate-800 rounded-tl-none border border-slate-100'
+                                    <div className={`rounded-2xl shadow-sm text-sm leading-relaxed ${msg.role === 'user'
+                                        ? 'bg-brand-600 text-white rounded-tr-none overflow-hidden'
+                                        : 'bg-white text-slate-800 rounded-tl-none border border-slate-100 overflow-hidden'
                                         }`}>
-                                        {msg.text}
-                                        {msg.role === 'model' && (
-                                            <div className="mt-2 pt-2 border-t border-slate-100 text-[10px] text-slate-400 text-right">
-                                                By AI客服
+                                        {/* 使用者附圖顯示（本地預覽） */}
+                                        {msg.role === 'user' && msg.imagePreview && (
+                                            <img
+                                                src={msg.imagePreview}
+                                                alt="附圖"
+                                                className="w-full max-w-xs object-cover cursor-pointer hover:opacity-90 transition-opacity"
+                                                style={{ maxHeight: '200px' }}
+                                                onClick={() => setLightboxSrc(msg.imagePreview)}
+                                            />
+                                        )}
+                                        <div className={`p-4 whitespace-pre-wrap ${!msg.text && msg.imagePreview ? 'hidden' : ''}`}>
+                                            {msg.text}
+                                            {msg.storefront_url && (
+                                                <a
+                                                    href={msg.storefront_url}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="mt-3 flex items-center gap-1.5 text-brand-600 hover:text-brand-700 font-semibold text-xs underline underline-offset-2"
+                                                >
+                                                    <Package size={13} />
+                                                    商品網站 →
+                                                </a>
+                                            )}
+                                            {msg.role === 'model' && (
+                                                <div className="mt-2 pt-2 border-t border-slate-100 text-[10px] text-slate-400 text-right">
+                                                    By AI客服
+                                                </div>
+                                            )}
+                                        </div>
+                                        {msg.images && msg.images.length > 0 && (
+                                            <div className={`grid gap-1 ${msg.images.length === 1 ? 'grid-cols-1' : 'grid-cols-2'}`}>
+                                                {msg.images.map((img, i) => (
+                                                    <img
+                                                        key={i}
+                                                        src={img.preview_url || img.url}
+                                                        alt=""
+                                                        className="w-full object-cover cursor-pointer hover:opacity-90 transition-opacity"
+                                                        style={{ maxHeight: '200px' }}
+                                                        onClick={() => setLightboxSrc(img.url)}
+                                                    />
+                                                ))}
                                             </div>
                                         )}
                                     </div>
@@ -255,14 +327,55 @@ const StepDemo = ({ formData, sessionId, setSessionId, agentId, onNext, setCurre
 
                     {/* Input */}
                     <div className="p-4 bg-white border-t border-slate-100">
+                        {/* 圖片預覽列 */}
+                        {imagePreview && (
+                            <div className="mb-3 flex items-center gap-2 animate-in fade-in slide-in-from-bottom-2 duration-250">
+                                <div className="relative inline-block">
+                                    <img
+                                        src={imagePreview}
+                                        alt="附圖預覽"
+                                        className="h-16 w-16 object-cover rounded-xl border border-slate-200 cursor-pointer hover:opacity-80"
+                                        onClick={() => setLightboxSrc(imagePreview)}
+                                    />
+                                    <button
+                                        onClick={() => { setAttachedFile(null); setImagePreview(''); }}
+                                        className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-slate-700 text-white rounded-full flex items-center justify-center text-xs hover:bg-red-500 transition-colors"
+                                    >✕</button>
+                                </div>
+                                <span className="text-xs text-slate-400">已附圖，傳送後 AI 會分析此圖片</span>
+                            </div>
+                        )}
                         <div className="flex items-center gap-2 relative">
+                            {/* Hidden file input */}
+                            <input
+                                ref={fileInputRef}
+                                type="file"
+                                accept="image/*"
+                                className="hidden"
+                                onChange={(e) => {
+                                    const f = e.target.files?.[0];
+                                    if (!f) return;
+                                    setAttachedFile(f);
+                                    setImagePreview(URL.createObjectURL(f));
+                                    e.target.value = '';
+                                }}
+                            />
+                            {/* 附圖按鈕 */}
+                            <button
+                                onClick={() => fileInputRef.current?.click()}
+                                disabled={isLoading}
+                                title="附上圖片"
+                                className="flex-shrink-0 p-2.5 rounded-xl border border-slate-200 text-slate-400 hover:text-brand-600 hover:border-brand-300 hover:bg-brand-50 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+                            >
+                                <ImageIcon size={20} />
+                            </button>
                             <div className="flex-1 relative">
                                 <input
                                     type="text"
                                     value={input}
                                     onChange={(e) => setInput(e.target.value.slice(0, 100))}
                                     onKeyDown={handleKeyDown}
-                                    placeholder="輸入測試訊息內容..."
+                                    placeholder={attachedFile ? '可選：加入文字說明...' : '輸入測試訊息內容...'}
                                     maxLength={100}
                                     className="w-full pl-5 pr-28 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-all text-sm"
                                     disabled={isLoading}
@@ -272,10 +385,10 @@ const StepDemo = ({ formData, sessionId, setSessionId, agentId, onNext, setCurre
                                 </div>
                                 <button
                                     onClick={() => handleSend()}
-                                    disabled={!input.trim() || isLoading}
+                                    disabled={(!input.trim() && !attachedFile) || isLoading}
                                     className="absolute right-2 top-1/2 -translate-y-1/2 p-2.5 bg-brand-600 text-white rounded-xl hover:bg-brand-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-md shadow-brand-100 active:scale-95"
                                 >
-                                    <Send size={20} />
+                                    {imageUploading ? <Loader2 size={20} className="animate-spin" /> : <Send size={20} />}
                                 </button>
                             </div>
                         </div>
@@ -334,6 +447,31 @@ const StepDemo = ({ formData, sessionId, setSessionId, agentId, onNext, setCurre
                                         ))
                                     }
 
+                                    {/* Product Hits - Each in its own block */}
+                                    {lastResponseInfo.related_products && lastResponseInfo.related_products.length > 0 &&
+                                        lastResponseInfo.related_products.map((product, i) => (
+                                            <div key={`product-${i}`} className="space-y-3">
+                                                <div className="flex items-center gap-2 text-green-600">
+                                                    <CheckCircle2 size={16} />
+                                                    <span className="text-xs font-bold uppercase tracking-wider">成功命中商品</span>
+                                                </div>
+                                                <div className="bg-green-50/30 border border-green-100 rounded-2xl p-4">
+                                                    <div className="text-[10px] font-black text-green-600 uppercase mb-3 tracking-widest opacity-70">商品資訊</div>
+                                                    <div className="text-xs space-y-3">
+                                                        <div className="flex gap-2">
+                                                            <span className="font-bold text-slate-700 shrink-0">商品:</span>
+                                                            <span className="text-slate-600 leading-relaxed">{product.name}</span>
+                                                        </div>
+                                                        <div className="flex gap-2">
+                                                            <span className="font-bold text-slate-700 shrink-0">說明:</span>
+                                                            <span className="text-slate-600 leading-relaxed">{product.description}</span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ))
+                                    }
+
                                     {/* Handoff Hit - Separate block */}
                                     {lastResponseInfo.handoff?.hand_off && (
                                         <div className="space-y-3">
@@ -350,11 +488,11 @@ const StepDemo = ({ formData, sessionId, setSessionId, agentId, onNext, setCurre
                                     )}
 
                                     {/* Empty State */}
-                                    {(!lastResponseInfo.related_faqs || lastResponseInfo.related_faqs.length === 0) && !lastResponseInfo.handoff?.hand_off && (
+                                    {(!lastResponseInfo.related_faqs || lastResponseInfo.related_faqs.length === 0) && (!lastResponseInfo.related_products || lastResponseInfo.related_products.length === 0) && !lastResponseInfo.handoff?.hand_off && (
                                         <div className="space-y-3">
                                             <div className="flex items-center gap-2 text-slate-400 bg-slate-100/50 px-3 py-1.5 rounded-lg w-fit">
                                                 <HelpCircle size={16} />
-                                                <span className="text-sm font-bold">未命中任何 FAQ</span>
+                                                <span className="text-sm font-bold">未命中任何 FAQ 或商品</span>
                                             </div>
 
                                             <div className="pt-2">
@@ -364,7 +502,7 @@ const StepDemo = ({ formData, sessionId, setSessionId, agentId, onNext, setCurre
                                                         <Lightbulb size={16} />
                                                     </div>
                                                     <p className="text-xs text-slate-600 leading-relaxed">
-                                                        建議前往 <button onClick={() => setCurrentStep(AppStep.REVIEW)} className="text-brand-600 font-bold hover:underline">Step 2</button> 新增一題關於 「{messages.filter(m => m.role === 'user').slice(-1)[0]?.text}」 的 FAQ，以減少轉人工頻率。
+                                                        建議前往 <button onClick={() => setCurrentStep(AppStep.REVIEW)} className="text-brand-600 font-bold hover:underline">Step 2</button> 新增一題關於 「{messages.filter(m => m.role === 'user').slice(-1)[0]?.text}」 的 FAQ 或商品資料，以優化回答覆蓋率。
                                                     </p>
                                                 </div>
                                             </div>
@@ -377,6 +515,13 @@ const StepDemo = ({ formData, sessionId, setSessionId, agentId, onNext, setCurre
                     </div>
                 </div>
             </div>
+            {/* 圖片放大燈箱 */}
+            <ImageLightbox
+                isOpen={!!lightboxSrc}
+                src={lightboxSrc}
+                alt="測試對話附圖"
+                onClose={() => setLightboxSrc(null)}
+            />
         </div>
     );
 };
