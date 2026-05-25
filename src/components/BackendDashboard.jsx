@@ -3689,7 +3689,6 @@ const BackendDashboard = () => {
                                                                             <button
                                                                                 key={i}
                                                                                 onClick={() => handlePlaygroundFaqClick(faq.question)}
-                                                                                disabled={playgroundPendingCount > 0}
                                                                                 className="w-full text-left p-3 rounded-xl border border-slate-100 hover:border-brand-300 hover:bg-brand-50/50 transition-all group mb-2"
                                                                             >
                                                                                 <div className="flex items-start gap-2">
@@ -3715,7 +3714,6 @@ const BackendDashboard = () => {
                                                                 <button
                                                                     key={idx}
                                                                     onClick={() => handlePlaygroundFaqClick(`請問「${product.name}」有什麼特色或詳細資訊？`)}
-                                                                    disabled={playgroundPendingCount > 0}
                                                                     className="w-full text-left p-4 rounded-2xl border border-slate-100 hover:border-green-300 hover:bg-green-50/50 transition-all group"
                                                                 >
                                                                     <div className="flex items-start gap-2">

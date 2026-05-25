@@ -208,7 +208,6 @@ const StepDemo = ({ formData, sessionId, setSessionId, agentId, onNext, setCurre
                                                     <button
                                                         key={idx}
                                                         onClick={() => handleFaqClick(faq.question)}
-                                                        disabled={pendingCount > 0}
                                                         className="w-full text-left p-3 rounded-xl border border-slate-100 hover:border-brand-300 hover:bg-brand-50/50 transition-all group"
                                                     >
                                                         <div className="text-[10px] font-bold text-slate-400 mb-1 group-hover:text-brand-500 uppercase tracking-widest">FAQ {idx + 1}</div>
@@ -228,7 +227,6 @@ const StepDemo = ({ formData, sessionId, setSessionId, agentId, onNext, setCurre
                                     <button
                                         key={idx}
                                         onClick={() => handleFaqClick(`請問「${product.name}」有什麼特色或詳細資訊？`)}
-                                        disabled={pendingCount > 0}
                                         className="w-full text-left p-3 rounded-xl border border-slate-100 hover:border-green-300 hover:bg-green-50/50 transition-all group"
                                     >
                                         <div className="text-[10px] font-bold text-slate-400 mb-0.5 group-hover:text-green-600 uppercase tracking-widest">商品 {idx + 1}</div>
