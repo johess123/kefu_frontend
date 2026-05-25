@@ -12,7 +12,7 @@ const StepDemo = ({ formData, sessionId, setSessionId, agentId, onNext, setCurre
         { role: 'model', text: '你好！我是你的 AI 智能客服，有什麼可以幫你的嗎？' }
     ]);
     const [input, setInput] = useState('');
-    const [isLoading, setIsLoading] = useState(false);
+    const [pendingCount, setPendingCount] = useState(0);
     const [lastResponseInfo, setLastResponseInfo] = useState(null);
     const [leftTab, setLeftTab] = useState('faq');
     const [collapsedFaqCats, setCollapsedFaqCats] = useState(new Set());
@@ -52,7 +52,7 @@ const StepDemo = ({ formData, sessionId, setSessionId, agentId, onNext, setCurre
         const fileToUpload = attachedFile;
         setAttachedFile(null);
         setImagePreview('');
-        setIsLoading(true);
+        setPendingCount(c => c + 1);
         setLastResponseInfo(null);
 
         try {
@@ -95,14 +95,16 @@ const StepDemo = ({ formData, sessionId, setSessionId, agentId, onNext, setCurre
                 storefront_url: storefront_url || '',
             };
 
-            setMessages(prev => [...prev, newMessage]);
-            setLastResponseInfo(newMessage);
+            if (response_text) {
+                setMessages(prev => [...prev, newMessage]);
+                setLastResponseInfo(newMessage);
+            }
 
         } catch (error) {
             console.error('Chat error:', error);
             setMessages(prev => [...prev, { role: 'model', text: '抱歉，發生錯誤，請稍後再試。' }]);
         } finally {
-            setIsLoading(false);
+            setPendingCount(c => Math.max(0, c - 1));
             setImageUploading(false);
         }
     };
@@ -206,7 +208,7 @@ const StepDemo = ({ formData, sessionId, setSessionId, agentId, onNext, setCurre
                                                     <button
                                                         key={idx}
                                                         onClick={() => handleFaqClick(faq.question)}
-                                                        disabled={isLoading}
+                                                        disabled={pendingCount > 0}
                                                         className="w-full text-left p-3 rounded-xl border border-slate-100 hover:border-brand-300 hover:bg-brand-50/50 transition-all group"
                                                     >
                                                         <div className="text-[10px] font-bold text-slate-400 mb-1 group-hover:text-brand-500 uppercase tracking-widest">FAQ {idx + 1}</div>
@@ -226,7 +228,7 @@ const StepDemo = ({ formData, sessionId, setSessionId, agentId, onNext, setCurre
                                     <button
                                         key={idx}
                                         onClick={() => handleFaqClick(`請問「${product.name}」有什麼特色或詳細資訊？`)}
-                                        disabled={isLoading}
+                                        disabled={pendingCount > 0}
                                         className="w-full text-left p-3 rounded-xl border border-slate-100 hover:border-green-300 hover:bg-green-50/50 transition-all group"
                                     >
                                         <div className="text-[10px] font-bold text-slate-400 mb-0.5 group-hover:text-green-600 uppercase tracking-widest">商品 {idx + 1}</div>
@@ -308,7 +310,7 @@ const StepDemo = ({ formData, sessionId, setSessionId, agentId, onNext, setCurre
                                 </div>
                             </div>
                         ))}
-                        {isLoading && (
+                        {pendingCount > 0 && (
                             <div className="flex justify-start animate-pulse">
                                 <div className="flex items-start gap-3">
                                     <div className="w-9 h-9 rounded-full bg-brand-600 text-white flex items-center justify-center shadow-sm">
@@ -363,7 +365,7 @@ const StepDemo = ({ formData, sessionId, setSessionId, agentId, onNext, setCurre
                             {/* 附圖按鈕 */}
                             <button
                                 onClick={() => fileInputRef.current?.click()}
-                                disabled={isLoading}
+                                disabled={pendingCount > 0}
                                 title="附上圖片"
                                 className="flex-shrink-0 p-2.5 rounded-xl border border-slate-200 text-slate-400 hover:text-brand-600 hover:border-brand-300 hover:bg-brand-50 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
                             >
@@ -378,17 +380,16 @@ const StepDemo = ({ formData, sessionId, setSessionId, agentId, onNext, setCurre
                                     placeholder={attachedFile ? '可選：加入文字說明...' : '輸入測試訊息內容...'}
                                     maxLength={100}
                                     className="w-full pl-5 pr-28 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-all text-sm"
-                                    disabled={isLoading}
                                 />
                                 <div className="absolute right-14 top-1/2 -translate-y-1/2 text-[10px] font-medium text-slate-400">
                                     {input.length}/100
                                 </div>
                                 <button
                                     onClick={() => handleSend()}
-                                    disabled={(!input.trim() && !attachedFile) || isLoading}
+                                    disabled={!input.trim() && !attachedFile}
                                     className="absolute right-2 top-1/2 -translate-y-1/2 p-2.5 bg-brand-600 text-white rounded-xl hover:bg-brand-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-md shadow-brand-100 active:scale-95"
                                 >
-                                    {imageUploading ? <Loader2 size={20} className="animate-spin" /> : <Send size={20} />}
+                                    {imageUploading || pendingCount > 0 ? <Loader2 size={20} className="animate-spin" /> : <Send size={20} />}
                                 </button>
                             </div>
                         </div>
