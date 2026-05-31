@@ -5,6 +5,7 @@ import Cookies from 'js-cookie';
 import config from '../config';
 import { ToneType, TONE_PROMPTS, DEFAULT_HANDOFF_OPTIONS } from '../types';
 import FaqImportModal from './FaqImportModal';
+import FaqAddModal from './FaqAddModal';
 
 const StepWizard = ({ formData, setFormData, agentId, onComplete }) => {
     const [qIndex, setQIndex] = useState(0);
@@ -26,6 +27,7 @@ const StepWizard = ({ formData, setFormData, agentId, onComplete }) => {
     const [wizardDragOverCat, setWizardDragOverCat] = useState(null);
     const [wizardExpandedFaqItems, setWizardExpandedFaqItems] = useState(new Set());
     const [wizardMoveFaqModal, setWizardMoveFaqModal] = useState({ open: false, faqId: null, faqQuestion: '', currentCat: '' });
+    const [wizardAddFaqModal, setWizardAddFaqModal] = useState({ open: false, category: '', categoryFixed: false });
 
     useEffect(() => {
         const allCats = [...new Set((formData.faqs || []).map(f => f.category || '常見問題'))];
@@ -199,13 +201,10 @@ const StepWizard = ({ formData, setFormData, agentId, onComplete }) => {
     );
 
     const renderQ3 = () => {
-        const addFAQ = (category = '') => {
+        const addFAQ = (category = '', fixed = false) => {
+            if (formData.faqs.length >= 200) { alert('FAQ 問答已達 200 組上限'); return; }
             const cat = category || (formData.faqs.length > 0 ? (formData.faqs[formData.faqs.length - 1].category || '常見問題') : '常見問題');
-            const newId = Date.now().toString();
-            const newFAQ = { id: newId, question: '', answer: '', image_id: '', category: cat };
-            updateField('faqs', [...formData.faqs, newFAQ]);
-            setExpandedCategories(prev => new Set([...prev, cat]));
-            setWizardExpandedFaqItems(prev => new Set([...prev, newId]));
+            setWizardAddFaqModal({ open: true, category: cat, categoryFixed: fixed });
         };
 
         const renameCategory = (oldName, newName) => {
@@ -398,8 +397,12 @@ const StepWizard = ({ formData, setFormData, agentId, onComplete }) => {
         };
 
         const handleConfirmWizardImportFaqs = (newFaqs) => {
-            updateField('faqs', [...formData.faqs, ...newFaqs]);
-            const newCats = new Set(newFaqs.map(f => f.category));
+            const remaining = 200 - formData.faqs.length;
+            if (remaining <= 0) { alert('FAQ 問答已達 200 組上限'); return; }
+            const toAdd = newFaqs.slice(0, remaining);
+            if (toAdd.length < newFaqs.length) alert(`已達 200 組上限，僅新增 ${toAdd.length} 組`);
+            updateField('faqs', [...formData.faqs, ...toAdd]);
+            const newCats = new Set(toAdd.map(f => f.category));
             setExpandedCategories(prev => new Set([...prev, ...newCats]));
         };
 
@@ -599,7 +602,7 @@ const StepWizard = ({ formData, setFormData, agentId, onComplete }) => {
                                             className="flex-1 bg-transparent font-bold text-slate-700 text-sm focus:outline-none focus:border-b focus:border-brand-400 min-w-0"
                                         />
                                         <span className="text-xs text-slate-400 flex-shrink-0">{catFaqs.length} 組</span>
-                                        <button onClick={(e) => { e.stopPropagation(); addFAQ(cat); }} className="text-slate-400 hover:text-brand-600 p-1 flex-shrink-0" title="新增此分類 FAQ"><Plus size={14} /></button>
+                                        <button onClick={(e) => { e.stopPropagation(); addFAQ(cat, true); }} className="text-slate-400 hover:text-brand-600 p-1 flex-shrink-0" title="新增此分類 FAQ"><Plus size={14} /></button>
                                         <button onClick={(e) => { e.stopPropagation(); deleteCategory(cat); }} className="text-slate-400 hover:text-red-500 p-1 flex-shrink-0" title="刪除此分類"><Trash2 size={14} /></button>
                                     </div>
                                     {isExpanded && (
@@ -661,6 +664,22 @@ const StepWizard = ({ formData, setFormData, agentId, onComplete }) => {
                         </div>
                     </div>
                 )}
+
+                <FaqAddModal
+                    open={wizardAddFaqModal.open}
+                    onClose={() => setWizardAddFaqModal({ open: false, category: '', categoryFixed: false })}
+                    categories={wizardCategoryOrder}
+                    defaultCategory={wizardAddFaqModal.category}
+                    categoryFixed={wizardAddFaqModal.categoryFixed}
+                    onSubmit={(faq) => {
+                        const newId = Date.now().toString();
+                        updateField('faqs', [...formData.faqs, { id: newId, ...faq }]);
+                        setExpandedCategories(prev => new Set([...prev, faq.category]));
+                        setWizardCategoryOrder(prev => prev.includes(faq.category) ? prev : [...prev, faq.category]);
+                        setWizardExpandedFaqItems(prev => new Set([...prev, newId]));
+                        setWizardAddFaqModal({ open: false, category: '', categoryFixed: false });
+                    }}
+                />
             </div>
         );
     };
