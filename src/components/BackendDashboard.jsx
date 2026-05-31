@@ -72,7 +72,7 @@ import NotifyBanner from './NotifyBanner';
 import FaqImportModal from './FaqImportModal';
 import FaqAddModal from './FaqAddModal';
 import ProductImportModal from './ProductImportModal';
-import { FAQ_MAX_QUESTION, FAQ_MAX_ANSWER, FAQ_MAX_COUNT, getDefaultFaqCategory, validateFaqsForSave, validateFaqsForAnalyze, validateFaqItemForOptimize } from '../utils/faqUtils';
+import { FAQ_MAX_QUESTION, FAQ_MAX_ANSWER, FAQ_MAX_COUNT, FAQ_MAX_CATEGORY, getDefaultFaqCategory, validateFaqsForSave, validateFaqsForAnalyze, validateFaqItemForOptimize } from '../utils/faqUtils';
 import SpotlightTour from './SpotlightTour';
 import OnboardingChecklist from './OnboardingChecklist';
 import InboxIntroModal from './InboxIntroModal';
@@ -2110,6 +2110,7 @@ const BackendDashboard = () => {
                                                                                 <input
                                                                                     type="text"
                                                                                     value={cat}
+                                                                                    maxLength={FAQ_MAX_CATEGORY}
                                                                                     onChange={(e) => renameFaqCategory(cat, e.target.value)}
                                                                                     onClick={(e) => e.stopPropagation()}
                                                                                     className="flex-1 bg-transparent font-bold text-slate-700 text-sm focus:outline-none focus:border-b focus:border-brand-400 min-w-0"
@@ -5185,12 +5186,14 @@ const BackendDashboard = () => {
                                 <input
                                     type="text"
                                     value={newCategoryName}
+                                    maxLength={FAQ_MAX_CATEGORY}
                                     onChange={(e) => setNewCategoryName(e.target.value)}
                                     onKeyDown={(e) => e.key === 'Enter' && confirmAddCategory()}
                                     placeholder="例如：訂購規範與流程"
                                     autoFocus
                                     className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-slate-800 font-bold text-sm focus:ring-2 focus:ring-brand-500/10 focus:border-brand-500 outline-none"
                                 />
+                                <div className="text-[10px] text-slate-300 text-right mt-1">{newCategoryName.length}/{FAQ_MAX_CATEGORY}</div>
                             </div>
                             <div className="px-6 py-4 bg-slate-50/50 border-t border-slate-100 flex justify-end gap-3">
                                 <button onClick={() => setShowCategoryModal(false)} className="px-5 py-2.5 rounded-xl text-sm font-bold text-slate-600 hover:bg-slate-100 transition-all">取消</button>

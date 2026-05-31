@@ -7,7 +7,7 @@ import { ToneType, TONE_PROMPTS, DEFAULT_HANDOFF_OPTIONS } from '../types';
 import FaqImportModal from './FaqImportModal';
 import FaqAddModal from './FaqAddModal';
 import ProductImportModal from './ProductImportModal';
-import { FAQ_MAX_QUESTION, FAQ_MAX_ANSWER, FAQ_MAX_COUNT, getDefaultFaqCategory, validateFaqsForSave, validateFaqsForAnalyze, validateFaqItemForOptimize } from '../utils/faqUtils';
+import { FAQ_MAX_QUESTION, FAQ_MAX_ANSWER, FAQ_MAX_COUNT, FAQ_MAX_CATEGORY, getDefaultFaqCategory, validateFaqsForSave, validateFaqsForAnalyze, validateFaqItemForOptimize } from '../utils/faqUtils';
 
 const StepWizard = ({ formData, setFormData, agentId, onComplete }) => {
     const [qIndex, setQIndex] = useState(0);
@@ -558,6 +558,7 @@ const StepWizard = ({ formData, setFormData, agentId, onComplete }) => {
                                         <input
                                             type="text"
                                             value={cat}
+                                            maxLength={FAQ_MAX_CATEGORY}
                                             onChange={(e) => renameCategory(cat, e.target.value)}
                                             onClick={(e) => e.stopPropagation()}
                                             className="flex-1 bg-transparent font-bold text-slate-700 text-sm focus:outline-none focus:border-b focus:border-brand-400 min-w-0"

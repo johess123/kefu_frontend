@@ -3,6 +3,7 @@ import { X, Upload, Loader2 } from 'lucide-react';
 import axios from 'axios';
 import Cookies from 'js-cookie';
 import config from '../config';
+import { FAQ_MAX_QUESTION, FAQ_MAX_ANSWER, FAQ_MAX_COUNT, FAQ_MAX_CATEGORY } from '../utils/faqUtils';
 
 export default function FaqImportModal({ onClose, onConfirm, brandDescription = '', existingCategories = [] }) {
     const [tab, setTab] = useState('file');
@@ -108,7 +109,7 @@ export default function FaqImportModal({ onClose, onConfirm, brandDescription = 
                                 )}
                                 <input ref={fileRef} type="file" accept=".xlsx,.csv" className="hidden" onChange={(e) => { setPreview(null); setFileName(e.target.files?.[0]?.name || ''); }} />
                             </label>
-                            <p className="text-xs text-slate-400 mt-3 text-center">AI 會自動識別問題與回答欄位，每次最多解析 200 組</p>
+                            <p className="text-xs text-slate-400 mt-3 text-center">AI 會自動識別問題與回答欄位，每次最多解析 {FAQ_MAX_COUNT} 組</p>
                         </div>
                     )}
                     {tab === 'text' && !preview && (
@@ -137,6 +138,7 @@ export default function FaqImportModal({ onClose, onConfirm, brandDescription = 
                                             <input
                                                 list="faq-import-modal-cats"
                                                 value={f.category || '常見問題'}
+                                                maxLength={FAQ_MAX_CATEGORY}
                                                 onChange={(e) => updatePreview(i, 'category', e.target.value)}
                                                 className="flex-1 text-[11px] font-bold text-brand-600 bg-brand-50 border border-brand-100 rounded-full px-2.5 py-0.5 outline-none focus:border-brand-400 focus:bg-white transition-colors min-w-0"
                                                 placeholder="分類名稱"
@@ -149,23 +151,23 @@ export default function FaqImportModal({ onClose, onConfirm, brandDescription = 
                                             <input
                                                 type="text"
                                                 value={f.question}
-                                                maxLength={100}
+                                                maxLength={FAQ_MAX_QUESTION}
                                                 onChange={(e) => updatePreview(i, 'question', e.target.value)}
                                                 className="w-full text-sm font-semibold text-slate-800 bg-transparent border-b border-slate-100 focus:border-brand-400 outline-none py-0.5 transition-colors"
                                                 placeholder="問題..."
                                             />
-                                            <div className="text-[10px] text-slate-300 text-right">{f.question?.length || 0}/100</div>
+                                            <div className="text-[10px] text-slate-300 text-right">{f.question?.length || 0}/{FAQ_MAX_QUESTION}</div>
                                         </div>
                                         <div>
                                             <textarea
                                                 rows={2}
                                                 value={f.answer}
-                                                maxLength={500}
+                                                maxLength={FAQ_MAX_ANSWER}
                                                 onChange={(e) => updatePreview(i, 'answer', e.target.value)}
                                                 className="w-full text-xs text-slate-500 bg-slate-50 rounded-lg px-2 py-1.5 resize-none outline-none focus:bg-white focus:ring-1 focus:ring-brand-200 transition-colors"
                                                 placeholder="回答..."
                                             />
-                                            <div className="text-[10px] text-slate-300 text-right">{f.answer?.length || 0}/500</div>
+                                            <div className="text-[10px] text-slate-300 text-right">{f.answer?.length || 0}/{FAQ_MAX_ANSWER}</div>
                                         </div>
                                     </div>
                                 ))}
