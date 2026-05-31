@@ -79,6 +79,7 @@ import InboxIntroModal from './InboxIntroModal';
 import ActivityIntroModal from './ActivityIntroModal';
 import CrmIntroModal from './CrmIntroModal';
 import { useAuth } from '../context/AuthContext';
+import { safeUrl } from '../utils/urlUtils';
 
 const SUB_SECTION_MAP = {
     'knowledge-base': 'Knowledge Base',
@@ -484,6 +485,7 @@ const BackendDashboard = () => {
     const kbCardRef = React.useRef(null);
     const escalationCardRef = React.useRef(null);
     const analystCardRef = React.useRef(null);
+    const isTogglingChannelRef = React.useRef(false);
     const [showTeamTour, setShowTeamTour] = useState(
         () => !localStorage.getItem('kefu_team_tour_done_v1')
     );
@@ -556,6 +558,7 @@ const BackendDashboard = () => {
     };
 
     const handleSaveTags = async (user, newTags) => {
+        if (isSavingTags) return;
         setIsSavingTags(true);
         try {
             await axios.put(
@@ -572,6 +575,7 @@ const BackendDashboard = () => {
     };
 
     const handleSaveNotes = async (user) => {
+        if (isSavingNotes) return;
         setIsSavingNotes(true);
         try {
             await axios.put(
@@ -1053,7 +1057,8 @@ const BackendDashboard = () => {
     };
 
     const handleToggleChannel = async (channel, enabled) => {
-        if (!currentAgent?._id) return;
+        if (!currentAgent?._id || isTogglingChannelRef.current) return;
+        isTogglingChannelRef.current = true;
         try {
             await axios.patch(
                 `${config.API_URL}/api/agent/${currentAgent._id}/channel/${channel}/toggle`,
@@ -1072,6 +1077,8 @@ const BackendDashboard = () => {
         } catch (error) {
             const msg = error?.response?.data?.detail || error?.message || '未知錯誤';
             alert('切換渠道狀態失敗: ' + msg);
+        } finally {
+            isTogglingChannelRef.current = false;
         }
     };
 
@@ -3785,7 +3792,7 @@ const BackendDashboard = () => {
                                                                         {msg.text}
                                                                         {msg.storefront_url && (
                                                                             <a
-                                                                                href={msg.storefront_url}
+                                                                                href={safeUrl(msg.storefront_url)}
                                                                                 target="_blank"
                                                                                 rel="noopener noreferrer"
                                                                                 className="mt-3 flex items-center gap-1.5 text-brand-600 hover:text-brand-700 font-semibold text-xs underline underline-offset-2"
@@ -4173,11 +4180,12 @@ const BackendDashboard = () => {
                                 <div>
                                     <label className="text-[11px] font-bold text-slate-400 uppercase tracking-[0.1em] mb-2 block">Bot Token</label>
                                     <input
-                                        type="text"
+                                        type="password"
                                         value={telegramBotToken}
                                         onChange={(e) => setTelegramBotToken(e.target.value)}
                                         placeholder="123456:ABC-DEF..."
                                         maxLength={256}
+                                        autoComplete="new-password"
                                         className="w-full px-5 py-4 bg-white border border-slate-200 rounded-2xl focus:ring-2 focus:ring-[#0088cc]/20 focus:border-[#0088cc] outline-none transition-all text-slate-700 font-medium placeholder:text-slate-300"
                                     />
                                     <p className="text-xs text-slate-400 mt-2">從 @BotFather 取得，格式如 123456:ABC-DEF...</p>
@@ -4256,13 +4264,14 @@ const BackendDashboard = () => {
                                 {/* Page Access Token */}
                                 <div>
                                     <label className="text-[11px] font-bold text-slate-400 uppercase tracking-[0.1em] mb-2 block">Page Access Token</label>
-                                    <textarea
+                                    <input
+                                        type="password"
                                         value={metaPageAccessToken}
                                         onChange={(e) => setMetaPageAccessToken(e.target.value)}
                                         placeholder="EAAxxxxxxxxxx..."
-                                        rows={3}
                                         maxLength={512}
-                                        className="w-full px-5 py-4 bg-white border border-slate-200 rounded-2xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all text-slate-700 font-mono text-sm placeholder:text-slate-300 resize-none"
+                                        autoComplete="new-password"
+                                        className="w-full px-5 py-4 bg-white border border-slate-200 rounded-2xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all text-slate-700 font-mono text-sm placeholder:text-slate-300"
                                     />
                                     <p className="text-xs text-slate-400 mt-1.5">從 Meta for Developers → 您的粉絲專頁 → 取得 Page Access Token</p>
                                 </div>
@@ -4272,11 +4281,12 @@ const BackendDashboard = () => {
                                     <label className="text-[11px] font-bold text-slate-400 uppercase tracking-[0.1em] mb-2 block">Webhook Verify Token</label>
                                     <div className="flex gap-2">
                                         <input
-                                            type="text"
+                                            type="password"
                                             value={metaVerifyToken}
                                             onChange={(e) => setMetaVerifyToken(e.target.value)}
                                             placeholder="自訂一組驗證密碼..."
                                             maxLength={256}
+                                            autoComplete="new-password"
                                             className="flex-1 px-5 py-4 bg-white border border-slate-200 rounded-2xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all text-slate-700 font-mono text-sm placeholder:text-slate-300"
                                         />
                                         <button
@@ -5200,7 +5210,7 @@ const BackendDashboard = () => {
                                     value={newCategoryName}
                                     maxLength={FAQ_MAX_CATEGORY}
                                     onChange={(e) => setNewCategoryName(e.target.value)}
-                                    onKeyDown={(e) => e.key === 'Enter' && confirmAddCategory()}
+                                    onKeyDown={(e) => e.key === 'Enter' && !e.nativeEvent.isComposing && confirmAddCategory()}
                                     placeholder="例如：訂購規範與流程"
                                     autoFocus
                                     className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-slate-800 font-bold text-sm focus:ring-2 focus:ring-brand-500/10 focus:border-brand-500 outline-none"

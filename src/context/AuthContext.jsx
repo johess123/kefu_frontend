@@ -102,11 +102,12 @@ export const AuthProvider = ({ children }) => {
                 setUserBalance(balance || 0);
                 setIsMonitorAllowed(isMonitor === true);
 
-                Cookies.set('google_user_id', googleId, { expires: 7 });
-                Cookies.set('google_user_name', name, { expires: 7 });
-                Cookies.set('google_user_email', email, { expires: 7 });
-                Cookies.set('google_user_picture', picture, { expires: 7 });
-                Cookies.set('is_monitor', String(isMonitor === true), { expires: 7 });
+                const cookieOpts = { expires: 7, secure: true, sameSite: 'Strict' };
+                Cookies.set('google_user_id', googleId, cookieOpts);
+                Cookies.set('google_user_name', name, cookieOpts);
+                Cookies.set('google_user_email', email, cookieOpts);
+                Cookies.set('google_user_picture', picture, cookieOpts);
+                Cookies.set('is_monitor', String(isMonitor === true), cookieOpts);
             }
         } catch (error) {
             console.error('Google login failed:', error);

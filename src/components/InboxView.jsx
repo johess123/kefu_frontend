@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import axios from 'axios';
 import config from '../config';
 import { RefreshCw, Send, MessageSquare } from 'lucide-react';
+import { safeUrl } from '../utils/urlUtils';
 
 const API = config.API_URL;
 
@@ -17,6 +18,7 @@ export default function InboxView({ currentAgent }) {
     const [isClosing, setIsClosing] = useState(false);
     const [lineQuota, setLineQuota] = useState(null);
     const messagesEndRef = useRef(null);
+    const isSendingRef = useRef(false);
 
     const agentId = currentAgent?._id;
     const adminId = currentAgent?.admin_id;
@@ -82,7 +84,8 @@ export default function InboxView({ currentAgent }) {
     };
 
     const handleSend = async () => {
-        if (!replyText.trim() || !selectedSession || isSending) return;
+        if (!replyText.trim() || !selectedSession || isSendingRef.current) return;
+        isSendingRef.current = true;
 
         const text = replyText.trim();
         const pad = n => String(n).padStart(2, '0');
@@ -122,6 +125,7 @@ export default function InboxView({ currentAgent }) {
             }
             alert('發送失敗，請確認渠道部署設定是否正確。');
         } finally {
+            isSendingRef.current = false;
             setIsSending(false);
         }
     };
@@ -374,9 +378,9 @@ export default function InboxView({ currentAgent }) {
                                                     {msg.image_urls && msg.image_urls.length > 0 && (
                                                         <div className={`flex flex-wrap gap-2 ${msg.content ? 'mt-2' : ''}`}>
                                                             {msg.image_urls.map((url, imgIdx) => (
-                                                                <a key={imgIdx} href={url} target="_blank" rel="noopener noreferrer">
+                                                                <a key={imgIdx} href={safeUrl(url)} target="_blank" rel="noopener noreferrer">
                                                                     <img
-                                                                        src={url}
+                                                                        src={safeUrl(url)}
                                                                         alt=""
                                                                         className="max-w-[200px] max-h-[200px] rounded-xl object-cover border border-slate-200 cursor-pointer hover:opacity-90 transition-opacity"
                                                                         onError={(e) => { e.target.style.display = 'none'; }}
