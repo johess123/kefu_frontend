@@ -240,11 +240,11 @@ const StepReview = ({ onNext, onEdit, formData, setFormData, sessionId, agentId,
                                 <div className="relative">
                                     <textarea
                                         value={editingFaq.answer}
-                                        maxLength={200}
+                                        maxLength={500}
                                         onChange={(e) => setEditingFaq({ ...editingFaq, answer: e.target.value })}
                                         className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-brand-500 outline-none text-slate-600 text-sm leading-relaxed min-h-[250px]"
                                     />
-                                    <div className="text-[10px] text-slate-300 text-right pr-2 mt-1">{editingFaq.answer.length}/200</div>
+                                    <div className="text-[10px] text-slate-300 text-right pr-2 mt-1">{editingFaq.answer.length}/500</div>
                                 </div>
                             ) : (
                                 <div className="p-5 bg-brand-50/30 rounded-xl border border-brand-100 text-slate-600 text-sm leading-relaxed whitespace-pre-wrap">

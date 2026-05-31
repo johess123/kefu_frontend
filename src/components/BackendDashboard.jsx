@@ -4076,6 +4076,7 @@ const BackendDashboard = () => {
                                             value={lineConfig.accessToken}
                                             onChange={(e) => setLineConfig({ ...lineConfig, accessToken: e.target.value })}
                                             placeholder="輸入 Channel Access Token"
+                                            maxLength={256}
                                             className="w-full px-5 py-4 bg-white border border-slate-200 rounded-2xl focus:ring-2 focus:ring-[#06C755]/20 focus:border-[#06C755] outline-none transition-all text-slate-700 font-medium placeholder:text-slate-300"
                                         />
                                     </div>
@@ -4086,6 +4087,7 @@ const BackendDashboard = () => {
                                             value={lineConfig.channelSecret}
                                             onChange={(e) => setLineConfig({ ...lineConfig, channelSecret: e.target.value })}
                                             placeholder="輸入 Channel Secret"
+                                            maxLength={128}
                                             className="w-full px-5 py-4 bg-white border border-slate-200 rounded-2xl focus:ring-2 focus:ring-[#06C755]/20 focus:border-[#06C755] outline-none transition-all text-slate-700 font-medium placeholder:text-slate-300"
                                         />
                                     </div>
@@ -4175,6 +4177,7 @@ const BackendDashboard = () => {
                                         value={telegramBotToken}
                                         onChange={(e) => setTelegramBotToken(e.target.value)}
                                         placeholder="123456:ABC-DEF..."
+                                        maxLength={256}
                                         className="w-full px-5 py-4 bg-white border border-slate-200 rounded-2xl focus:ring-2 focus:ring-[#0088cc]/20 focus:border-[#0088cc] outline-none transition-all text-slate-700 font-medium placeholder:text-slate-300"
                                     />
                                     <p className="text-xs text-slate-400 mt-2">從 @BotFather 取得，格式如 123456:ABC-DEF...</p>
@@ -4258,6 +4261,7 @@ const BackendDashboard = () => {
                                         onChange={(e) => setMetaPageAccessToken(e.target.value)}
                                         placeholder="EAAxxxxxxxxxx..."
                                         rows={3}
+                                        maxLength={512}
                                         className="w-full px-5 py-4 bg-white border border-slate-200 rounded-2xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all text-slate-700 font-mono text-sm placeholder:text-slate-300 resize-none"
                                     />
                                     <p className="text-xs text-slate-400 mt-1.5">從 Meta for Developers → 您的粉絲專頁 → 取得 Page Access Token</p>
@@ -4272,6 +4276,7 @@ const BackendDashboard = () => {
                                             value={metaVerifyToken}
                                             onChange={(e) => setMetaVerifyToken(e.target.value)}
                                             placeholder="自訂一組驗證密碼..."
+                                            maxLength={256}
                                             className="flex-1 px-5 py-4 bg-white border border-slate-200 rounded-2xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all text-slate-700 font-mono text-sm placeholder:text-slate-300"
                                         />
                                         <button
@@ -4395,6 +4400,7 @@ const BackendDashboard = () => {
                                                                     setMetaPostValidation(prev => { const n = { ...prev }; delete n[idx]; return n; });
                                                                 }}
                                                                 placeholder="https://www.instagram.com/p/Cxxxxxxxx/"
+                                                                maxLength={500}
                                                                 className="flex-1 px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs text-slate-700 outline-none focus:border-purple-400 transition-colors font-mono"
                                                             />
                                                             <button
@@ -4434,6 +4440,7 @@ const BackendDashboard = () => {
                                                                 value={trigger.keyword}
                                                                 onChange={(e) => { const u = [...metaIgTriggers]; u[idx] = { ...u[idx], keyword: e.target.value }; setMetaIgTriggers(u); }}
                                                                 placeholder="例：報名"
+                                                                maxLength={100}
                                                                 className="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-sm text-slate-700 outline-none focus:border-purple-400 transition-colors"
                                                             />
                                                         </div>
@@ -4460,6 +4467,7 @@ const BackendDashboard = () => {
                                                             value={trigger.public_reply || ''}
                                                             onChange={(e) => { const u = [...metaIgTriggers]; u[idx] = { ...u[idx], public_reply: e.target.value }; setMetaIgTriggers(u); }}
                                                             placeholder="謝謝你的留言！已為你發送詳細資訊 😊"
+                                                            maxLength={150}
                                                             className="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-sm text-slate-700 outline-none focus:border-purple-400 transition-colors"
                                                         />
                                                     </div>
@@ -4474,6 +4482,7 @@ const BackendDashboard = () => {
                                                             onChange={(e) => { const u = [...metaIgTriggers]; u[idx] = { ...u[idx], reply_message: e.target.value }; setMetaIgTriggers(u); }}
                                                             placeholder="您好！活動報名連結在這裡：https://..."
                                                             rows={2}
+                                                            maxLength={1000}
                                                             className="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-sm text-slate-700 outline-none focus:border-purple-400 transition-colors resize-none"
                                                         />
                                                     </div>
@@ -4529,6 +4538,7 @@ const BackendDashboard = () => {
                                                                 value={trigger.keyword}
                                                                 onChange={(e) => { const u = [...metaIgTriggers]; u[idx] = { ...u[idx], keyword: e.target.value }; setMetaIgTriggers(u); }}
                                                                 placeholder="例：網站"
+                                                                maxLength={100}
                                                                 className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-700 outline-none focus:border-blue-400 transition-colors"
                                                             />
                                                         </div>
@@ -4555,6 +4565,7 @@ const BackendDashboard = () => {
                                                             value={trigger.public_reply || ''}
                                                             onChange={(e) => { const u = [...metaIgTriggers]; u[idx] = { ...u[idx], public_reply: e.target.value }; setMetaIgTriggers(u); }}
                                                             placeholder="謝謝你的留言！已為你發送詳細資訊 😊"
+                                                            maxLength={150}
                                                             className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-700 outline-none focus:border-blue-400 transition-colors"
                                                         />
                                                     </div>
@@ -4569,6 +4580,7 @@ const BackendDashboard = () => {
                                                             onChange={(e) => { const u = [...metaIgTriggers]; u[idx] = { ...u[idx], reply_message: e.target.value }; setMetaIgTriggers(u); }}
                                                             placeholder="您好！這是我們的官網連結：https://..."
                                                             rows={2}
+                                                            maxLength={1000}
                                                             className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-700 outline-none focus:border-blue-400 transition-colors resize-none"
                                                         />
                                                     </div>

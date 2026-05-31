@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { BookOpen, X, Plus, Upload, Trash2 } from 'lucide-react';
 import axios from 'axios';
 import config from '../config';
+import { FAQ_MAX_QUESTION, FAQ_MAX_ANSWER } from '../utils/faqUtils';
 
 export default function FaqAddModal({ open, onClose, categories = [], defaultCategory = '常見問題', categoryFixed = false, onSubmit }) {
     const [form, setForm] = useState({ question: '', answer: '', image_id: '', _preview_url: '', category: defaultCategory });
@@ -52,20 +53,20 @@ export default function FaqAddModal({ open, onClose, categories = [], defaultCat
                     </div>
                     <div className="space-y-2">
                         <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Question</label>
-                        <input type="text" value={form.question} maxLength={100}
+                        <input type="text" value={form.question} maxLength={FAQ_MAX_QUESTION}
                             onChange={(e) => setForm(f => ({ ...f, question: e.target.value }))}
                             placeholder="輸入常見問題..."
                             autoFocus
                             className="w-full bg-white border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 font-bold text-base focus:ring-2 focus:ring-brand-500/10 focus:border-brand-500 outline-none transition-all" />
-                        <div className="text-[10px] text-slate-300 text-right">{form.question.length}/100</div>
+                        <div className="text-[10px] text-slate-300 text-right">{form.question.length}/{FAQ_MAX_QUESTION}</div>
                     </div>
                     <div className="space-y-2">
                         <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Answer</label>
-                        <textarea value={form.answer} maxLength={500}
+                        <textarea value={form.answer} maxLength={FAQ_MAX_ANSWER}
                             onChange={(e) => setForm(f => ({ ...f, answer: e.target.value }))}
                             placeholder="輸入預設回覆回答內容..."
                             className="w-full bg-white border border-slate-200 rounded-2xl p-5 text-slate-600 text-sm leading-relaxed min-h-[120px] focus:ring-2 focus:ring-brand-500/10 focus:border-brand-500 outline-none transition-all" />
-                        <div className="text-[10px] text-slate-300 text-right">{form.answer.length}/500</div>
+                        <div className="text-[10px] text-slate-300 text-right">{form.answer.length}/{FAQ_MAX_ANSWER}</div>
                     </div>
                     <div className="space-y-2">
                         <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Image <span className="text-slate-300 normal-case">(選填)</span></label>
