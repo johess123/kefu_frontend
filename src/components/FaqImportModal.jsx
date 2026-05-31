@@ -116,9 +116,11 @@ export default function FaqImportModal({ onClose, onConfirm, brandDescription = 
                             <textarea
                                 value={text}
                                 onChange={(e) => setText(e.target.value)}
+                                maxLength={30000}
                                 placeholder={'請貼上網站 FAQ 內容...\n\n例如：\nQ: 如何退換貨？\nA: 商品到貨 7 天內可申請退換。\n\nQ: 運費怎麼計算？\nA: 滿 500 元免運。'}
                                 className="w-full h-52 text-sm text-slate-700 bg-slate-50 border border-slate-200 rounded-xl p-4 resize-none outline-none focus:border-brand-400 focus:bg-white transition-colors"
                             />
+                            <div className="text-[10px] text-slate-300 text-right">{text.length}/30000</div>
                             <p className="text-xs text-slate-400 mt-2">AI 會自動識別問答結構，支援 Q&A、數字編號、中文標點等各種格式</p>
                         </div>
                     )}
