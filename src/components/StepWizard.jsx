@@ -28,6 +28,8 @@ const StepWizard = ({ formData, setFormData, agentId, onComplete }) => {
     const [wizardExpandedFaqItems, setWizardExpandedFaqItems] = useState(new Set());
     const [wizardMoveFaqModal, setWizardMoveFaqModal] = useState({ open: false, faqId: null, faqQuestion: '', currentCat: '' });
     const [wizardAddFaqModal, setWizardAddFaqModal] = useState({ open: false, category: '', categoryFixed: false });
+    const [showWizardCategoryModal, setShowWizardCategoryModal] = useState(false);
+    const [wizardNewCategoryName, setWizardNewCategoryName] = useState('');
 
     useEffect(() => {
         const allCats = [...new Set((formData.faqs || []).map(f => f.category || '常見問題'))];
@@ -215,15 +217,20 @@ const StepWizard = ({ formData, setFormData, agentId, onComplete }) => {
         };
 
         const addNewCategory = () => {
-            const name = window.prompt('請輸入新分類名稱：');
-            if (!name || !name.trim()) return;
-            const trimmed = name.trim();
+            setWizardNewCategoryName('');
+            setShowWizardCategoryModal(true);
+        };
+
+        const confirmWizardAddCategory = () => {
+            const trimmed = wizardNewCategoryName.trim();
+            if (!trimmed) return;
             const newId = Date.now().toString();
             const newFAQ = { id: newId, question: '', answer: '', image_id: '', category: trimmed };
             updateField('faqs', [...formData.faqs, newFAQ]);
             setExpandedCategories(prev => new Set([...prev, trimmed]));
             setWizardCategoryOrder(prev => prev.includes(trimmed) ? prev : [...prev, trimmed]);
             setWizardExpandedFaqItems(prev => new Set([...prev, newId]));
+            setShowWizardCategoryModal(false);
         };
 
         const toggleWizardFaqItem = (id) =>
@@ -591,6 +598,45 @@ const StepWizard = ({ formData, setFormData, agentId, onComplete }) => {
                         brandDescription={formData.brandDescription || ''}
                         existingCategories={[...new Set(formData.faqs.map(f => f.category || '常見問題'))]}
                     />
+                )}
+
+                {showWizardCategoryModal && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setShowWizardCategoryModal(false)}>
+                        <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" />
+                        <div className="relative bg-white w-full max-w-sm rounded-[28px] overflow-hidden shadow-2xl" onClick={(e) => e.stopPropagation()}>
+                            <div className="p-6 border-b border-slate-100 flex items-center justify-between">
+                                <h2 className="text-lg font-bold text-slate-800">新增分類</h2>
+                                <button onClick={() => setShowWizardCategoryModal(false)} className="w-8 h-8 flex items-center justify-center text-slate-400 hover:text-slate-600 hover:bg-slate-50 rounded-full">
+                                    <X size={18} />
+                                </button>
+                            </div>
+                            <div className="p-6">
+                                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 block mb-2">分類名稱</label>
+                                <input
+                                    type="text"
+                                    value={wizardNewCategoryName}
+                                    maxLength={FAQ_MAX_CATEGORY}
+                                    onChange={(e) => setWizardNewCategoryName(e.target.value)}
+                                    onKeyDown={(e) => e.key === 'Enter' && confirmWizardAddCategory()}
+                                    placeholder="例如：訂購規範與流程"
+                                    autoFocus
+                                    className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-slate-800 font-bold text-sm focus:ring-2 focus:ring-brand-500/10 focus:border-brand-500 outline-none"
+                                />
+                                <div className="text-[10px] text-slate-300 text-right mt-1">{wizardNewCategoryName.length}/{FAQ_MAX_CATEGORY}</div>
+                            </div>
+                            <div className="px-6 py-4 bg-slate-50/50 border-t border-slate-100 flex justify-end gap-3">
+                                <button onClick={() => setShowWizardCategoryModal(false)} className="px-5 py-2.5 rounded-xl text-sm font-bold text-slate-600 hover:bg-slate-100 transition-all">取消</button>
+                                <button
+                                    onClick={confirmWizardAddCategory}
+                                    disabled={!wizardNewCategoryName.trim()}
+                                    className="flex items-center gap-2 px-5 py-2.5 bg-brand-600 text-white rounded-xl text-sm font-bold hover:bg-brand-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                    <Plus size={16} />
+                                    新增
+                                </button>
+                            </div>
+                        </div>
+                    </div>
                 )}
 
                 {wizardMoveFaqModal.open && (
