@@ -3883,7 +3883,7 @@ const BackendDashboard = () => {
                                                                 type="text"
                                                                 value={playgroundInput}
                                                                 onChange={(e) => setPlaygroundInput(e.target.value.slice(0, 100))}
-                                                                onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && handlePlaygroundSend()}
+                                                                onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) handlePlaygroundSend(); }}
                                                                 placeholder={playgroundAttachedFile ? '可選：加入文字說明...' : '輸入測試訊息內容...'}
                                                                 maxLength={100}
                                                                 className="w-full pl-4 pr-24 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-all text-sm"
@@ -5454,7 +5454,7 @@ const BackendDashboard = () => {
                                         type="text"
                                         value={modalFieldLabel}
                                         onChange={(e) => setModalFieldLabel(e.target.value)}
-                                        onKeyDown={(e) => { if (e.key === 'Enter') addCustomField(modalFieldLabel); }}
+                                        onKeyDown={(e) => { if (e.key === 'Enter' && !e.nativeEvent.isComposing) { e.preventDefault(); addCustomField(modalFieldLabel); } }}
                                         placeholder="輸入欄位名稱..."
                                         maxLength={20}
                                         className="flex-1 px-3 py-2 border border-slate-200 rounded-lg text-xs focus:ring-2 focus:ring-green-500/20 focus:border-green-500 outline-none transition-all"
