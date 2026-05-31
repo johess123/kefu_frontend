@@ -71,6 +71,8 @@ import LineDeployGuide from './LineDeployGuide';
 import NotifyBanner from './NotifyBanner';
 import FaqImportModal from './FaqImportModal';
 import FaqAddModal from './FaqAddModal';
+import ProductImportModal from './ProductImportModal';
+import { FAQ_MAX_QUESTION, FAQ_MAX_ANSWER, FAQ_MAX_COUNT, getDefaultFaqCategory, validateFaqsForSave, validateFaqsForAnalyze, validateFaqItemForOptimize } from '../utils/faqUtils';
 import SpotlightTour from './SpotlightTour';
 import OnboardingChecklist from './OnboardingChecklist';
 import InboxIntroModal from './InboxIntroModal';
@@ -477,9 +479,7 @@ const BackendDashboard = () => {
     const [newProduct, setNewProduct] = useState({ name: '', description: '', keywords: '', image_id: '' });
     const [expandedProductItems, setExpandedProductItems] = useState(new Set());
     const [uploadingProductIdx, setUploadingProductIdx] = useState(null);
-    const [isParsingProductFile, setIsParsingProductFile] = useState(false);
-    const [productFileName, setProductFileName] = useState('');
-    const productFileRef = React.useRef(null);
+    const [showProductImportModal, setShowProductImportModal] = useState(false);
     const [showFaqImportModal, setShowFaqImportModal] = useState(false);
     const kbCardRef = React.useRef(null);
     const escalationCardRef = React.useRef(null);
@@ -502,51 +502,10 @@ const BackendDashboard = () => {
     const [modalFieldLabel, setModalFieldLabel] = useState('');
     const [isSavingSchema, setIsSavingSchema] = useState(false);
 
-    const handleParseProductFile = async (file) => {
-        if (!file) return;
-        const ext = file.name.split('.').pop().toLowerCase();
-        if (!['xlsx', 'csv', 'json'].includes(ext)) {
-            alert('僅支援 .xlsx、.csv 或 .json 格式');
-            return;
-        }
-        if (editingProducts.length >= 50) {
-            alert('最多只能新增 50 個商品');
-            return;
-        }
-        setIsParsingProductFile(true);
-        setProductFileName(file.name);
-        try {
-            const fd = new FormData();
-            fd.append('file', file);
-            fd.append('brandDescription', currentAgent?.config?.raw_config?.merchant_name || '');
-            fd.append('line_user_id', Cookies.get('google_user_id') || '');
-            if (productFieldSchema.length > 0) {
-                fd.append('field_schema', JSON.stringify(productFieldSchema));
-            }
-            const res = await axios.post(`${config.API_URL}/api/parse_products`, fd, {
-                headers: { 'Content-Type': 'multipart/form-data' }
-            });
-            if (res.data.error) {
-                alert('解析失敗：' + res.data.error);
-            } else if (res.data.products) {
-                const newProducts = res.data.products.map(p => ({
-                    id: Math.random().toString(36).substr(2, 9),
-                    name: p.name,
-                    description: p.description,
-                    keywords: p.keywords || '',
-                    custom_fields: p.custom_fields || {},
-                }));
-                const merged = [...editingProducts, ...newProducts].slice(0, 50);
-                setEditingProducts(merged);
-                setTimeout(() => productsEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
-            }
-        } catch (err) {
-            console.error('Failed to parse products:', err);
-            alert('解析失敗，請檢查檔案格式或稍後再試');
-        } finally {
-            setIsParsingProductFile(false);
-            if (productFileRef.current) productFileRef.current.value = '';
-        }
+    const handleConfirmImportProducts = (newProducts) => {
+        const merged = [...editingProducts, ...newProducts].slice(0, 50);
+        setEditingProducts(merged);
+        setTimeout(() => productsEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
     };
 
     // Lightbox state
@@ -1228,22 +1187,8 @@ const BackendDashboard = () => {
     };
 
     const validateAndAnalyzeFaqs = async () => {
-        if (!editingFaqs || editingFaqs.length === 0) {
-            alert('請先新增問答組');
-            return;
-        }
-
-        const hasIncomplete = editingFaqs.some(f => !f.question?.trim() || !f.answer?.trim());
-        if (hasIncomplete) {
-            alert('請填寫所有 FAQ 的問題與回答，再進行健檢');
-            return;
-        }
-
-        const tooLong = editingFaqs.some(f => (f.question?.length || 0) > 100 || (f.answer?.length || 0) > 500);
-        if (tooLong) {
-            alert('部分內容超過字數限制 (問題 100 字，回答 500 字)');
-            return;
-        }
+        const analyzeError = validateFaqsForAnalyze(editingFaqs);
+        if (analyzeError) { alert(analyzeError); return; }
 
         setIsAnalyzing(true);
         try {
@@ -1303,14 +1248,8 @@ const BackendDashboard = () => {
 
     const handleOptimizeFaq = async (idx) => {
         const faq = editingFaqs[idx];
-        if (!faq.question?.trim() || !faq.answer?.trim()) {
-            alert('請先輸入完整的問題與回答內容才能進行優化');
-            return;
-        }
-        if ((faq.question?.length || 0) > 100 || (faq.answer?.length || 0) > 500) {
-            alert('內容超過字數限制 (問題 100 字，回答 500 字)');
-            return;
-        }
+        const optError = validateFaqItemForOptimize(faq);
+        if (optError) { alert(optError); return; }
 
         setOptimizingIndices(prev => new Set(prev).add(idx));
         try {
@@ -1414,25 +1353,8 @@ const BackendDashboard = () => {
             const bi = categoryOrder.indexOf(b.category || '常見問題');
             return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi);
         });
-        // 過濾掉全空的組別
-        const cleanedFaqs = sortedFaqs.filter(f => f.question?.trim() !== '' || f.answer?.trim() !== '');
-
-        if (cleanedFaqs.length === 0) {
-            alert('請至少新增一組 FAQ 並填寫內容');
-            return;
-        }
-
-        const hasIncomplete = cleanedFaqs.some(f => !f.question?.trim() || !f.answer?.trim());
-        if (hasIncomplete) {
-            alert('請填寫所有 FAQ 的問題與回答，或是刪除未填寫完整的組別');
-            return;
-        }
-
-        const tooLong = cleanedFaqs.some(f => (f.question?.length || 0) > 100 || (f.answer?.length || 0) > 500);
-        if (tooLong) {
-            alert('部分內容超過字數限制 (問題 100 字，回答 500 字)');
-            return;
-        }
+        const { error, cleaned: cleanedFaqs } = validateFaqsForSave(sortedFaqs);
+        if (error) { alert(error); return; }
 
         try {
             setIsSaving(true);
@@ -1457,10 +1379,10 @@ const BackendDashboard = () => {
     };
 
     const handleConfirmImportFaqs = (newFaqs) => {
-        const remaining = 200 - editingFaqs.length;
-        if (remaining <= 0) { alert('FAQ 問答已達 200 組上限'); return; }
+        const remaining = FAQ_MAX_COUNT - editingFaqs.length;
+        if (remaining <= 0) { alert(`FAQ 問答已達 ${FAQ_MAX_COUNT} 組上限`); return; }
         const toAdd = newFaqs.slice(0, remaining);
-        if (toAdd.length < newFaqs.length) alert(`已達 200 組上限，僅新增 ${toAdd.length} 組`);
+        if (toAdd.length < newFaqs.length) alert(`已達 ${FAQ_MAX_COUNT} 組上限，僅新增 ${toAdd.length} 組`);
         setEditingFaqs(prev => [...prev, ...toAdd]);
         const newCats = [...new Set(toAdd.map(f => f.category))];
         setCategoryOrder(prev => {
@@ -2123,7 +2045,7 @@ const BackendDashboard = () => {
                                                                 </button>
                                                                 <button
                                                                     onClick={() => {
-                                                                        if (editingFaqs.length >= 200) { alert('FAQ 問答已達 200 組上限'); return; }
+                                                                        if (editingFaqs.length >= FAQ_MAX_COUNT) { alert(`FAQ 問答已達 ${FAQ_MAX_COUNT} 組上限`); return; }
                                                                         setShowFaqModal(true);
                                                                     }}
                                                                     className="flex items-center gap-2 px-3 sm:px-5 py-2.5 bg-brand-600 text-white rounded-xl text-sm font-bold hover:bg-brand-700 transition-all shadow-md shadow-brand-100"
@@ -2193,7 +2115,7 @@ const BackendDashboard = () => {
                                                                                     className="flex-1 bg-transparent font-bold text-slate-700 text-sm focus:outline-none focus:border-b focus:border-brand-400 min-w-0"
                                                                                 />
                                                                                 <span className="text-xs text-slate-400 flex-shrink-0">{items.length} 組</span>
-                                                                                <button onClick={(e) => { e.stopPropagation(); if (editingFaqs.length >= 200) { alert('FAQ 問答已達 200 組上限'); return; } setAddFaqCategoryModal({ open: true, category: cat }); }} className="w-7 h-7 flex items-center justify-center text-slate-400 hover:text-brand-600 flex-shrink-0" title="新增此分類 FAQ"><Plus size={14} /></button>
+                                                                                <button onClick={(e) => { e.stopPropagation(); if (editingFaqs.length >= FAQ_MAX_COUNT) { alert(`FAQ 問答已達 ${FAQ_MAX_COUNT} 組上限`); return; } setAddFaqCategoryModal({ open: true, category: cat }); }} className="w-7 h-7 flex items-center justify-center text-slate-400 hover:text-brand-600 flex-shrink-0" title="新增此分類 FAQ"><Plus size={14} /></button>
                                                                                 <button onClick={(e) => { e.stopPropagation(); deleteFaqCategory(cat); }} className="w-7 h-7 flex items-center justify-center text-slate-400 hover:text-red-500 flex-shrink-0" title="刪除此分類"><Trash2 size={14} /></button>
                                                                             </div>
                                                                             {isExpanded && (
@@ -2223,8 +2145,8 @@ const BackendDashboard = () => {
                                                                                                     <div className="px-4 sm:px-6 pb-5 pt-3 space-y-4 border-t border-slate-100 bg-white">
                                                                                                         <div>
                                                                                                             <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Question</div>
-                                                                                                            <input type="text" value={faq.question} maxLength={100} onChange={(e) => { const f = [...editingFaqs]; f[idx] = { ...f[idx], question: e.target.value }; setEditingFaqs(f); }} placeholder="輸入常見問題..." className="w-full bg-transparent text-base font-bold text-slate-800 placeholder:text-slate-300 outline-none p-0" />
-                                                                                                            <div className="text-[10px] text-slate-300 text-right mt-1">{faq.question?.length || 0}/100</div>
+                                                                                                            <input type="text" value={faq.question} maxLength={FAQ_MAX_QUESTION} onChange={(e) => { const f = [...editingFaqs]; f[idx] = { ...f[idx], question: e.target.value }; setEditingFaqs(f); }} placeholder="輸入常見問題..." className="w-full bg-transparent text-base font-bold text-slate-800 placeholder:text-slate-300 outline-none p-0" />
+                                                                                                            <div className="text-[10px] text-slate-300 text-right mt-1">{faq.question?.length || 0}/{FAQ_MAX_QUESTION}</div>
                                                                                                         </div>
                                                                                                         {analysisReport && analysisReport.suggestions.find(s => s.id.toString() === (faq.id || idx.toString()).toString()) && (
                                                                                                             <div className="p-3 bg-amber-50 border border-amber-100 rounded-xl">
@@ -2243,8 +2165,8 @@ const BackendDashboard = () => {
                                                                                                         )}
                                                                                                         <div>
                                                                                                             <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Answer</div>
-                                                                                                            <textarea value={faq.answer} maxLength={500} onChange={(e) => { const f = [...editingFaqs]; f[idx] = { ...f[idx], answer: e.target.value }; setEditingFaqs(f); }} placeholder="輸入預設回覆回答內容..." className="w-full bg-white border border-slate-200 rounded-xl p-4 text-slate-600 text-sm leading-relaxed min-h-[100px] focus:ring-2 focus:ring-brand-500/10 focus:border-brand-500 outline-none transition-all shadow-inner resize-none" />
-                                                                                                            <div className="text-[10px] text-slate-300 text-right mt-1">{faq.answer?.length || 0}/500</div>
+                                                                                                            <textarea value={faq.answer} maxLength={FAQ_MAX_ANSWER} onChange={(e) => { const f = [...editingFaqs]; f[idx] = { ...f[idx], answer: e.target.value }; setEditingFaqs(f); }} placeholder="輸入預設回覆回答內容..." className="w-full bg-white border border-slate-200 rounded-xl p-4 text-slate-600 text-sm leading-relaxed min-h-[100px] focus:ring-2 focus:ring-brand-500/10 focus:border-brand-500 outline-none transition-all shadow-inner resize-none" />
+                                                                                                            <div className="text-[10px] text-slate-300 text-right mt-1">{faq.answer?.length || 0}/{FAQ_MAX_ANSWER}</div>
                                                                                                         </div>
                                                                                                         <div>
                                                                                                             <div className="flex items-center gap-2 text-slate-400 mb-1">
@@ -2318,22 +2240,14 @@ const BackendDashboard = () => {
                                                                     <Copy size={16} />
                                                                     <span className="hidden sm:inline">複製連結</span>
                                                                 </button>
-                                                                <label className={`flex items-center gap-2 px-3 sm:px-5 py-2.5 border border-green-200 text-green-700 rounded-xl text-sm font-bold hover:bg-green-50 transition-all cursor-pointer ${isParsingProductFile ? 'opacity-50 cursor-not-allowed' : ''}`}>
-                                                                    {isParsingProductFile ? (
-                                                                        <Loader2 size={16} className="animate-spin" />
-                                                                    ) : (
-                                                                        <FileSpreadsheet size={16} />
-                                                                    )}
-                                                                    <span className="hidden sm:inline">{isParsingProductFile ? 'AI 解析中...' : '匯入檔案'}</span>
-                                                                    <input
-                                                                        ref={productFileRef}
-                                                                        type="file"
-                                                                        accept=".xlsx,.csv,.json"
-                                                                        className="hidden"
-                                                                        disabled={isParsingProductFile}
-                                                                        onChange={(e) => handleParseProductFile(e.target.files[0])}
-                                                                    />
-                                                                </label>
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => setShowProductImportModal(true)}
+                                                                    className="flex items-center gap-2 px-3 sm:px-5 py-2.5 border border-green-200 text-green-700 rounded-xl text-sm font-bold hover:bg-green-50 transition-all"
+                                                                >
+                                                                    <FileSpreadsheet size={16} />
+                                                                    <span className="hidden sm:inline">匯入檔案</span>
+                                                                </button>
                                                                 <button
                                                                     onClick={() => {
                                                                         if (editingProducts.length >= 50) {
@@ -2511,20 +2425,13 @@ const BackendDashboard = () => {
                                                             })}
                                                             <div ref={productsEndRef} />
 
-                                                            {editingProducts.length === 0 && !isParsingProductFile && (
+                                                            {editingProducts.length === 0 && (
                                                                 <div className="text-center py-20 bg-slate-50/50 rounded-3xl border border-dashed border-slate-200">
                                                                     <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center mx-auto mb-4 border border-slate-100">
                                                                         <Package size={32} className="text-slate-200" />
                                                                     </div>
                                                                     <h4 className="text-slate-800 font-bold mb-1">商品庫目前為空</h4>
                                                                     <p className="text-xs text-slate-400">點擊上方「新增商品」手動建立，或「匯入 Excel/CSV」批次匯入。</p>
-                                                                </div>
-                                                            )}
-                                                            {isParsingProductFile && (
-                                                                <div className="text-center py-20 bg-green-50/50 rounded-3xl border border-dashed border-green-200">
-                                                                    <Loader2 size={32} className="animate-spin text-green-500 mx-auto mb-4" />
-                                                                    <h4 className="text-green-800 font-bold mb-1">AI 正在解析「{productFileName}」</h4>
-                                                                    <p className="text-xs text-green-600">自動擷取商品名稱、描述、關鍵字...</p>
                                                                 </div>
                                                             )}
                                                         </div>
@@ -5232,7 +5139,7 @@ const BackendDashboard = () => {
                     open={showFaqModal}
                     onClose={() => setShowFaqModal(false)}
                     categories={[...new Set(editingFaqs.map(f => f.category || '常見問題'))]}
-                    defaultCategory={[...new Set(editingFaqs.map(f => f.category || '常見問題'))][0] || '常見問題'}
+                    defaultCategory={getDefaultFaqCategory(editingFaqs)}
                     onSubmit={(faq) => {
                         const newId = Date.now().toString();
                         setEditingFaqs([...editingFaqs, { id: newId, ...faq }]);
@@ -5422,6 +5329,15 @@ const BackendDashboard = () => {
                     onConfirm={handleConfirmImportFaqs}
                     brandDescription={currentAgent?.brand_description || ''}
                     existingCategories={categoryOrder}
+                />
+            )}
+
+            {showProductImportModal && (
+                <ProductImportModal
+                    onClose={() => setShowProductImportModal(false)}
+                    onConfirm={handleConfirmImportProducts}
+                    brandDescription={currentAgent?.config?.raw_config?.merchant_name || ''}
+                    fieldSchema={productFieldSchema}
                 />
             )}
 
