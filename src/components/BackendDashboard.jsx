@@ -1079,7 +1079,7 @@ const BackendDashboard = () => {
                 user_name: line_user_name,
                 agent_id: currentAgent._id,
                 session_id: playgroundSessionId,
-                source: 'test',
+                source: 'web',
                 ...(uploadedImageUrl && { image_url: uploadedImageUrl }),
             });
 
