@@ -77,7 +77,7 @@ const StepDemo = ({ formData, sessionId, setSessionId, agentId, onNext, setCurre
                 user_name: line_user_name,
                 agent_id: agentId,
                 session_id: sessionId,
-                source: 'test',
+                source: 'web',
                 ...(uploadedImageUrl && { image_url: uploadedImageUrl }),
             });
 
