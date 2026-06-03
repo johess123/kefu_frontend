@@ -69,6 +69,10 @@ import ConfirmDialog from './ConfirmDialog';
 import ImageLightbox from './ImageLightbox';
 import LineDeployGuide from './LineDeployGuide';
 import NotifyBanner from './NotifyBanner';
+import FaqImportModal from './FaqImportModal';
+import FaqAddModal from './FaqAddModal';
+import ProductImportModal from './ProductImportModal';
+import { FAQ_MAX_QUESTION, FAQ_MAX_ANSWER, FAQ_MAX_COUNT, FAQ_MAX_CATEGORY, getDefaultFaqCategory, validateFaqsForSave, validateFaqsForAnalyze, validateFaqItemForOptimize } from '../utils/faqUtils';
 import SpotlightTour from './SpotlightTour';
 import OnboardingChecklist from './OnboardingChecklist';
 import InboxIntroModal from './InboxIntroModal';
@@ -391,6 +395,19 @@ const BackendDashboard = () => {
     const [isTelegramModalOpen, setIsTelegramModalOpen] = useState(false);
     const [telegramBotToken, setTelegramBotToken] = useState('');
     const [isTelegramDeploying, setIsTelegramDeploying] = useState(false);
+
+    // Meta (FB + IG) Integration states
+    const [isMetaModalOpen, setIsMetaModalOpen] = useState(false);
+    const [metaPageAccessToken, setMetaPageAccessToken] = useState('');
+    const [metaVerifyToken, setMetaVerifyToken] = useState('');
+    const [metaFbEnabled, setMetaFbEnabled] = useState(true);
+    const [metaIgDmEnabled, setMetaIgDmEnabled] = useState(true);
+    const [metaIgCommentEnabled, setMetaIgCommentEnabled] = useState(false);
+    const [metaIgTriggers, setMetaIgTriggers] = useState([]);
+    const [isMetaDeploying, setIsMetaDeploying] = useState(false);
+    const [metaDeployResult, setMetaDeployResult] = useState(null);
+    const [metaCopied, setMetaCopied] = useState('');
+    const [metaPostValidation, setMetaPostValidation] = useState({});  // { [idx]: {status, caption, media_id} }
     const [lineConfig, setLineConfig] = useState({
         accessToken: currentAgent?.deploy_config?.line?.access_token || currentAgent?.deploy_config?.access_token || '',
         channelSecret: currentAgent?.deploy_config?.line?.channel_secret || currentAgent?.deploy_config?.channel_secret || ''
@@ -449,13 +466,12 @@ const BackendDashboard = () => {
 
     // Add FAQ / Product modal states
     const [showFaqModal, setShowFaqModal] = useState(false);
-    const [newFaq, setNewFaq] = useState({ question: '', answer: '', image_id: '', category: '常見問題' });
     const [showCategoryModal, setShowCategoryModal] = useState(false);
     const [newCategoryName, setNewCategoryName] = useState('');
     const [uploadingFaqIdx, setUploadingFaqIdx] = useState(null);
     const [expandedFaqItems, setExpandedFaqItems] = useState(new Set());
     const [moveFaqModal, setMoveFaqModal] = useState({ open: false, idx: null, faqQuestion: '', currentCat: '' });
-    const [addFaqCategoryModal, setAddFaqCategoryModal] = useState({ open: false, category: '', question: '', answer: '', image_id: '', _preview_url: '' });
+    const [addFaqCategoryModal, setAddFaqCategoryModal] = useState({ open: false, category: '' });
     const [categoryOrder, setCategoryOrder] = useState([]);
     const [draggedCat, setDraggedCat] = useState(null);
     const [dragOverCat, setDragOverCat] = useState(null);
@@ -463,15 +479,8 @@ const BackendDashboard = () => {
     const [newProduct, setNewProduct] = useState({ name: '', description: '', keywords: '', image_id: '' });
     const [expandedProductItems, setExpandedProductItems] = useState(new Set());
     const [uploadingProductIdx, setUploadingProductIdx] = useState(null);
-    const [isParsingProductFile, setIsParsingProductFile] = useState(false);
-    const [productFileName, setProductFileName] = useState('');
-    const productFileRef = React.useRef(null);
+    const [showProductImportModal, setShowProductImportModal] = useState(false);
     const [showFaqImportModal, setShowFaqImportModal] = useState(false);
-    const [faqImportTab, setFaqImportTab] = useState('file');
-    const [faqImportText, setFaqImportText] = useState('');
-    const faqImportFileRef = React.useRef(null);
-    const [isParsingFaqs, setIsParsingFaqs] = useState(false);
-    const [parsedFaqPreview, setParsedFaqPreview] = useState(null);
     const kbCardRef = React.useRef(null);
     const escalationCardRef = React.useRef(null);
     const analystCardRef = React.useRef(null);
@@ -493,51 +502,10 @@ const BackendDashboard = () => {
     const [modalFieldLabel, setModalFieldLabel] = useState('');
     const [isSavingSchema, setIsSavingSchema] = useState(false);
 
-    const handleParseProductFile = async (file) => {
-        if (!file) return;
-        const ext = file.name.split('.').pop().toLowerCase();
-        if (!['xlsx', 'csv', 'json'].includes(ext)) {
-            alert('僅支援 .xlsx、.csv 或 .json 格式');
-            return;
-        }
-        if (editingProducts.length >= 50) {
-            alert('最多只能新增 50 個商品');
-            return;
-        }
-        setIsParsingProductFile(true);
-        setProductFileName(file.name);
-        try {
-            const fd = new FormData();
-            fd.append('file', file);
-            fd.append('brandDescription', currentAgent?.config?.raw_config?.merchant_name || '');
-            fd.append('line_user_id', Cookies.get('google_user_id') || '');
-            if (productFieldSchema.length > 0) {
-                fd.append('field_schema', JSON.stringify(productFieldSchema));
-            }
-            const res = await axios.post(`${config.API_URL}/api/parse_products`, fd, {
-                headers: { 'Content-Type': 'multipart/form-data' }
-            });
-            if (res.data.error) {
-                alert('解析失敗：' + res.data.error);
-            } else if (res.data.products) {
-                const newProducts = res.data.products.map(p => ({
-                    id: Math.random().toString(36).substr(2, 9),
-                    name: p.name,
-                    description: p.description,
-                    keywords: p.keywords || '',
-                    custom_fields: p.custom_fields || {},
-                }));
-                const merged = [...editingProducts, ...newProducts].slice(0, 50);
-                setEditingProducts(merged);
-                setTimeout(() => productsEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
-            }
-        } catch (err) {
-            console.error('Failed to parse products:', err);
-            alert('解析失敗，請檢查檔案格式或稍後再試');
-        } finally {
-            setIsParsingProductFile(false);
-            if (productFileRef.current) productFileRef.current.value = '';
-        }
+    const handleConfirmImportProducts = (newProducts) => {
+        const merged = [...editingProducts, ...newProducts].slice(0, 50);
+        setEditingProducts(merged);
+        setTimeout(() => productsEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
     };
 
     // Lightbox state
@@ -850,6 +818,15 @@ const BackendDashboard = () => {
                 channelSecret: dc.line?.channel_secret || dc.channel_secret || '',
             });
             setTelegramBotToken(dc.telegram?.bot_token || dc.bot_token || '');
+            // Meta
+            if (dc.meta) {
+                setMetaPageAccessToken(dc.meta.page_access_token || '');
+                setMetaVerifyToken(dc.meta.verify_token || '');
+                setMetaFbEnabled(dc.meta.fb_messenger_enabled !== false);
+                setMetaIgDmEnabled(dc.meta.ig_dm_enabled !== false);
+                setMetaIgCommentEnabled(!!dc.meta.ig_comment_enabled);
+                setMetaIgTriggers(dc.meta.ig_comment_triggers || []);
+            }
         }
     }, [currentAgent]);
 
@@ -983,6 +960,95 @@ const BackendDashboard = () => {
             alert('部署過程中發生錯誤: ' + detail);
         } finally {
             setIsTelegramDeploying(false);
+        }
+    };
+
+    const handleDeployMeta = async () => {
+        if (!currentAgent?._id) {
+            alert('Agent 資料尚未載入，請重新整理頁面後再試。');
+            return;
+        }
+        if (!metaPageAccessToken) {
+            alert('請輸入 Page Access Token');
+            return;
+        }
+        if (!metaVerifyToken) {
+            alert('請輸入 Verify Token');
+            return;
+        }
+
+        try {
+            setIsMetaDeploying(true);
+            const response = await axios.post(`${config.API_URL}/api/deploy_meta`, {
+                agent_id: currentAgent._id,
+                page_access_token: metaPageAccessToken,
+                verify_token: metaVerifyToken,
+                fb_messenger_enabled: metaFbEnabled,
+                ig_dm_enabled: metaIgDmEnabled,
+                ig_comment_enabled: metaIgCommentEnabled,
+                ig_comment_triggers: metaIgTriggers,
+            });
+
+            if (response.data.status === 'ok') {
+                setMetaDeployResult({
+                    webhookUrl: response.data.webhook_url,
+                    verifyToken: response.data.verify_token,
+                    pageName: response.data.page_name,
+                });
+                const agentRes = await axios.get(`${config.API_URL}/api/admin/agent/${currentAgent._id}`, {
+                    params: { userId: currentAgent.admin_id }
+                });
+                setCurrentAgent(agentRes.data);
+            } else {
+                alert('部署失敗: ' + (response.data.message || '未知錯誤'));
+            }
+        } catch (error) {
+            console.error('Failed to deploy Meta:', error);
+            const detail = error?.response?.data?.detail || error?.response?.data?.message || error?.message || '未知錯誤';
+            alert('部署過程中發生錯誤: ' + detail);
+        } finally {
+            setIsMetaDeploying(false);
+        }
+    };
+
+    const extractShortcode = (url) => {
+        const m = url.match(/instagram\.com\/(?:p|reel)\/([A-Za-z0-9_-]+)/);
+        return m ? m[1] : url.trim();
+    };
+
+    const handleValidatePost = async (idx) => {
+        const trigger = metaIgTriggers[idx];
+        const raw = trigger.post_url || '';
+        if (!raw.trim()) return;
+        const shortcode = extractShortcode(raw);
+
+        setMetaPostValidation(prev => ({ ...prev, [idx]: { status: 'loading' } }));
+        try {
+            const res = await axios.post(`${config.API_URL}/api/meta/validate_post`, {
+                agent_id: currentAgent._id,
+                post_shortcode: shortcode,
+            });
+            const data = res.data;
+            if (data.status === 'ok') {
+                setMetaPostValidation(prev => ({
+                    ...prev,
+                    [idx]: { status: 'ok', caption: data.caption_preview, media_id: data.media_id },
+                }));
+                // 把解析到的 post_id 寫回 trigger
+                const updated = [...metaIgTriggers];
+                updated[idx] = { ...updated[idx], post_shortcode: shortcode, post_id: data.media_id };
+                setMetaIgTriggers(updated);
+            } else {
+                setMetaPostValidation(prev => ({
+                    ...prev,
+                    [idx]: { status: 'error', message: data.message },
+                }));
+            }
+        } catch (e) {
+            setMetaPostValidation(prev => ({
+                ...prev,
+                [idx]: { status: 'error', message: '驗證失敗，請稍後再試' },
+            }));
         }
     };
 
@@ -1123,22 +1189,8 @@ const BackendDashboard = () => {
     };
 
     const validateAndAnalyzeFaqs = async () => {
-        if (!editingFaqs || editingFaqs.length === 0) {
-            alert('請先新增問答組');
-            return;
-        }
-
-        const hasIncomplete = editingFaqs.some(f => !f.question?.trim() || !f.answer?.trim());
-        if (hasIncomplete) {
-            alert('請填寫所有 FAQ 的問題與回答，再進行健檢');
-            return;
-        }
-
-        const tooLong = editingFaqs.some(f => (f.question?.length || 0) > 100 || (f.answer?.length || 0) > 500);
-        if (tooLong) {
-            alert('部分內容超過字數限制 (問題 100 字，回答 500 字)');
-            return;
-        }
+        const analyzeError = validateFaqsForAnalyze(editingFaqs);
+        if (analyzeError) { alert(analyzeError); return; }
 
         setIsAnalyzing(true);
         try {
@@ -1199,14 +1251,8 @@ const BackendDashboard = () => {
 
     const handleOptimizeFaq = async (idx) => {
         const faq = editingFaqs[idx];
-        if (!faq.question?.trim() || !faq.answer?.trim()) {
-            alert('請先輸入完整的問題與回答內容才能進行優化');
-            return;
-        }
-        if ((faq.question?.length || 0) > 100 || (faq.answer?.length || 0) > 500) {
-            alert('內容超過字數限制 (問題 100 字，回答 500 字)');
-            return;
-        }
+        const optError = validateFaqItemForOptimize(faq);
+        if (optError) { alert(optError); return; }
 
         setOptimizingIndices(prev => new Set(prev).add(idx));
         try {
@@ -1310,25 +1356,8 @@ const BackendDashboard = () => {
             const bi = categoryOrder.indexOf(b.category || '常見問題');
             return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi);
         });
-        // 過濾掉全空的組別
-        const cleanedFaqs = sortedFaqs.filter(f => f.question?.trim() !== '' || f.answer?.trim() !== '');
-
-        if (cleanedFaqs.length === 0) {
-            alert('請至少新增一組 FAQ 並填寫內容');
-            return;
-        }
-
-        const hasIncomplete = cleanedFaqs.some(f => !f.question?.trim() || !f.answer?.trim());
-        if (hasIncomplete) {
-            alert('請填寫所有 FAQ 的問題與回答，或是刪除未填寫完整的組別');
-            return;
-        }
-
-        const tooLong = cleanedFaqs.some(f => (f.question?.length || 0) > 100 || (f.answer?.length || 0) > 500);
-        if (tooLong) {
-            alert('部分內容超過字數限制 (問題 100 字，回答 500 字)');
-            return;
-        }
+        const { error, cleaned: cleanedFaqs } = validateFaqsForSave(sortedFaqs);
+        if (error) { alert(error); return; }
 
         try {
             setIsSaving(true);
@@ -1352,61 +1381,18 @@ const BackendDashboard = () => {
         }
     };
 
-    const handleImportFaqs = async (source) => {
-        setIsParsingFaqs(true);
-        try {
-            const fd = new FormData();
-            fd.append('brandDescription', currentAgent?.brand_description || '');
-            fd.append('line_user_id', Cookies.get('google_user_id') || '');
-            if (source === 'file') {
-                const file = faqImportFileRef.current?.files?.[0];
-                if (!file) { alert('請選擇檔案'); setIsParsingFaqs(false); return; }
-                if (file.size > 512 * 1024) { alert('檔案大小不得超過 500KB'); setIsParsingFaqs(false); return; }
-                const ext = file.name.toLowerCase().split('.').pop();
-                if (!['xlsx', 'csv'].includes(ext)) { alert('僅支援 .xlsx 或 .csv 格式'); setIsParsingFaqs(false); return; }
-                fd.append('file', file);
-            } else {
-                if (!faqImportText.trim()) { alert('請貼上 FAQ 文字內容'); setIsParsingFaqs(false); return; }
-                fd.append('text', faqImportText);
-            }
-            const res = await axios.post(`${config.API_URL}/api/parse_faqs`, fd, {
-                headers: { 'Content-Type': 'multipart/form-data' }
-            });
-            if (res.data.error) {
-                alert('解析失敗：' + res.data.error);
-            } else if (res.data.faqs) {
-                setParsedFaqPreview(res.data.faqs);
-                if (faqImportFileRef.current) faqImportFileRef.current.value = '';
-            }
-        } catch (err) {
-            console.error('FAQ import failed:', err);
-            alert('解析失敗，請稍後再試');
-        } finally {
-            setIsParsingFaqs(false);
-        }
+    const handleConfirmImportFaqs = (newFaqs) => {
+        const remaining = FAQ_MAX_COUNT - editingFaqs.length;
+        if (remaining <= 0) { alert(`FAQ 問答已達 ${FAQ_MAX_COUNT} 組上限`); return; }
+        const toAdd = newFaqs.slice(0, remaining);
+        if (toAdd.length < newFaqs.length) alert(`已達 ${FAQ_MAX_COUNT} 組上限，僅新增 ${toAdd.length} 組`);
+        setEditingFaqs(prev => [...prev, ...toAdd]);
+        const newCats = [...new Set(toAdd.map(f => f.category))];
+        setCategoryOrder(prev => {
+            const toAddCats = newCats.filter(c => !prev.includes(c));
+            return toAddCats.length > 0 ? [...prev, ...toAddCats] : prev;
+        });
     };
-
-    const handleConfirmImportFaqs = () => {
-        if (!parsedFaqPreview?.length) return;
-        const newFaqs = parsedFaqPreview.map(f => ({
-            id: Math.random().toString(36).substr(2, 9),
-            question: f.question,
-            answer: f.answer,
-            image_id: '',
-            category: f.category || '常見問題',
-        }));
-        setEditingFaqs(prev => [...prev, ...newFaqs]);
-        setShowFaqImportModal(false);
-        setParsedFaqPreview(null);
-        setFaqImportText('');
-        setFaqImportTab('file');
-    };
-
-    const updatePreviewFaq = (i, field, val) =>
-        setParsedFaqPreview(prev => prev.map((f, idx) => idx === i ? { ...f, [field]: val } : f));
-
-    const removePreviewFaq = (i) =>
-        setParsedFaqPreview(prev => prev.filter((_, idx) => idx !== i));
 
     const handleFaqImageUpload = async (idx, file) => {
         if (!file) return;
@@ -2047,7 +2033,7 @@ const BackendDashboard = () => {
                                                                     <span className="hidden sm:inline">AI 智能健檢</span>
                                                                 </button>
                                                                 <button
-                                                                    onClick={() => { setShowFaqImportModal(true); setParsedFaqPreview(null); setFaqImportText(''); setFaqImportTab('file'); }}
+                                                                    onClick={() => setShowFaqImportModal(true)}
                                                                     className="flex items-center gap-2 px-3 sm:px-5 py-2.5 bg-white border border-slate-200 text-slate-600 rounded-xl text-sm font-bold hover:bg-slate-50 transition-all shadow-sm"
                                                                 >
                                                                     <Upload size={18} className="text-brand-500" />
@@ -2062,8 +2048,7 @@ const BackendDashboard = () => {
                                                                 </button>
                                                                 <button
                                                                     onClick={() => {
-                                                                        const cats = [...new Set(editingFaqs.map(f => f.category || '常見問題'))];
-                                                                        setNewFaq({ question: '', answer: '', image_id: '', category: cats[0] || '常見問題' });
+                                                                        if (editingFaqs.length >= FAQ_MAX_COUNT) { alert(`FAQ 問答已達 ${FAQ_MAX_COUNT} 組上限`); return; }
                                                                         setShowFaqModal(true);
                                                                     }}
                                                                     className="flex items-center gap-2 px-3 sm:px-5 py-2.5 bg-brand-600 text-white rounded-xl text-sm font-bold hover:bg-brand-700 transition-all shadow-md shadow-brand-100"
@@ -2128,12 +2113,13 @@ const BackendDashboard = () => {
                                                                                 <input
                                                                                     type="text"
                                                                                     value={cat}
+                                                                                    maxLength={FAQ_MAX_CATEGORY}
                                                                                     onChange={(e) => renameFaqCategory(cat, e.target.value)}
                                                                                     onClick={(e) => e.stopPropagation()}
                                                                                     className="flex-1 bg-transparent font-bold text-slate-700 text-sm focus:outline-none focus:border-b focus:border-brand-400 min-w-0"
                                                                                 />
                                                                                 <span className="text-xs text-slate-400 flex-shrink-0">{items.length} 組</span>
-                                                                                <button onClick={(e) => { e.stopPropagation(); setAddFaqCategoryModal({ open: true, category: cat, question: '', answer: '', image_id: '', _preview_url: '' }); }} className="w-7 h-7 flex items-center justify-center text-slate-400 hover:text-brand-600 flex-shrink-0" title="新增此分類 FAQ"><Plus size={14} /></button>
+                                                                                <button onClick={(e) => { e.stopPropagation(); if (editingFaqs.length >= FAQ_MAX_COUNT) { alert(`FAQ 問答已達 ${FAQ_MAX_COUNT} 組上限`); return; } setAddFaqCategoryModal({ open: true, category: cat }); }} className="w-7 h-7 flex items-center justify-center text-slate-400 hover:text-brand-600 flex-shrink-0" title="新增此分類 FAQ"><Plus size={14} /></button>
                                                                                 <button onClick={(e) => { e.stopPropagation(); deleteFaqCategory(cat); }} className="w-7 h-7 flex items-center justify-center text-slate-400 hover:text-red-500 flex-shrink-0" title="刪除此分類"><Trash2 size={14} /></button>
                                                                             </div>
                                                                             {isExpanded && (
@@ -2163,8 +2149,8 @@ const BackendDashboard = () => {
                                                                                                     <div className="px-4 sm:px-6 pb-5 pt-3 space-y-4 border-t border-slate-100 bg-white">
                                                                                                         <div>
                                                                                                             <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Question</div>
-                                                                                                            <input type="text" value={faq.question} maxLength={100} onChange={(e) => { const f = [...editingFaqs]; f[idx] = { ...f[idx], question: e.target.value }; setEditingFaqs(f); }} placeholder="輸入常見問題..." className="w-full bg-transparent text-base font-bold text-slate-800 placeholder:text-slate-300 outline-none p-0" />
-                                                                                                            <div className="text-[10px] text-slate-300 text-right mt-1">{faq.question?.length || 0}/100</div>
+                                                                                                            <input type="text" value={faq.question} maxLength={FAQ_MAX_QUESTION} onChange={(e) => { const f = [...editingFaqs]; f[idx] = { ...f[idx], question: e.target.value }; setEditingFaqs(f); }} placeholder="輸入常見問題..." className="w-full bg-transparent text-base font-bold text-slate-800 placeholder:text-slate-300 outline-none p-0" />
+                                                                                                            <div className="text-[10px] text-slate-300 text-right mt-1">{faq.question?.length || 0}/{FAQ_MAX_QUESTION}</div>
                                                                                                         </div>
                                                                                                         {analysisReport && analysisReport.suggestions.find(s => s.id.toString() === (faq.id || idx.toString()).toString()) && (
                                                                                                             <div className="p-3 bg-amber-50 border border-amber-100 rounded-xl">
@@ -2183,8 +2169,8 @@ const BackendDashboard = () => {
                                                                                                         )}
                                                                                                         <div>
                                                                                                             <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Answer</div>
-                                                                                                            <textarea value={faq.answer} maxLength={500} onChange={(e) => { const f = [...editingFaqs]; f[idx] = { ...f[idx], answer: e.target.value }; setEditingFaqs(f); }} placeholder="輸入預設回覆回答內容..." className="w-full bg-white border border-slate-200 rounded-xl p-4 text-slate-600 text-sm leading-relaxed min-h-[100px] focus:ring-2 focus:ring-brand-500/10 focus:border-brand-500 outline-none transition-all shadow-inner resize-none" />
-                                                                                                            <div className="text-[10px] text-slate-300 text-right mt-1">{faq.answer?.length || 0}/500</div>
+                                                                                                            <textarea value={faq.answer} maxLength={FAQ_MAX_ANSWER} onChange={(e) => { const f = [...editingFaqs]; f[idx] = { ...f[idx], answer: e.target.value }; setEditingFaqs(f); }} placeholder="輸入預設回覆回答內容..." className="w-full bg-white border border-slate-200 rounded-xl p-4 text-slate-600 text-sm leading-relaxed min-h-[100px] focus:ring-2 focus:ring-brand-500/10 focus:border-brand-500 outline-none transition-all shadow-inner resize-none" />
+                                                                                                            <div className="text-[10px] text-slate-300 text-right mt-1">{faq.answer?.length || 0}/{FAQ_MAX_ANSWER}</div>
                                                                                                         </div>
                                                                                                         <div>
                                                                                                             <div className="flex items-center gap-2 text-slate-400 mb-1">
@@ -2258,22 +2244,14 @@ const BackendDashboard = () => {
                                                                     <Copy size={16} />
                                                                     <span className="hidden sm:inline">複製連結</span>
                                                                 </button>
-                                                                <label className={`flex items-center gap-2 px-3 sm:px-5 py-2.5 border border-green-200 text-green-700 rounded-xl text-sm font-bold hover:bg-green-50 transition-all cursor-pointer ${isParsingProductFile ? 'opacity-50 cursor-not-allowed' : ''}`}>
-                                                                    {isParsingProductFile ? (
-                                                                        <Loader2 size={16} className="animate-spin" />
-                                                                    ) : (
-                                                                        <FileSpreadsheet size={16} />
-                                                                    )}
-                                                                    <span className="hidden sm:inline">{isParsingProductFile ? 'AI 解析中...' : '匯入檔案'}</span>
-                                                                    <input
-                                                                        ref={productFileRef}
-                                                                        type="file"
-                                                                        accept=".xlsx,.csv,.json"
-                                                                        className="hidden"
-                                                                        disabled={isParsingProductFile}
-                                                                        onChange={(e) => handleParseProductFile(e.target.files[0])}
-                                                                    />
-                                                                </label>
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => setShowProductImportModal(true)}
+                                                                    className="flex items-center gap-2 px-3 sm:px-5 py-2.5 border border-green-200 text-green-700 rounded-xl text-sm font-bold hover:bg-green-50 transition-all"
+                                                                >
+                                                                    <FileSpreadsheet size={16} />
+                                                                    <span className="hidden sm:inline">匯入檔案</span>
+                                                                </button>
                                                                 <button
                                                                     onClick={() => {
                                                                         if (editingProducts.length >= 50) {
@@ -2451,20 +2429,13 @@ const BackendDashboard = () => {
                                                             })}
                                                             <div ref={productsEndRef} />
 
-                                                            {editingProducts.length === 0 && !isParsingProductFile && (
+                                                            {editingProducts.length === 0 && (
                                                                 <div className="text-center py-20 bg-slate-50/50 rounded-3xl border border-dashed border-slate-200">
                                                                     <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center mx-auto mb-4 border border-slate-100">
                                                                         <Package size={32} className="text-slate-200" />
                                                                     </div>
                                                                     <h4 className="text-slate-800 font-bold mb-1">商品庫目前為空</h4>
                                                                     <p className="text-xs text-slate-400">點擊上方「新增商品」手動建立，或「匯入 Excel/CSV」批次匯入。</p>
-                                                                </div>
-                                                            )}
-                                                            {isParsingProductFile && (
-                                                                <div className="text-center py-20 bg-green-50/50 rounded-3xl border border-dashed border-green-200">
-                                                                    <Loader2 size={32} className="animate-spin text-green-500 mx-auto mb-4" />
-                                                                    <h4 className="text-green-800 font-bold mb-1">AI 正在解析「{productFileName}」</h4>
-                                                                    <p className="text-xs text-green-600">自動擷取商品名稱、描述、關鍵字...</p>
                                                                 </div>
                                                             )}
                                                         </div>
@@ -3542,35 +3513,83 @@ const BackendDashboard = () => {
                                             </div>
 
                                             {/* Messenger */}
-                                            <div className="bg-white rounded-[32px] p-10 border border-slate-100 opacity-60 flex flex-col items-center text-center grayscale">
-                                                <div className="w-20 h-20 bg-blue-50 rounded-3xl flex items-center justify-center mb-6">
+                                            <div
+                                                onClick={() => { setMetaDeployResult(null); setIsMetaModalOpen(true); }}
+                                                className="bg-white rounded-[32px] p-10 border border-slate-200 shadow-sm hover:shadow-xl hover:border-blue-200 transition-all cursor-pointer group flex flex-col items-center text-center relative overflow-hidden"
+                                            >
+                                                <div className="absolute top-0 right-0 w-32 h-32 bg-[#0084FF]/5 rounded-full -mr-16 -mt-16 blur-2xl group-hover:bg-[#0084FF]/10 transition-colors"></div>
+                                                <div className="relative w-20 h-20 bg-blue-50 rounded-3xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform duration-300">
                                                     <svg width="48" height="48" viewBox="0 0 24 24" fill="#0084FF">
                                                         <path d="M12 2C6.47715 2 2 6.145 2 11.257c0 2.913 1.45 5.514 3.714 7.222V22l3.39-1.858c.905.251 1.868.388 2.896.388 5.52285 0 10-4.145 10-9.257C22 6.145 17.52285 2 12 2zm1.09 12.338l-2.607-2.78-5.084 2.78 5.587-5.93 2.67 2.78 5.022-2.78-5.588 5.93z" />
                                                     </svg>
                                                 </div>
-                                                <h3 className="text-2xl font-bold text-slate-400 mb-3">Messenger</h3>
-                                                <p className="text-slate-400 text-sm mb-8 leading-relaxed max-w-[280px]">
+                                                <h3 className="text-2xl font-bold text-slate-900 mb-3">Messenger</h3>
+                                                <p className="text-slate-500 text-sm mb-8 leading-relaxed max-w-[280px]">
                                                     Allow your users to talk to your AI Agent via Facebook.
                                                 </p>
-                                                <div className="bg-slate-50 text-slate-400 px-5 py-2 rounded-full text-[13px] font-bold border border-slate-100">
-                                                    即將推出
-                                                </div>
+                                                {currentAgent?.deploy_config?.meta?.fb_messenger_enabled ? (
+                                                    <div className="flex flex-col items-center gap-2">
+                                                        {currentAgent?.deploy_config?.meta?.enabled === false ? (
+                                                            <div className="bg-slate-100 text-slate-500 px-5 py-2 rounded-full text-[13px] font-bold border border-slate-200 flex items-center gap-2">
+                                                                <span className="w-2 h-2 bg-slate-400 rounded-full"></span>
+                                                                已暫停
+                                                            </div>
+                                                        ) : (
+                                                            <div className="bg-blue-50 text-blue-600 px-5 py-2 rounded-full text-[13px] font-bold border border-blue-100 flex items-center gap-2">
+                                                                <span className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></span>
+                                                                已連接
+                                                            </div>
+                                                        )}
+                                                        {currentAgent?.deploy_config?.meta?.page_name && (
+                                                            <span className="text-xs text-slate-400">{currentAgent.deploy_config.meta.page_name}</span>
+                                                        )}
+                                                    </div>
+                                                ) : (
+                                                    <div className="bg-green-50 text-green-600 px-5 py-2 rounded-full text-[13px] font-bold border border-green-100 flex items-center gap-2 group-hover:bg-green-100 transition-colors">
+                                                        <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
+                                                        可串接
+                                                    </div>
+                                                )}
                                             </div>
 
                                             {/* Instagram */}
-                                            <div className="bg-white rounded-[32px] p-10 border border-slate-100 opacity-60 flex flex-col items-center text-center grayscale">
-                                                <div className="w-20 h-20 bg-pink-50 rounded-3xl flex items-center justify-center mb-6">
+                                            <div
+                                                onClick={() => { setMetaDeployResult(null); setIsMetaModalOpen(true); }}
+                                                className="bg-white rounded-[32px] p-10 border border-slate-200 shadow-sm hover:shadow-xl hover:border-pink-200 transition-all cursor-pointer group flex flex-col items-center text-center relative overflow-hidden"
+                                            >
+                                                <div className="absolute top-0 right-0 w-32 h-32 bg-[#E4405F]/5 rounded-full -mr-16 -mt-16 blur-2xl group-hover:bg-[#E4405F]/10 transition-colors"></div>
+                                                <div className="relative w-20 h-20 bg-pink-50 rounded-3xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform duration-300">
                                                     <svg width="48" height="48" viewBox="0 0 24 24" fill="#E4405F">
                                                         <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.052.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0zm0 5.838a6.162 6.162 0 100 12.324 6.162 6.162 0 000-12.324zM12 16a4 4 0 110-8 4 4 0 010 8zm6.406-11.845a1.44 1.44 0 100 2.881 1.44 1.44 0 000-2.881z" />
                                                     </svg>
                                                 </div>
-                                                <h3 className="text-2xl font-bold text-slate-400 mb-3">Instagram</h3>
-                                                <p className="text-slate-400 text-sm mb-8 leading-relaxed max-w-[280px]">
-                                                    Automate replies for your Instagram Business account.
+                                                <h3 className="text-2xl font-bold text-slate-900 mb-3">Instagram</h3>
+                                                <p className="text-slate-500 text-sm mb-8 leading-relaxed max-w-[280px]">
+                                                    Automate DMs and comment keyword triggers for your IG Business account.
                                                 </p>
-                                                <div className="bg-slate-50 text-slate-400 px-5 py-2 rounded-full text-[13px] font-bold border border-slate-100">
-                                                    即將推出
-                                                </div>
+                                                {(currentAgent?.deploy_config?.meta?.ig_dm_enabled || currentAgent?.deploy_config?.meta?.ig_comment_enabled) ? (
+                                                    <div className="flex flex-col items-center gap-2">
+                                                        {currentAgent?.deploy_config?.meta?.enabled === false ? (
+                                                            <div className="bg-slate-100 text-slate-500 px-5 py-2 rounded-full text-[13px] font-bold border border-slate-200 flex items-center gap-2">
+                                                                <span className="w-2 h-2 bg-slate-400 rounded-full"></span>
+                                                                已暫停
+                                                            </div>
+                                                        ) : (
+                                                            <div className="bg-pink-50 text-pink-600 px-5 py-2 rounded-full text-[13px] font-bold border border-pink-100 flex items-center gap-2">
+                                                                <span className="w-2 h-2 bg-pink-500 rounded-full animate-pulse"></span>
+                                                                已連接
+                                                            </div>
+                                                        )}
+                                                        {currentAgent?.deploy_config?.meta?.page_name && (
+                                                            <span className="text-xs text-slate-400">{currentAgent.deploy_config.meta.page_name}</span>
+                                                        )}
+                                                    </div>
+                                                ) : (
+                                                    <div className="bg-green-50 text-green-600 px-5 py-2 rounded-full text-[13px] font-bold border border-green-100 flex items-center gap-2 group-hover:bg-green-100 transition-colors">
+                                                        <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
+                                                        可串接
+                                                    </div>
+                                                )}
                                             </div>
 
                                             {/* Telegram */}
@@ -3865,7 +3884,7 @@ const BackendDashboard = () => {
                                                                 type="text"
                                                                 value={playgroundInput}
                                                                 onChange={(e) => setPlaygroundInput(e.target.value.slice(0, 100))}
-                                                                onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && handlePlaygroundSend()}
+                                                                onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) handlePlaygroundSend(); }}
                                                                 placeholder={playgroundAttachedFile ? '可選：加入文字說明...' : '輸入測試訊息內容...'}
                                                                 maxLength={100}
                                                                 className="w-full pl-4 pr-24 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-all text-sm"
@@ -4057,6 +4076,7 @@ const BackendDashboard = () => {
                                             value={lineConfig.accessToken}
                                             onChange={(e) => setLineConfig({ ...lineConfig, accessToken: e.target.value })}
                                             placeholder="輸入 Channel Access Token"
+                                            maxLength={256}
                                             className="w-full px-5 py-4 bg-white border border-slate-200 rounded-2xl focus:ring-2 focus:ring-[#06C755]/20 focus:border-[#06C755] outline-none transition-all text-slate-700 font-medium placeholder:text-slate-300"
                                         />
                                     </div>
@@ -4067,6 +4087,7 @@ const BackendDashboard = () => {
                                             value={lineConfig.channelSecret}
                                             onChange={(e) => setLineConfig({ ...lineConfig, channelSecret: e.target.value })}
                                             placeholder="輸入 Channel Secret"
+                                            maxLength={128}
                                             className="w-full px-5 py-4 bg-white border border-slate-200 rounded-2xl focus:ring-2 focus:ring-[#06C755]/20 focus:border-[#06C755] outline-none transition-all text-slate-700 font-medium placeholder:text-slate-300"
                                         />
                                     </div>
@@ -4156,6 +4177,7 @@ const BackendDashboard = () => {
                                         value={telegramBotToken}
                                         onChange={(e) => setTelegramBotToken(e.target.value)}
                                         placeholder="123456:ABC-DEF..."
+                                        maxLength={256}
                                         className="w-full px-5 py-4 bg-white border border-slate-200 rounded-2xl focus:ring-2 focus:ring-[#0088cc]/20 focus:border-[#0088cc] outline-none transition-all text-slate-700 font-medium placeholder:text-slate-300"
                                     />
                                     <p className="text-xs text-slate-400 mt-2">從 @BotFather 取得，格式如 123456:ABC-DEF...</p>
@@ -4181,6 +4203,443 @@ const BackendDashboard = () => {
                                         <Check size={20} />
                                     )}
                                     確認部署
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* Meta (FB + IG) Modal */}
+                {isMetaModalOpen && (
+                    <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
+                        <div
+                            className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
+                            onClick={() => setIsMetaModalOpen(false)}
+                        />
+                        <div className="relative bg-white w-full max-w-2xl rounded-[32px] overflow-hidden shadow-2xl animate-in fade-in zoom-in duration-300 max-h-[90vh] flex flex-col">
+                            {/* Header */}
+                            <div className="p-8 border-b border-slate-100 flex items-center justify-between shrink-0">
+                                <div className="flex items-center gap-4">
+                                    <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #0084FF 0%, #E4405F 100%)' }}>
+                                        <svg width="22" height="22" viewBox="0 0 24 24" fill="white">
+                                            <path d="M12 2C6.47715 2 2 6.145 2 11.257c0 2.913 1.45 5.514 3.714 7.222V22l3.39-1.858c.905.251 1.868.388 2.896.388 5.52285 0 10-4.145 10-9.257C22 6.145 17.52285 2 12 2zm1.09 12.338l-2.607-2.78-5.084 2.78 5.587-5.93 2.67 2.78 5.022-2.78-5.588 5.93z" />
+                                        </svg>
+                                    </div>
+                                    <h2 className="text-xl font-bold text-slate-800">串接 Facebook & Instagram</h2>
+                                </div>
+                                <button
+                                    onClick={() => setIsMetaModalOpen(false)}
+                                    className="w-10 h-10 flex items-center justify-center text-slate-400 hover:text-slate-600 hover:bg-slate-50 rounded-full transition-all"
+                                >
+                                    <X size={24} />
+                                </button>
+                            </div>
+
+                            {/* Body */}
+                            <div className="p-8 space-y-6 overflow-y-auto flex-1">
+                                {/* 已連接：顯示 toggle */}
+                                {currentAgent?.deploy_config?.meta && (
+                                    <div className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                                        <div className="flex-1 min-w-0 pr-4">
+                                            <p className="font-bold text-slate-700 text-sm">渠道啟用</p>
+                                            <p className="text-xs text-slate-400 mt-0.5">關閉後 FB / IG 訊息將停止自動回覆</p>
+                                        </div>
+                                        <button
+                                            onClick={() => handleToggleChannel('meta', currentAgent.deploy_config.meta.enabled === false)}
+                                            className={`relative w-12 h-6 flex-none rounded-full transition-colors ${currentAgent.deploy_config.meta.enabled !== false ? 'bg-blue-500' : 'bg-slate-300'}`}
+                                        >
+                                            <span className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full shadow transition-transform ${currentAgent.deploy_config.meta.enabled !== false ? 'translate-x-6' : 'translate-x-0'}`} />
+                                        </button>
+                                    </div>
+                                )}
+
+                                {/* Page Access Token */}
+                                <div>
+                                    <label className="text-[11px] font-bold text-slate-400 uppercase tracking-[0.1em] mb-2 block">Page Access Token</label>
+                                    <textarea
+                                        value={metaPageAccessToken}
+                                        onChange={(e) => setMetaPageAccessToken(e.target.value)}
+                                        placeholder="EAAxxxxxxxxxx..."
+                                        rows={3}
+                                        maxLength={512}
+                                        className="w-full px-5 py-4 bg-white border border-slate-200 rounded-2xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all text-slate-700 font-mono text-sm placeholder:text-slate-300 resize-none"
+                                    />
+                                    <p className="text-xs text-slate-400 mt-1.5">從 Meta for Developers → 您的粉絲專頁 → 取得 Page Access Token</p>
+                                </div>
+
+                                {/* Verify Token */}
+                                <div>
+                                    <label className="text-[11px] font-bold text-slate-400 uppercase tracking-[0.1em] mb-2 block">Webhook Verify Token</label>
+                                    <div className="flex gap-2">
+                                        <input
+                                            type="text"
+                                            value={metaVerifyToken}
+                                            onChange={(e) => setMetaVerifyToken(e.target.value)}
+                                            placeholder="自訂一組驗證密碼..."
+                                            maxLength={256}
+                                            className="flex-1 px-5 py-4 bg-white border border-slate-200 rounded-2xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all text-slate-700 font-mono text-sm placeholder:text-slate-300"
+                                        />
+                                        <button
+                                            onClick={() => setMetaVerifyToken(Math.random().toString(36).slice(2, 18))}
+                                            className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 text-sm font-bold rounded-2xl transition-all whitespace-nowrap"
+                                        >
+                                            自動產生
+                                        </button>
+                                    </div>
+                                    <p className="text-xs text-slate-400 mt-1.5">部署後將顯示 Webhook URL，請至 Meta App Dashboard 填入此 Token 完成驗證</p>
+                                </div>
+
+                                {/* 功能開關 */}
+                                <div className="space-y-3">
+                                    <p className="text-[11px] font-bold text-slate-400 uppercase tracking-[0.1em]">功能設定</p>
+                                    {[
+                                        { label: 'Facebook Messenger 自動回覆', desc: '粉絲專頁訊息 → AI 自動回覆', value: metaFbEnabled, setter: setMetaFbEnabled, color: 'bg-blue-500' },
+                                        { label: 'Instagram DM 自動回覆', desc: 'IG 私訊 → AI 自動回覆', value: metaIgDmEnabled, setter: setMetaIgDmEnabled, color: 'bg-pink-500' },
+                                        { label: 'IG 留言關鍵字觸發 DM', desc: '用戶在貼文留言指定關鍵字 → 自動傳送 DM', value: metaIgCommentEnabled, setter: setMetaIgCommentEnabled, color: 'bg-purple-500' },
+                                    ].map(({ label, desc, value, setter, color }) => (
+                                        <div key={label} className="flex items-center justify-between p-4 rounded-2xl border border-slate-100 bg-slate-50/50">
+                                            <div className="flex-1 min-w-0 pr-4">
+                                                <p className="font-bold text-slate-700 text-sm">{label}</p>
+                                                <p className="text-xs text-slate-400 mt-0.5">{desc}</p>
+                                            </div>
+                                            <button
+                                                onClick={() => setter(!value)}
+                                                className={`relative w-12 h-6 flex-none rounded-full transition-colors ${value ? color : 'bg-slate-300'}`}
+                                            >
+                                                <span className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full shadow transition-transform ${value ? 'translate-x-6' : 'translate-x-0'}`} />
+                                            </button>
+                                        </div>
+                                    ))}
+                                </div>
+
+                                {/* IG 留言關鍵字規則 */}
+                                {metaIgCommentEnabled && (
+                                    <div className="space-y-3">
+                                        {/* 標題列 */}
+                                        <div className="flex items-center justify-between">
+                                            <div>
+                                                <p className="text-[11px] font-bold text-slate-400 uppercase tracking-[0.1em]">關鍵字觸發規則</p>
+                                                <p className="text-[10px] text-slate-400 mt-0.5">指定貼文規則優先比對，再比對全部貼文規則</p>
+                                            </div>
+                                            <button
+                                                onClick={() => {
+                                                    setMetaIgTriggers(prev => [...prev, {
+                                                        keyword: '', match_type: 'contains',
+                                                        post_scope: 'all', post_url: '', post_shortcode: '', post_id: '',
+                                                        public_reply: '', reply_message: '',
+                                                    }]);
+                                                }}
+                                                className="text-xs font-bold text-blue-600 hover:text-blue-700 flex items-center gap-1 shrink-0"
+                                            >
+                                                <Plus size={14} />
+                                                新增規則
+                                            </button>
+                                        </div>
+
+                                        {metaIgTriggers.length === 0 && (
+                                            <p className="text-xs text-slate-400 text-center py-4 bg-slate-50 rounded-2xl">
+                                                尚未新增規則，點擊「新增規則」開始設定
+                                            </p>
+                                        )}
+
+                                        {/* 指定貼文規則（優先） */}
+                                        {metaIgTriggers.some(t => t.post_scope === 'specific') && (
+                                            <p className="text-[10px] font-bold text-purple-500 uppercase tracking-wider flex items-center gap-1">
+                                                <span className="w-4 h-4 bg-purple-100 rounded-full flex items-center justify-center text-purple-600 font-black text-[9px]">1</span>
+                                                指定貼文規則（優先）
+                                            </p>
+                                        )}
+
+                                        {metaIgTriggers.map((trigger, idx) => {
+                                            if (trigger.post_scope !== 'specific') return null;
+                                            const validation = metaPostValidation[idx] || {};
+                                            return (
+                                                <div key={idx} className="p-4 rounded-2xl border border-purple-100 bg-purple-50/30 space-y-3">
+                                                    {/* 標頭：適用範圍 + 刪除 */}
+                                                    <div className="flex items-center justify-between">
+                                                        <div className="flex gap-2">
+                                                            {['all', 'specific'].map(scope => (
+                                                                <button
+                                                                    key={scope}
+                                                                    onClick={() => {
+                                                                        const updated = [...metaIgTriggers];
+                                                                        updated[idx] = { ...updated[idx], post_scope: scope };
+                                                                        setMetaIgTriggers(updated);
+                                                                        if (scope === 'all') {
+                                                                            setMetaPostValidation(prev => { const n = { ...prev }; delete n[idx]; return n; });
+                                                                        }
+                                                                    }}
+                                                                    className={`text-xs font-bold px-3 py-1.5 rounded-lg transition-all ${trigger.post_scope === scope ? 'bg-purple-600 text-white' : 'bg-white text-slate-500 border border-slate-200 hover:border-purple-300'}`}
+                                                                >
+                                                                    {scope === 'all' ? '🌐 全部貼文' : '📄 指定貼文'}
+                                                                </button>
+                                                            ))}
+                                                        </div>
+                                                        <button
+                                                            onClick={() => {
+                                                                setMetaIgTriggers(prev => prev.filter((_, i) => i !== idx));
+                                                                setMetaPostValidation(prev => { const n = { ...prev }; delete n[idx]; return n; });
+                                                            }}
+                                                            className="w-8 h-8 flex items-center justify-center text-slate-300 hover:text-red-400 hover:bg-red-50 rounded-lg transition-all"
+                                                        >
+                                                            <Trash2 size={15} />
+                                                        </button>
+                                                    </div>
+
+                                                    {/* 貼文 URL */}
+                                                    <div>
+                                                        <label className="text-[10px] font-bold text-slate-500 uppercase mb-1 block">IG 貼文網址</label>
+                                                        <div className="flex gap-2">
+                                                            <input
+                                                                type="text"
+                                                                value={trigger.post_url || ''}
+                                                                onChange={(e) => {
+                                                                    const updated = [...metaIgTriggers];
+                                                                    updated[idx] = { ...updated[idx], post_url: e.target.value, post_id: '', post_shortcode: '' };
+                                                                    setMetaIgTriggers(updated);
+                                                                    setMetaPostValidation(prev => { const n = { ...prev }; delete n[idx]; return n; });
+                                                                }}
+                                                                placeholder="https://www.instagram.com/p/Cxxxxxxxx/"
+                                                                maxLength={500}
+                                                                className="flex-1 px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs text-slate-700 outline-none focus:border-purple-400 transition-colors font-mono"
+                                                            />
+                                                            <button
+                                                                onClick={() => handleValidatePost(idx)}
+                                                                disabled={!trigger.post_url || validation.status === 'loading'}
+                                                                className="px-3 py-2 bg-purple-600 hover:bg-purple-700 disabled:opacity-40 text-white text-xs font-bold rounded-xl transition-all flex items-center gap-1 shrink-0"
+                                                            >
+                                                                {validation.status === 'loading'
+                                                                    ? <Loader2 size={13} className="animate-spin" />
+                                                                    : <Check size={13} />}
+                                                                驗證
+                                                            </button>
+                                                        </div>
+                                                        {validation.status === 'ok' && (
+                                                            <p className="text-[11px] text-green-600 mt-1 flex items-center gap-1">
+                                                                <CheckCircle2 size={12} />
+                                                                驗證成功｜「{validation.caption || '（無說明文字）'}」
+                                                            </p>
+                                                        )}
+                                                        {validation.status === 'error' && (
+                                                            <p className="text-[11px] text-red-500 mt-1">❌ {validation.message}</p>
+                                                        )}
+                                                        {!validation.status && trigger.post_id && (
+                                                            <p className="text-[11px] text-green-600 mt-1 flex items-center gap-1">
+                                                                <CheckCircle2 size={12} />
+                                                                已驗證（media_id: {trigger.post_id.slice(0, 8)}...）
+                                                            </p>
+                                                        )}
+                                                    </div>
+
+                                                    {/* 關鍵字 + 比對方式 */}
+                                                    <div className="flex gap-2">
+                                                        <div className="flex-1">
+                                                            <label className="text-[10px] font-bold text-slate-500 uppercase mb-1 block">關鍵字</label>
+                                                            <input
+                                                                type="text"
+                                                                value={trigger.keyword}
+                                                                onChange={(e) => { const u = [...metaIgTriggers]; u[idx] = { ...u[idx], keyword: e.target.value }; setMetaIgTriggers(u); }}
+                                                                placeholder="例：報名"
+                                                                maxLength={100}
+                                                                className="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-sm text-slate-700 outline-none focus:border-purple-400 transition-colors"
+                                                            />
+                                                        </div>
+                                                        <div className="w-28">
+                                                            <label className="text-[10px] font-bold text-slate-500 uppercase mb-1 block">比對方式</label>
+                                                            <select
+                                                                value={trigger.match_type}
+                                                                onChange={(e) => { const u = [...metaIgTriggers]; u[idx] = { ...u[idx], match_type: e.target.value }; setMetaIgTriggers(u); }}
+                                                                className="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-sm text-slate-700 outline-none focus:border-purple-400 transition-colors"
+                                                            >
+                                                                <option value="contains">包含</option>
+                                                                <option value="exact">完全符合</option>
+                                                            </select>
+                                                        </div>
+                                                    </div>
+
+                                                    {/* 公開留言回覆 */}
+                                                    <div>
+                                                        <label className="text-[10px] font-bold text-slate-500 uppercase mb-1 block">
+                                                            公開留言回覆 <span className="text-slate-300 font-normal normal-case">（選填，所有人可見）</span>
+                                                        </label>
+                                                        <input
+                                                            type="text"
+                                                            value={trigger.public_reply || ''}
+                                                            onChange={(e) => { const u = [...metaIgTriggers]; u[idx] = { ...u[idx], public_reply: e.target.value }; setMetaIgTriggers(u); }}
+                                                            placeholder="謝謝你的留言！已為你發送詳細資訊 😊"
+                                                            maxLength={150}
+                                                            className="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-sm text-slate-700 outline-none focus:border-purple-400 transition-colors"
+                                                        />
+                                                    </div>
+
+                                                    {/* 私訊 DM */}
+                                                    <div>
+                                                        <label className="text-[10px] font-bold text-slate-500 uppercase mb-1 block">
+                                                            私訊 DM 內容 <span className="text-red-400">*</span>
+                                                        </label>
+                                                        <textarea
+                                                            value={trigger.reply_message}
+                                                            onChange={(e) => { const u = [...metaIgTriggers]; u[idx] = { ...u[idx], reply_message: e.target.value }; setMetaIgTriggers(u); }}
+                                                            placeholder="您好！活動報名連結在這裡：https://..."
+                                                            rows={2}
+                                                            maxLength={1000}
+                                                            className="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-sm text-slate-700 outline-none focus:border-purple-400 transition-colors resize-none"
+                                                        />
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+
+                                        {/* 全部貼文規則 */}
+                                        {metaIgTriggers.some(t => t.post_scope !== 'specific') && (
+                                            <p className="text-[10px] font-bold text-blue-500 uppercase tracking-wider flex items-center gap-1 mt-1">
+                                                <span className="w-4 h-4 bg-blue-100 rounded-full flex items-center justify-center text-blue-600 font-black text-[9px]">
+                                                    {metaIgTriggers.some(t => t.post_scope === 'specific') ? '2' : '1'}
+                                                </span>
+                                                全部貼文規則
+                                            </p>
+                                        )}
+
+                                        {metaIgTriggers.map((trigger, idx) => {
+                                            if (trigger.post_scope === 'specific') return null;
+                                            return (
+                                                <div key={idx} className="p-4 rounded-2xl border border-slate-200 bg-white space-y-3">
+                                                    {/* 標頭：適用範圍 + 刪除 */}
+                                                    <div className="flex items-center justify-between">
+                                                        <div className="flex gap-2">
+                                                            {['all', 'specific'].map(scope => (
+                                                                <button
+                                                                    key={scope}
+                                                                    onClick={() => {
+                                                                        const updated = [...metaIgTriggers];
+                                                                        updated[idx] = { ...updated[idx], post_scope: scope };
+                                                                        setMetaIgTriggers(updated);
+                                                                    }}
+                                                                    className={`text-xs font-bold px-3 py-1.5 rounded-lg transition-all ${trigger.post_scope === scope ? 'bg-blue-600 text-white' : 'bg-slate-50 text-slate-500 border border-slate-200 hover:border-blue-300'}`}
+                                                                >
+                                                                    {scope === 'all' ? '🌐 全部貼文' : '📄 指定貼文'}
+                                                                </button>
+                                                            ))}
+                                                        </div>
+                                                        <button
+                                                            onClick={() => setMetaIgTriggers(prev => prev.filter((_, i) => i !== idx))}
+                                                            className="w-8 h-8 flex items-center justify-center text-slate-300 hover:text-red-400 hover:bg-red-50 rounded-lg transition-all"
+                                                        >
+                                                            <Trash2 size={15} />
+                                                        </button>
+                                                    </div>
+
+                                                    {/* 關鍵字 + 比對方式 */}
+                                                    <div className="flex gap-2">
+                                                        <div className="flex-1">
+                                                            <label className="text-[10px] font-bold text-slate-500 uppercase mb-1 block">關鍵字</label>
+                                                            <input
+                                                                type="text"
+                                                                value={trigger.keyword}
+                                                                onChange={(e) => { const u = [...metaIgTriggers]; u[idx] = { ...u[idx], keyword: e.target.value }; setMetaIgTriggers(u); }}
+                                                                placeholder="例：網站"
+                                                                maxLength={100}
+                                                                className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-700 outline-none focus:border-blue-400 transition-colors"
+                                                            />
+                                                        </div>
+                                                        <div className="w-28">
+                                                            <label className="text-[10px] font-bold text-slate-500 uppercase mb-1 block">比對方式</label>
+                                                            <select
+                                                                value={trigger.match_type}
+                                                                onChange={(e) => { const u = [...metaIgTriggers]; u[idx] = { ...u[idx], match_type: e.target.value }; setMetaIgTriggers(u); }}
+                                                                className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-700 outline-none focus:border-blue-400 transition-colors"
+                                                            >
+                                                                <option value="contains">包含</option>
+                                                                <option value="exact">完全符合</option>
+                                                            </select>
+                                                        </div>
+                                                    </div>
+
+                                                    {/* 公開留言回覆 */}
+                                                    <div>
+                                                        <label className="text-[10px] font-bold text-slate-500 uppercase mb-1 block">
+                                                            公開留言回覆 <span className="text-slate-300 font-normal normal-case">（選填，所有人可見）</span>
+                                                        </label>
+                                                        <input
+                                                            type="text"
+                                                            value={trigger.public_reply || ''}
+                                                            onChange={(e) => { const u = [...metaIgTriggers]; u[idx] = { ...u[idx], public_reply: e.target.value }; setMetaIgTriggers(u); }}
+                                                            placeholder="謝謝你的留言！已為你發送詳細資訊 😊"
+                                                            maxLength={150}
+                                                            className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-700 outline-none focus:border-blue-400 transition-colors"
+                                                        />
+                                                    </div>
+
+                                                    {/* 私訊 DM */}
+                                                    <div>
+                                                        <label className="text-[10px] font-bold text-slate-500 uppercase mb-1 block">
+                                                            私訊 DM 內容 <span className="text-red-400">*</span>
+                                                        </label>
+                                                        <textarea
+                                                            value={trigger.reply_message}
+                                                            onChange={(e) => { const u = [...metaIgTriggers]; u[idx] = { ...u[idx], reply_message: e.target.value }; setMetaIgTriggers(u); }}
+                                                            placeholder="您好！這是我們的官網連結：https://..."
+                                                            rows={2}
+                                                            maxLength={1000}
+                                                            className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-700 outline-none focus:border-blue-400 transition-colors resize-none"
+                                                        />
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                )}
+
+                                {/* 部署後顯示 Webhook 資訊 */}
+                                {metaDeployResult && (
+                                    <div className="p-5 bg-green-50 border border-green-100 rounded-2xl space-y-4">
+                                        <div className="flex items-center gap-2 text-green-700 font-bold text-sm">
+                                            <CheckCircle2 size={18} />
+                                            部署成功！請至 Meta App Dashboard 完成 Webhook 設定
+                                        </div>
+                                        {[
+                                            { label: 'Webhook URL', value: metaDeployResult.webhookUrl, key: 'url' },
+                                            { label: 'Verify Token', value: metaDeployResult.verifyToken, key: 'token' },
+                                        ].map(({ label, value, key }) => (
+                                            <div key={key}>
+                                                <p className="text-[10px] font-bold text-slate-500 uppercase mb-1">{label}</p>
+                                                <div className="flex items-center gap-2">
+                                                    <code className="flex-1 text-xs bg-white border border-green-100 px-3 py-2 rounded-xl text-slate-700 font-mono break-all">{value}</code>
+                                                    <button
+                                                        onClick={() => { navigator.clipboard.writeText(value); setMetaCopied(key); setTimeout(() => setMetaCopied(''), 2000); }}
+                                                        className="w-8 h-8 flex-none flex items-center justify-center text-slate-400 hover:text-green-600 hover:bg-green-100 rounded-lg transition-all"
+                                                    >
+                                                        {metaCopied === key ? <Check size={15} /> : <Copy size={15} />}
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        ))}
+                                        <p className="text-xs text-slate-500 leading-relaxed">
+                                            前往 <strong>Meta for Developers → 您的 App → Webhooks</strong>，新增上方 URL 並填入 Verify Token，訂閱 <code className="bg-white px-1 rounded">messages</code> 欄位後按儲存。
+                                        </p>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Footer */}
+                            <div className="px-8 py-6 bg-slate-50/50 border-t border-slate-100 flex justify-end items-center gap-4 shrink-0">
+                                <button
+                                    onClick={() => setIsMetaModalOpen(false)}
+                                    className="text-slate-500 hover:text-slate-700 font-bold px-6 py-4 rounded-2xl transition-all"
+                                >
+                                    {metaDeployResult ? '關閉' : '取消'}
+                                </button>
+                                <button
+                                    disabled={isMetaDeploying}
+                                    onClick={handleDeployMeta}
+                                    className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-bold px-10 py-4 rounded-2xl shadow-lg shadow-blue-200 transition-all active:scale-95 flex items-center gap-2"
+                                >
+                                    {isMetaDeploying ? (
+                                        <Loader2 className="animate-spin" size={20} />
+                                    ) : (
+                                        <Check size={20} />
+                                    )}
+                                    {metaDeployResult ? '重新部署' : '確認部署'}
                                 </button>
                             </div>
                         </div>
@@ -4238,36 +4697,62 @@ const BackendDashboard = () => {
                                         </div>
                                     );
                                 })()}
-                                {/* Messenger - unavailable */}
-                                <div className="flex items-center justify-between p-4 rounded-2xl border border-slate-100 opacity-50">
-                                    <div className="flex items-center gap-3">
-                                        <div className="w-9 h-9 bg-blue-50 rounded-xl flex items-center justify-center">
-                                            <svg width="20" height="20" viewBox="0 0 24 24" fill="#0084FF"><path d="M12 2C6.47715 2 2 6.145 2 11.257c0 2.913 1.45 5.514 3.714 7.222V22l3.39-1.858c.905.251 1.868.388 2.896.388 5.52285 0 10-4.145 10-9.257C22 6.145 17.52285 2 12 2zm1.09 12.338l-2.607-2.78-5.084 2.78 5.587-5.93 2.67 2.78 5.022-2.78-5.588 5.93z" /></svg>
+                                {/* Messenger */}
+                                {(() => {
+                                    const metaConnected = !!(currentAgent?.deploy_config?.meta?.fb_messenger_enabled);
+                                    const metaEnabled = currentAgent?.deploy_config?.meta?.enabled !== false;
+                                    return (
+                                        <div className="flex items-center justify-between p-4 rounded-2xl border border-slate-100 bg-slate-50/50">
+                                            <div className="flex items-center gap-3 flex-1 min-w-0">
+                                                <div className="w-9 h-9 bg-blue-50 rounded-xl flex-none flex items-center justify-center">
+                                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="#0084FF"><path d="M12 2C6.47715 2 2 6.145 2 11.257c0 2.913 1.45 5.514 3.714 7.222V22l3.39-1.858c.905.251 1.868.388 2.896.388 5.52285 0 10-4.145 10-9.257C22 6.145 17.52285 2 12 2zm1.09 12.338l-2.607-2.78-5.084 2.78 5.587-5.93 2.67 2.78 5.022-2.78-5.588 5.93z" /></svg>
+                                                </div>
+                                                <div className="min-w-0">
+                                                    <p className="font-bold text-slate-800 text-sm truncate">Messenger</p>
+                                                    <p className="text-xs text-slate-400">{metaConnected ? (metaEnabled ? '已啟用' : '已暫停') : '尚未設定'}</p>
+                                                </div>
+                                            </div>
+                                            {metaConnected ? (
+                                                <button
+                                                    onClick={() => handleToggleChannel('meta', !metaEnabled)}
+                                                    className={`relative w-12 h-6 flex-none rounded-full transition-colors ${metaEnabled ? 'bg-blue-500' : 'bg-slate-300'}`}
+                                                >
+                                                    <span className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full shadow transition-transform ${metaEnabled ? 'translate-x-6' : 'translate-x-0'}`} />
+                                                </button>
+                                            ) : (
+                                                <span className="text-xs flex-none text-slate-400 bg-slate-100 px-3 py-1 rounded-full">請先設定</span>
+                                            )}
                                         </div>
-                                        <div>
-                                            <p className="font-bold text-slate-800 text-sm">Messenger</p>
-                                            <p className="text-xs text-slate-400">暫未開放</p>
+                                    );
+                                })()}
+                                {/* Instagram */}
+                                {(() => {
+                                    const igConnected = !!(currentAgent?.deploy_config?.meta?.ig_dm_enabled || currentAgent?.deploy_config?.meta?.ig_comment_enabled);
+                                    const metaEnabled = currentAgent?.deploy_config?.meta?.enabled !== false;
+                                    return (
+                                        <div className="flex items-center justify-between p-4 rounded-2xl border border-slate-100 bg-slate-50/50">
+                                            <div className="flex items-center gap-3 flex-1 min-w-0">
+                                                <div className="w-9 h-9 bg-pink-50 rounded-xl flex-none flex items-center justify-center">
+                                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="#E4405F"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.052.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0zm0 5.838a6.162 6.162 0 100 12.324 6.162 6.162 0 000-12.324zM12 16a4 4 0 110-8 4 4 0 010 8zm6.406-11.845a1.44 1.44 0 100 2.881 1.44 1.44 0 000-2.881z" /></svg>
+                                                </div>
+                                                <div className="min-w-0">
+                                                    <p className="font-bold text-slate-800 text-sm truncate">Instagram</p>
+                                                    <p className="text-xs text-slate-400">{igConnected ? (metaEnabled ? '已啟用' : '已暫停') : '尚未設定'}</p>
+                                                </div>
+                                            </div>
+                                            {igConnected ? (
+                                                <button
+                                                    onClick={() => handleToggleChannel('meta', !metaEnabled)}
+                                                    className={`relative w-12 h-6 flex-none rounded-full transition-colors ${metaEnabled ? 'bg-pink-500' : 'bg-slate-300'}`}
+                                                >
+                                                    <span className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full shadow transition-transform ${metaEnabled ? 'translate-x-6' : 'translate-x-0'}`} />
+                                                </button>
+                                            ) : (
+                                                <span className="text-xs flex-none text-slate-400 bg-slate-100 px-3 py-1 rounded-full">請先設定</span>
+                                            )}
                                         </div>
-                                    </div>
-                                    <button disabled className="relative w-12 h-6 rounded-full shrink-0 bg-slate-200 cursor-not-allowed">
-                                        <span className="absolute top-1 translate-x-1 w-4 h-4 bg-white rounded-full shadow" />
-                                    </button>
-                                </div>
-                                {/* Instagram - unavailable */}
-                                <div className="flex items-center justify-between p-4 rounded-2xl border border-slate-100 opacity-50">
-                                    <div className="flex items-center gap-3">
-                                        <div className="w-9 h-9 bg-pink-50 rounded-xl flex items-center justify-center">
-                                            <svg width="20" height="20" viewBox="0 0 24 24" fill="#E4405F"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.052.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0zm0 5.838a6.162 6.162 0 100 12.324 6.162 6.162 0 000-12.324zM12 16a4 4 0 110-8 4 4 0 010 8zm6.406-11.845a1.44 1.44 0 100 2.881 1.44 1.44 0 000-2.881z" /></svg>
-                                        </div>
-                                        <div>
-                                            <p className="font-bold text-slate-800 text-sm">Instagram</p>
-                                            <p className="text-xs text-slate-400">暫未開放</p>
-                                        </div>
-                                    </div>
-                                    <button disabled className="relative w-12 h-6 rounded-full shrink-0 bg-slate-200 cursor-not-allowed">
-                                        <span className="absolute top-1 translate-x-1 w-4 h-4 bg-white rounded-full shadow" />
-                                    </button>
-                                </div>
+                                    );
+                                })()}
                                 {/* Telegram */}
                                 {(() => {
                                     const tgConnected = !!(currentAgent?.deploy_config?.telegram || currentAgent?.deploy_type === 'telegram');
@@ -4663,250 +5148,39 @@ const BackendDashboard = () => {
                 )}
 
                 {/* Add FAQ Modal */}
-                {showFaqModal && (
-                    <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
-                        <div
-                            className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
-                            onClick={() => setShowFaqModal(false)}
-                        />
-                        <div className="relative bg-white w-full max-w-xl rounded-[32px] overflow-hidden shadow-2xl">
-                            <div className="p-8 border-b border-slate-100 flex items-center justify-between">
-                                <div className="flex items-center gap-4">
-                                    <div className="w-10 h-10 bg-brand-50 text-brand-600 rounded-xl flex items-center justify-center border border-brand-100">
-                                        <BookOpen size={20} />
-                                    </div>
-                                    <div>
-                                        <h2 className="text-xl font-bold text-slate-800">新增問答</h2>
-                                        <p className="text-slate-400 text-xs mt-0.5">建立一組 FAQ 問答</p>
-                                    </div>
-                                </div>
-                                <button
-                                    onClick={() => setShowFaqModal(false)}
-                                    className="w-10 h-10 flex items-center justify-center text-slate-400 hover:text-slate-600 hover:bg-slate-50 rounded-full transition-all"
-                                >
-                                    <X size={20} />
-                                </button>
-                            </div>
-                            <div className="p-8 space-y-6">
-                                <div className="space-y-2">
-                                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Category 分類</label>
-                                    <select
-                                        value={newFaq.category}
-                                        onChange={(e) => setNewFaq({ ...newFaq, category: e.target.value })}
-                                        className="w-full bg-white border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-700 text-sm focus:ring-2 focus:ring-brand-500/10 focus:border-brand-500 outline-none transition-all appearance-none cursor-pointer"
-                                    >
-                                        {[...new Set(editingFaqs.map(f => f.category || '常見問題'))].map(cat => (
-                                            <option key={cat} value={cat}>{cat}</option>
-                                        ))}
-                                        {editingFaqs.length === 0 && <option value="常見問題">常見問題</option>}
-                                    </select>
-                                </div>
-                                <div className="space-y-2">
-                                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Question</label>
-                                    <input
-                                        type="text"
-                                        value={newFaq.question}
-                                        maxLength={100}
-                                        onChange={(e) => setNewFaq({ ...newFaq, question: e.target.value })}
-                                        placeholder="輸入常見問題..."
-                                        autoFocus
-                                        className="w-full bg-white border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 font-bold text-base focus:ring-2 focus:ring-brand-500/10 focus:border-brand-500 outline-none transition-all"
-                                    />
-                                    <div className="text-[10px] text-slate-300 text-right">{newFaq.question.length}/100</div>
-                                </div>
-                                <div className="space-y-2">
-                                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Answer</label>
-                                    <textarea
-                                        value={newFaq.answer}
-                                        maxLength={500}
-                                        onChange={(e) => setNewFaq({ ...newFaq, answer: e.target.value })}
-                                        placeholder="輸入預設回覆回答內容..."
-                                        className="w-full bg-white border border-slate-200 rounded-2xl p-5 text-slate-600 text-sm leading-relaxed min-h-[120px] focus:ring-2 focus:ring-brand-500/10 focus:border-brand-500 outline-none transition-all"
-                                    />
-                                    <div className="text-[10px] text-slate-300 text-right">{newFaq.answer.length}/500</div>
-                                </div>
-                                <div className="space-y-2">
-                                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Image <span className="text-slate-300 normal-case">(選填)</span></label>
-                                    {newFaq.image_id ? (
-                                        <div className="flex items-center gap-3">
-                                            <img src={newFaq._preview_url} alt="FAQ 附圖" className="w-16 h-16 object-cover rounded-xl border border-slate-200" />
-                                            <button
-                                                onClick={() => setNewFaq({ ...newFaq, image_id: '', _preview_url: '' })}
-                                                className="flex items-center gap-1 px-3 py-1.5 border border-red-200 text-red-500 rounded-lg text-xs font-bold hover:bg-red-50"
-                                            >
-                                                <Trash2 size={12} /> 移除
-                                            </button>
-                                        </div>
-                                    ) : (
-                                        <label className="flex items-center gap-2 px-4 py-3 bg-white border border-dashed border-slate-200 rounded-xl cursor-pointer hover:border-brand-300 transition-all">
-                                            <Upload size={16} className="text-slate-400" />
-                                            <span className="text-xs text-slate-500">上傳附圖 (jpg/png/webp, 2MB)</span>
-                                            <input type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={async (e) => {
-                                                const file = e.target.files[0];
-                                                if (!file) return;
-                                                if (file.size > 2 * 1024 * 1024) { alert('圖片大小不可超過 2MB'); return; }
-                                                const fd = new FormData();
-                                                fd.append('file', file);
-                                                try {
-                                                    const res = await axios.post(`${config.API_URL}/api/admin/upload_image`, fd, { headers: { 'Content-Type': 'multipart/form-data' } });
-                                                    setNewFaq(prev => ({ ...prev, image_id: res.data.image_id, _preview_url: res.data.preview_url }));
-                                                } catch { alert('圖片上傳失敗'); }
-                                            }} />
-                                        </label>
-                                    )}
-                                </div>
-                            </div>
-                            <div className="px-8 py-6 bg-slate-50/50 border-t border-slate-100 flex justify-end gap-3">
-                                <button
-                                    onClick={() => setShowFaqModal(false)}
-                                    className="px-6 py-2.5 rounded-xl text-sm font-bold text-slate-600 hover:bg-slate-100 transition-all"
-                                >
-                                    取消
-                                </button>
-                                <button
-                                    onClick={() => {
-                                        const cat = newFaq.category?.trim() || '常見問題';
-                                        const modalNewId = Date.now().toString();
-                                        setEditingFaqs([...editingFaqs, { id: modalNewId, question: newFaq.question, answer: newFaq.answer, image_id: newFaq.image_id || '', category: cat }]);
-                                        setExpandedCategories(prev => new Set([...prev, cat]));
-                                        setCategoryOrder(prev => prev.includes(cat) ? prev : [...prev, cat]);
-                                        setExpandedFaqItems(prev => new Set([...prev, modalNewId]));
-                                        setShowFaqModal(false);
-                                        setTimeout(() => {
-                                            faqsEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                                        }, 100);
-                                    }}
-                                    disabled={!newFaq.question.trim() || !newFaq.answer.trim()}
-                                    className="flex items-center gap-2 px-6 py-2.5 bg-brand-600 text-white rounded-xl text-sm font-bold hover:bg-brand-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                                >
-                                    <Plus size={16} />
-                                    新增
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                )}
+                <FaqAddModal
+                    open={showFaqModal}
+                    onClose={() => setShowFaqModal(false)}
+                    categories={[...new Set(editingFaqs.map(f => f.category || '常見問題'))]}
+                    defaultCategory={getDefaultFaqCategory(editingFaqs)}
+                    onSubmit={(faq) => {
+                        const newId = Date.now().toString();
+                        setEditingFaqs([...editingFaqs, { id: newId, ...faq }]);
+                        setExpandedCategories(prev => new Set([...prev, faq.category]));
+                        setCategoryOrder(prev => prev.includes(faq.category) ? prev : [...prev, faq.category]);
+                        setExpandedFaqItems(prev => new Set([...prev, newId]));
+                        setShowFaqModal(false);
+                        setTimeout(() => { faqsEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }); }, 100);
+                    }}
+                />
 
                 {/* Add FAQ to Category Modal */}
-                {addFaqCategoryModal.open && (
-                    <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
-                        <div
-                            className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
-                            onClick={() => setAddFaqCategoryModal(prev => ({ ...prev, open: false }))}
-                        />
-                        <div className="relative bg-white w-full max-w-xl rounded-[32px] overflow-hidden shadow-2xl">
-                            <div className="p-8 border-b border-slate-100 flex items-center justify-between">
-                                <div className="flex items-center gap-4">
-                                    <div className="w-10 h-10 bg-brand-50 text-brand-600 rounded-xl flex items-center justify-center border border-brand-100">
-                                        <BookOpen size={20} />
-                                    </div>
-                                    <div>
-                                        <h2 className="text-xl font-bold text-slate-800">新增問答</h2>
-                                        <p className="text-slate-400 text-xs mt-0.5">建立一組 FAQ 問答</p>
-                                    </div>
-                                </div>
-                                <button
-                                    onClick={() => setAddFaqCategoryModal(prev => ({ ...prev, open: false }))}
-                                    className="w-10 h-10 flex items-center justify-center text-slate-400 hover:text-slate-600 hover:bg-slate-50 rounded-full transition-all"
-                                >
-                                    <X size={20} />
-                                </button>
-                            </div>
-                            <div className="p-8 space-y-6">
-                                <div className="space-y-2">
-                                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Category 分類</label>
-                                    <input
-                                        type="text"
-                                        value={addFaqCategoryModal.category}
-                                        disabled
-                                        className="w-full bg-slate-100 border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-700 text-sm text-slate-500 outline-none cursor-not-allowed"
-                                    />
-                                </div>
-                                <div className="space-y-2">
-                                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Question</label>
-                                    <input
-                                        type="text"
-                                        value={addFaqCategoryModal.question}
-                                        maxLength={100}
-                                        onChange={(e) => setAddFaqCategoryModal(prev => ({ ...prev, question: e.target.value }))}
-                                        placeholder="輸入常見問題..."
-                                        autoFocus
-                                        className="w-full bg-white border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 font-bold text-base focus:ring-2 focus:ring-brand-500/10 focus:border-brand-500 outline-none transition-all"
-                                    />
-                                    <div className="text-[10px] text-slate-300 text-right">{addFaqCategoryModal.question.length}/100</div>
-                                </div>
-                                <div className="space-y-2">
-                                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Answer</label>
-                                    <textarea
-                                        value={addFaqCategoryModal.answer}
-                                        maxLength={500}
-                                        onChange={(e) => setAddFaqCategoryModal(prev => ({ ...prev, answer: e.target.value }))}
-                                        placeholder="輸入預設回覆回答內容..."
-                                        className="w-full bg-white border border-slate-200 rounded-2xl p-5 text-slate-600 text-sm leading-relaxed min-h-[120px] focus:ring-2 focus:ring-brand-500/10 focus:border-brand-500 outline-none transition-all"
-                                    />
-                                    <div className="text-[10px] text-slate-300 text-right">{addFaqCategoryModal.answer.length}/500</div>
-                                </div>
-                                <div className="space-y-2">
-                                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Image <span className="text-slate-300 normal-case">(選填)</span></label>
-                                    {addFaqCategoryModal.image_id ? (
-                                        <div className="flex items-center gap-3">
-                                            <img src={addFaqCategoryModal._preview_url} alt="FAQ 附圖" className="w-16 h-16 object-cover rounded-xl border border-slate-200" />
-                                            <button
-                                                onClick={() => setAddFaqCategoryModal(prev => ({ ...prev, image_id: '', _preview_url: '' }))}
-                                                className="flex items-center gap-1 px-3 py-1.5 border border-red-200 text-red-500 rounded-lg text-xs font-bold hover:bg-red-50"
-                                            >
-                                                <Trash2 size={12} /> 移除
-                                            </button>
-                                        </div>
-                                    ) : (
-                                        <label className="flex items-center gap-2 px-4 py-3 bg-white border border-dashed border-slate-200 rounded-xl cursor-pointer hover:border-brand-300 transition-all">
-                                            <Upload size={16} className="text-slate-400" />
-                                            <span className="text-xs text-slate-500">上傳附圖 (jpg/png/webp, 2MB)</span>
-                                            <input type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={async (e) => {
-                                                const file = e.target.files[0];
-                                                if (!file) return;
-                                                if (file.size > 2 * 1024 * 1024) { alert('圖片大小不可超過 2MB'); return; }
-                                                const fd = new FormData();
-                                                fd.append('file', file);
-                                                try {
-                                                    const res = await axios.post(`${config.API_URL}/api/admin/upload_image`, fd, { headers: { 'Content-Type': 'multipart/form-data' } });
-                                                    setAddFaqCategoryModal(prev => ({ ...prev, image_id: res.data.image_id, _preview_url: res.data.preview_url }));
-                                                } catch { alert('圖片上傳失敗'); }
-                                            }} />
-                                        </label>
-                                    )}
-                                </div>
-                            </div>
-                            <div className="px-8 py-6 bg-slate-50/50 border-t border-slate-100 flex justify-end gap-3">
-                                <button
-                                    onClick={() => setAddFaqCategoryModal(prev => ({ ...prev, open: false }))}
-                                    className="px-6 py-2.5 rounded-xl text-sm font-bold text-slate-600 hover:bg-slate-100 transition-all"
-                                >
-                                    取消
-                                </button>
-                                <button
-                                    onClick={() => {
-                                        const cat = addFaqCategoryModal.category?.trim() || '常見問題';
-                                        const modalNewId = Date.now().toString();
-                                        setEditingFaqs([...editingFaqs, { id: modalNewId, question: addFaqCategoryModal.question, answer: addFaqCategoryModal.answer, image_id: addFaqCategoryModal.image_id || '', category: cat }]);
-                                        setExpandedCategories(prev => new Set([...prev, cat]));
-                                        setCategoryOrder(prev => prev.includes(cat) ? prev : [...prev, cat]);
-                                        setExpandedFaqItems(prev => new Set([...prev, modalNewId]));
-                                        setAddFaqCategoryModal(prev => ({ ...prev, open: false }));
-                                        setTimeout(() => {
-                                            faqsEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                                        }, 100);
-                                    }}
-                                    disabled={!addFaqCategoryModal.question.trim() || !addFaqCategoryModal.answer.trim()}
-                                    className="flex items-center gap-2 px-6 py-2.5 bg-brand-600 text-white rounded-xl text-sm font-bold hover:bg-brand-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                                >
-                                    <Plus size={16} />
-                                    新增
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                )}
+                <FaqAddModal
+                    open={addFaqCategoryModal.open}
+                    onClose={() => setAddFaqCategoryModal(prev => ({ ...prev, open: false }))}
+                    categories={[addFaqCategoryModal.category]}
+                    defaultCategory={addFaqCategoryModal.category}
+                    categoryFixed={true}
+                    onSubmit={(faq) => {
+                        const newId = Date.now().toString();
+                        setEditingFaqs([...editingFaqs, { id: newId, ...faq }]);
+                        setExpandedCategories(prev => new Set([...prev, faq.category]));
+                        setCategoryOrder(prev => prev.includes(faq.category) ? prev : [...prev, faq.category]);
+                        setExpandedFaqItems(prev => new Set([...prev, newId]));
+                        setAddFaqCategoryModal(prev => ({ ...prev, open: false }));
+                        setTimeout(() => { faqsEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }); }, 100);
+                    }}
+                />
 
                 {/* Add Category Modal */}
                 {showCategoryModal && (
@@ -4924,12 +5198,14 @@ const BackendDashboard = () => {
                                 <input
                                     type="text"
                                     value={newCategoryName}
+                                    maxLength={FAQ_MAX_CATEGORY}
                                     onChange={(e) => setNewCategoryName(e.target.value)}
                                     onKeyDown={(e) => e.key === 'Enter' && confirmAddCategory()}
                                     placeholder="例如：訂購規範與流程"
                                     autoFocus
                                     className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-slate-800 font-bold text-sm focus:ring-2 focus:ring-brand-500/10 focus:border-brand-500 outline-none"
                                 />
+                                <div className="text-[10px] text-slate-300 text-right mt-1">{newCategoryName.length}/{FAQ_MAX_CATEGORY}</div>
                             </div>
                             <div className="px-6 py-4 bg-slate-50/50 border-t border-slate-100 flex justify-end gap-3">
                                 <button onClick={() => setShowCategoryModal(false)} className="px-5 py-2.5 rounded-xl text-sm font-bold text-slate-600 hover:bg-slate-100 transition-all">取消</button>
@@ -5063,114 +5339,21 @@ const BackendDashboard = () => {
 
             {/* 移動分類彈窗 */}
             {showFaqImportModal && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setShowFaqImportModal(false)}>
-                    <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
-                    <div className="relative bg-white rounded-2xl shadow-xl w-full max-w-lg flex flex-col max-h-[85vh]" onClick={(e) => e.stopPropagation()}>
-                        <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-slate-100 flex-shrink-0">
-                            <div>
-                                <h3 className="text-base font-bold text-slate-800">匯入 FAQ</h3>
-                                <p className="text-xs text-slate-400 mt-0.5">AI 自動解析並整理為知識庫格式</p>
-                            </div>
-                            <button onClick={() => setShowFaqImportModal(false)} className="p-1 text-slate-400 hover:text-slate-600 transition-colors"><X size={16} /></button>
-                        </div>
-                        <div className="flex border-b border-slate-100 flex-shrink-0">
-                            <button onClick={() => { setFaqImportTab('file'); setParsedFaqPreview(null); }} className={`flex-1 py-3 text-sm font-semibold transition-colors ${faqImportTab === 'file' ? 'text-brand-600 border-b-2 border-brand-500' : 'text-slate-400 hover:text-slate-600'}`}>上傳檔案</button>
-                            <button onClick={() => { setFaqImportTab('text'); setParsedFaqPreview(null); }} className={`flex-1 py-3 text-sm font-semibold transition-colors ${faqImportTab === 'text' ? 'text-brand-600 border-b-2 border-brand-500' : 'text-slate-400 hover:text-slate-600'}`}>貼上文字</button>
-                        </div>
-                        <div className="flex-1 overflow-y-auto p-6 space-y-4">
-                            {faqImportTab === 'file' && !parsedFaqPreview && (
-                                <div>
-                                    <label className="flex flex-col items-center justify-center w-full h-36 border-2 border-dashed border-slate-200 rounded-2xl cursor-pointer hover:border-brand-300 hover:bg-brand-50/30 transition-colors">
-                                        <Upload size={28} className="text-slate-300 mb-2" />
-                                        <span className="text-sm font-semibold text-slate-500">點擊選擇或拖放檔案</span>
-                                        <span className="text-xs text-slate-400 mt-1">支援 .xlsx / .csv，最大 500KB</span>
-                                        <input ref={faqImportFileRef} type="file" accept=".xlsx,.csv" className="hidden" onChange={() => setParsedFaqPreview(null)} />
-                                    </label>
-                                    <p className="text-xs text-slate-400 mt-3 text-center">AI 會自動識別問題與回答欄位，每次最多解析 50 組</p>
-                                </div>
-                            )}
-                            {faqImportTab === 'text' && !parsedFaqPreview && (
-                                <div>
-                                    <textarea
-                                        value={faqImportText}
-                                        onChange={(e) => setFaqImportText(e.target.value)}
-                                        placeholder={'請貼上網站 FAQ 內容...\n\n例如：\nQ: 如何退換貨？\nA: 商品到貨 7 天內可申請退換。\n\nQ: 運費怎麼計算？\nA: 滿 500 元免運。'}
-                                        className="w-full h-52 text-sm text-slate-700 bg-slate-50 border border-slate-200 rounded-xl p-4 resize-none outline-none focus:border-brand-400 focus:bg-white transition-colors"
-                                    />
-                                    <p className="text-xs text-slate-400 mt-2">AI 會自動識別問答結構，支援 Q&A、數字編號、中文標點等各種格式</p>
-                                </div>
-                            )}
-                            {parsedFaqPreview && (
-                                <div>
-                                    <p className="text-sm font-semibold text-slate-700 mb-3">解析結果：共 {parsedFaqPreview.length} 組 FAQ <span className="text-xs font-normal text-slate-400">（可直接編輯或刪除）</span></p>
-                                    <datalist id="faq-import-cats">
-                                        {[...new Set([...categoryOrder, ...(parsedFaqPreview || []).map(f => f.category || '常見問題')])].map(c => <option key={c} value={c} />)}
-                                    </datalist>
-                                    <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
-                                        {parsedFaqPreview.map((f, i) => (
-                                            <div key={i} className="bg-white border border-slate-200 rounded-xl px-4 py-3 space-y-2">
-                                                <div className="flex items-center gap-2">
-                                                    <input
-                                                        list="faq-import-cats"
-                                                        value={f.category || '常見問題'}
-                                                        onChange={(e) => updatePreviewFaq(i, 'category', e.target.value)}
-                                                        className="flex-1 text-[11px] font-bold text-brand-600 bg-brand-50 border border-brand-100 rounded-full px-2.5 py-0.5 outline-none focus:border-brand-400 focus:bg-white transition-colors min-w-0"
-                                                        placeholder="分類名稱"
-                                                    />
-                                                    <button onClick={() => removePreviewFaq(i)} className="flex-shrink-0 w-5 h-5 flex items-center justify-center text-slate-300 hover:text-red-400 transition-colors" title="移除此 FAQ">
-                                                        <X size={13} />
-                                                    </button>
-                                                </div>
-                                                <div>
-                                                    <input
-                                                        type="text"
-                                                        value={f.question}
-                                                        maxLength={100}
-                                                        onChange={(e) => updatePreviewFaq(i, 'question', e.target.value)}
-                                                        className="w-full text-sm font-semibold text-slate-800 bg-transparent border-b border-slate-100 focus:border-brand-400 outline-none py-0.5 transition-colors"
-                                                        placeholder="問題..."
-                                                    />
-                                                    <div className="text-[10px] text-slate-300 text-right">{f.question?.length || 0}/100</div>
-                                                </div>
-                                                <div>
-                                                    <textarea
-                                                        rows={2}
-                                                        value={f.answer}
-                                                        maxLength={500}
-                                                        onChange={(e) => updatePreviewFaq(i, 'answer', e.target.value)}
-                                                        className="w-full text-xs text-slate-500 bg-slate-50 rounded-lg px-2 py-1.5 resize-none outline-none focus:bg-white focus:ring-1 focus:ring-brand-200 transition-colors"
-                                                        placeholder="回答..."
-                                                    />
-                                                    <div className="text-[10px] text-slate-300 text-right">{f.answer?.length || 0}/500</div>
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
-                        </div>
-                        <div className="px-6 py-4 border-t border-slate-100 flex items-center justify-between gap-3 flex-shrink-0">
-                            <button onClick={() => setShowFaqImportModal(false)} className="px-4 py-2.5 text-sm font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors">取消</button>
-                            {!parsedFaqPreview ? (
-                                <button
-                                    onClick={() => handleImportFaqs(faqImportTab)}
-                                    disabled={isParsingFaqs}
-                                    className="flex items-center gap-2 px-5 py-2.5 bg-brand-600 text-white rounded-xl text-sm font-bold hover:bg-brand-700 transition-all disabled:opacity-50"
-                                >
-                                    {isParsingFaqs ? <Loader2 size={16} className="animate-spin" /> : <Upload size={16} />}
-                                    {isParsingFaqs ? 'AI 解析中...' : '開始解析'}
-                                </button>
-                            ) : (
-                                <div className="flex gap-2">
-                                    <button onClick={() => setParsedFaqPreview(null)} className="px-4 py-2.5 text-sm font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors">重新解析</button>
-                                    <button onClick={handleConfirmImportFaqs} disabled={!parsedFaqPreview?.length} className="px-5 py-2.5 bg-brand-600 text-white rounded-xl text-sm font-bold hover:bg-brand-700 transition-all disabled:opacity-40">
-                                        {parsedFaqPreview?.length ? `加入知識庫（${parsedFaqPreview.length} 組）` : '已無可加入的 FAQ'}
-                                    </button>
-                                </div>
-                            )}
-                        </div>
-                    </div>
-                </div>
+                <FaqImportModal
+                    onClose={() => setShowFaqImportModal(false)}
+                    onConfirm={handleConfirmImportFaqs}
+                    brandDescription={currentAgent?.brand_description || ''}
+                    existingCategories={categoryOrder}
+                />
+            )}
+
+            {showProductImportModal && (
+                <ProductImportModal
+                    onClose={() => setShowProductImportModal(false)}
+                    onConfirm={handleConfirmImportProducts}
+                    brandDescription={currentAgent?.config?.raw_config?.merchant_name || ''}
+                    fieldSchema={productFieldSchema}
+                />
             )}
 
             {moveFaqModal.open && (
@@ -5271,7 +5454,7 @@ const BackendDashboard = () => {
                                         type="text"
                                         value={modalFieldLabel}
                                         onChange={(e) => setModalFieldLabel(e.target.value)}
-                                        onKeyDown={(e) => { if (e.key === 'Enter') addCustomField(modalFieldLabel); }}
+                                        onKeyDown={(e) => { if (e.key === 'Enter' && !e.nativeEvent.isComposing) { e.preventDefault(); addCustomField(modalFieldLabel); } }}
                                         placeholder="輸入欄位名稱..."
                                         maxLength={20}
                                         className="flex-1 px-3 py-2 border border-slate-200 rounded-lg text-xs focus:ring-2 focus:ring-green-500/20 focus:border-green-500 outline-none transition-all"
