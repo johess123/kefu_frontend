@@ -50,7 +50,7 @@ const SUBAGENT_PILL = {
 const SOURCE_DOT = {
     LINE: 'bg-green-500',
     Telegram: 'bg-blue-500',
-    test: 'bg-slate-400',
+    web: 'bg-slate-400',
     analysis: 'bg-purple-500',
     build: 'bg-indigo-500',
 };
@@ -67,7 +67,7 @@ function deriveCardMeta(log) {
     const productEvt = events.find(e => e.action === 'product_matched');
     const faqEvt = events.find(e => e.action === 'faq_matched');
     const analysisEvt = events.find(e => e.action === 'analysis_completed');
-    const buildEvt = events.find(e => ['faq_generated', 'faq_optimized', 'faq_health_checked', 'website_crawled', 'form_parsed'].includes(e.action));
+    const buildEvt = events.find(e => ['faq_generated', 'faq_optimized', 'faq_health_checked', 'website_crawled', 'form_parsed', 'services_optimized'].includes(e.action));
 
     let agentKey = 'faq_expert';
     let actionType = 'reply';
@@ -82,6 +82,7 @@ function deriveCardMeta(log) {
         else if (buildEvt?.action === 'faq_health_checked') summary = `FAQ 健檢：評分 ${d.score ?? 0} 分，建議 ${d.suggestion_count ?? 0} 則`;
         else if (buildEvt?.action === 'website_crawled') summary = `爬取網站：${d.url || ''}`;
         else if (buildEvt?.action === 'form_parsed') summary = `解析表單：${d.merchant_name || ''}`;
+        else if (buildEvt?.action === 'services_optimized') summary = `優化商家服務內容：${d.business_name || ''}`;
         else summary = '執行 Agent 建置操作';
     } else if (isAnalysis || analysisEvt) {
         agentKey = 'conversation_analyst';
@@ -162,6 +163,10 @@ function buildReasoning(events) {
         } else if (evt.action === 'form_parsed') {
             const d = evt.detail || {};
             lines.push(`解析商家表單，識別商家名稱：${d.merchant_name || ''}。`);
+        } else if (evt.action === 'services_optimized') {
+            const d = evt.detail || {};
+            lines.push(`優化商家服務內容描述。`);
+            if (d.business_name) pills.push({ label: d.business_name, type: 'builder' });
         }
     }
 

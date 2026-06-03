@@ -145,7 +145,7 @@ const AgentHome = () => {
                             className="flex items-center gap-2 bg-brand-600 hover:bg-brand-700 text-white font-semibold py-2 px-4 rounded-xl transition-all shadow-md shadow-brand-100 active:scale-95 text-sm"
                         >
                             <Plus size={16} />
-                            建立新 Agent
+                            建立新團隊
                         </button>
 
                         {/* User Profile Dropdown */}

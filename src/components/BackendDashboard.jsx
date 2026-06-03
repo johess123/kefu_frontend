@@ -420,7 +420,7 @@ const BackendDashboard = () => {
     ]);
     const [playgroundSessionId, setPlaygroundSessionId] = useState(null);
     const [lastResponseInfo, setLastResponseInfo] = useState(null);
-    const [isPlaygroundLoading, setIsPlaygroundLoading] = useState(false);
+    const [playgroundPendingCount, setPlaygroundPendingCount] = useState(0);
     const [playgroundInput, setPlaygroundInput] = useState('');
     const [playgroundLeftTab, setPlaygroundLeftTab] = useState('faq');
     const [playgroundExpandedCats, setPlaygroundExpandedCats] = useState(new Set());
@@ -1120,7 +1120,7 @@ const BackendDashboard = () => {
         const localPreview = playgroundImagePreview;
         setPlaygroundAttachedFile(null);
         setPlaygroundImagePreview('');
-        setIsPlaygroundLoading(true);
+        setPlaygroundPendingCount(c => c + 1);
         setLastResponseInfo(null);
 
         try {
@@ -1145,7 +1145,7 @@ const BackendDashboard = () => {
                 user_name: line_user_name,
                 agent_id: currentAgent._id,
                 session_id: playgroundSessionId,
-                source: 'test',
+                source: 'web',
                 ...(uploadedImageUrl && { image_url: uploadedImageUrl }),
             });
 
@@ -1163,13 +1163,15 @@ const BackendDashboard = () => {
                 storefront_url: storefront_url || '',
             };
 
-            setPlaygroundMessages(prev => [...prev, newMessage]);
-            setLastResponseInfo(newMessage);
+            if (response_text) {
+                setPlaygroundMessages(prev => [...prev, newMessage]);
+                setLastResponseInfo(newMessage);
+            }
         } catch (error) {
             console.error('Playground chat error:', error);
             setPlaygroundMessages(prev => [...prev, { role: 'model', text: '抱歉，發生錯誤，請稍後再試。' }]);
         } finally {
-            setIsPlaygroundLoading(false);
+            setPlaygroundPendingCount(c => Math.max(0, c - 1));
             setPlaygroundImageUploading(false);
         }
     };
@@ -1194,7 +1196,8 @@ const BackendDashboard = () => {
         try {
             const line_user_id = Cookies.get('google_user_id');
             const response = await axios.post(`${config.API_URL}/api/analyze_faqs`, {
-                brandDescription: currentAgent?.config?.raw_config?.services || currentAgent?.name || '',
+                businessName: currentAgent?.config?.raw_config?.merchant_name || currentAgent?.name || '',
+                servicesDescription: currentAgent?.config?.raw_config?.services || '',
                 faqs: editingFaqs.map((f, i) => ({ ...f, id: f.id || i.toString() })),
                 line_user_id: line_user_id,
                 agent_id: currentAgent?._id
@@ -1849,7 +1852,7 @@ const BackendDashboard = () => {
                             className="hidden sm:flex items-center gap-2 bg-brand-600 hover:bg-brand-700 text-white font-semibold py-2 px-4 rounded-xl transition-all shadow-md shadow-brand-100 active:scale-95 text-sm"
                         >
                             <Plus size={16} />
-                            建立新 Agent
+                            建立新團隊
                         </button>
                         <div className="relative hidden sm:block border-l border-slate-100 pl-4 ml-4">
                             <button
@@ -3705,7 +3708,6 @@ const BackendDashboard = () => {
                                                                             <button
                                                                                 key={i}
                                                                                 onClick={() => handlePlaygroundFaqClick(faq.question)}
-                                                                                disabled={isPlaygroundLoading}
                                                                                 className="w-full text-left p-3 rounded-xl border border-slate-100 hover:border-brand-300 hover:bg-brand-50/50 transition-all group mb-2"
                                                                             >
                                                                                 <div className="flex items-start gap-2">
@@ -3731,7 +3733,6 @@ const BackendDashboard = () => {
                                                                 <button
                                                                     key={idx}
                                                                     onClick={() => handlePlaygroundFaqClick(`請問「${product.name}」有什麼特色或詳細資訊？`)}
-                                                                    disabled={isPlaygroundLoading}
                                                                     className="w-full text-left p-4 rounded-2xl border border-slate-100 hover:border-green-300 hover:bg-green-50/50 transition-all group"
                                                                 >
                                                                     <div className="flex items-start gap-2">
@@ -3781,7 +3782,7 @@ const BackendDashboard = () => {
                                                                             onClick={() => setLightboxSrc(msg.imagePreview)}
                                                                         />
                                                                     )}
-                                                                    <div className={`p-4 ${!msg.text && msg.imagePreview ? 'hidden' : ''}`}>
+                                                                    <div className={`p-4 whitespace-pre-wrap ${!msg.text && msg.imagePreview ? 'hidden' : ''}`}>
                                                                         {msg.text}
                                                                         {msg.storefront_url && (
                                                                             <a
@@ -3818,7 +3819,7 @@ const BackendDashboard = () => {
                                                             </div>
                                                         </div>
                                                     ))}
-                                                    {isPlaygroundLoading && (
+                                                    {playgroundPendingCount > 0 && (
                                                         <div className="flex justify-start animate-pulse">
                                                             <div className="flex items-start gap-3">
                                                                 <div className="w-9 h-9 rounded-full bg-brand-600 text-white flex items-center justify-center shadow-sm">
@@ -3872,7 +3873,7 @@ const BackendDashboard = () => {
                                                         {/* 附圖按鈕 */}
                                                         <button
                                                             onClick={() => playgroundFileInputRef.current?.click()}
-                                                            disabled={isPlaygroundLoading}
+                                                            disabled={playgroundPendingCount > 0}
                                                             title="附上圖片"
                                                             className="flex-shrink-0 p-2.5 rounded-xl border border-slate-200 text-slate-400 hover:text-brand-600 hover:border-brand-300 hover:bg-brand-50 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
                                                         >
@@ -3887,17 +3888,16 @@ const BackendDashboard = () => {
                                                                 placeholder={playgroundAttachedFile ? '可選：加入文字說明...' : '輸入測試訊息內容...'}
                                                                 maxLength={100}
                                                                 className="w-full pl-4 pr-24 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500 transition-all text-sm"
-                                                                disabled={isPlaygroundLoading}
                                                             />
                                                             <div className="absolute right-14 top-1/2 -translate-y-1/2 text-[10px] font-medium text-slate-400">
                                                                 {playgroundInput.length}/100
                                                             </div>
                                                             <button
                                                                 onClick={() => handlePlaygroundSend()}
-                                                                disabled={(!playgroundInput.trim() && !playgroundAttachedFile) || isPlaygroundLoading}
+                                                                disabled={!playgroundInput.trim() && !playgroundAttachedFile}
                                                                 className="absolute right-2 top-1/2 -translate-y-1/2 p-2.5 bg-brand-600 text-white rounded-xl hover:bg-brand-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-md shadow-brand-100 active:scale-95"
                                                             >
-                                                                {playgroundImageUploading ? <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" /> : <Send size={20} />}
+                                                                {playgroundImageUploading || playgroundPendingCount > 0 ? <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" /> : <Send size={20} />}
                                                             </button>
                                                         </div>
                                                     </div>

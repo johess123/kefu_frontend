@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import config from '../config';
-import { Loader2, MessageSquare, UserCheck, ArrowRight, Plus, Trash2, Save, CheckCircle, ChevronRight, Edit3, Package } from 'lucide-react';
+import { Loader2, MessageSquare, UserCheck, ArrowRight, Plus, Trash2, Save, CheckCircle, ChevronRight, ChevronDown, Edit3, Package } from 'lucide-react';
 
 import Cookies from 'js-cookie';
 
@@ -11,6 +11,16 @@ const StepReview = ({ onNext, onEdit, formData, setFormData, sessionId, agentId,
     const [selectedFaqIndex, setSelectedFaqIndex] = useState(0);
     const [isEditingFaq, setIsEditingFaq] = useState(false);
     const [editingFaq, setEditingFaq] = useState({ question: '', answer: '' });
+    const [isNewFaq, setIsNewFaq] = useState(false);
+    const [collapsedCategories, setCollapsedCategories] = useState(new Set());
+
+    const toggleCategory = (cat) => {
+        setCollapsedCategories(prev => {
+            const next = new Set(prev);
+            next.has(cat) ? next.delete(cat) : next.add(cat);
+            return next;
+        });
+    };
 
     const handleGenerate = async () => {
         setIsLoading(true);
@@ -21,14 +31,20 @@ const StepReview = ({ onNext, onEdit, formData, setFormData, sessionId, agentId,
                 line_user_id,
                 agent_id: agentId
             });
-            setReviewData(response.data);
-            if (response.data.faqs && response.data.faqs.length > 0) {
-                setSelectedFaqIndex(0);
-                setEditingFaq(response.data.faqs[0]);
+            if (response.data && !response.data.error) {
+                setReviewData(response.data);
+                if (response.data.faqs && response.data.faqs.length > 0) {
+                    setSelectedFaqIndex(0);
+                    setEditingFaq(response.data.faqs[0]);
+                }
+            } else {
+                alert('生成失敗：' + (response.data.error || '未知錯誤'));
+                if (onEdit) onEdit();
             }
         } catch (error) {
             console.error('Error generating data:', error);
             alert('生成失敗，請稍後再試');
+            if (onEdit) onEdit();
         } finally {
             setIsLoading(false);
         }
@@ -81,16 +97,20 @@ const StepReview = ({ onNext, onEdit, formData, setFormData, sessionId, agentId,
         setSelectedFaqIndex(index);
         setEditingFaq(reviewData.faqs[index]);
         setIsEditingFaq(false);
+        setIsNewFaq(false);
     };
 
-    const handleAddFaq = () => {
-        const newFaq = { id: Date.now().toString(), question: '', answer: '', category: '' };
+    const handleAddFaq = (category = null) => {
+        const defaultCat = category ||
+            (reviewData.faqs.length > 0 ? (reviewData.faqs[reviewData.faqs.length - 1].category || '常見問題') : '常見問題');
+        const newFaq = { id: Date.now().toString(), question: '', answer: '', category: defaultCat };
         const newFaqs = [...reviewData.faqs, newFaq];
         setReviewData({ ...reviewData, faqs: newFaqs });
-        setFormData(prev => ({ ...prev, faqs: newFaqs })); // Sync to global state
+        setFormData(prev => ({ ...prev, faqs: newFaqs }));
         setSelectedFaqIndex(newFaqs.length - 1);
         setEditingFaq(newFaq);
         setIsEditingFaq(true);
+        setIsNewFaq(true);
     };
 
     const handleDeleteFaq = (index) => {
@@ -107,14 +127,28 @@ const StepReview = ({ onNext, onEdit, formData, setFormData, sessionId, agentId,
     };
 
     const handleSaveFaq = () => {
-        if (editingFaq.question.length > 50 || editingFaq.answer.length > 200) {
-            alert('內容超過字數限制 (問題 50 字，回答 200 字)');
+        if (editingFaq.question.length > 100 || editingFaq.answer.length > 500) {
+            alert('內容超過字數限制 (問題 100 字，回答 500 字)');
             return;
         }
         const newFaqs = [...reviewData.faqs];
         newFaqs[selectedFaqIndex] = editingFaq;
         setReviewData({ ...reviewData, faqs: newFaqs });
-        setFormData(prev => ({ ...prev, faqs: newFaqs })); // Sync to global state
+        setFormData(prev => ({ ...prev, faqs: newFaqs }));
+        setIsEditingFaq(false);
+        setIsNewFaq(false);
+    };
+
+    const handleCancelEdit = () => {
+        if (isNewFaq) {
+            const newFaqs = reviewData.faqs.filter((_, i) => i !== selectedFaqIndex);
+            setReviewData({ ...reviewData, faqs: newFaqs });
+            setFormData(prev => ({ ...prev, faqs: newFaqs }));
+            const nextIndex = Math.max(0, selectedFaqIndex - 1);
+            setSelectedFaqIndex(nextIndex);
+            if (newFaqs.length > 0) setEditingFaq(newFaqs[nextIndex]);
+            setIsNewFaq(false);
+        }
         setIsEditingFaq(false);
     };
 
@@ -145,32 +179,72 @@ const StepReview = ({ onNext, onEdit, formData, setFormData, sessionId, agentId,
                             FAQ 列表
                         </h3>
                         <button
-                            onClick={handleAddFaq}
+                            onClick={() => handleAddFaq()}
                             className="p-1.5 hover:bg-brand-100 text-brand-600 rounded-lg transition-colors border border-brand-200"
                         >
                             <Plus size={16} />
                         </button>
                     </div>
-                    <div className="flex-1 overflow-y-auto p-2 space-y-1">
-                        {reviewData.faqs.map((faq, idx) => (
-                            <button
-                                key={idx}
-                                onClick={() => handleSelectFaq(idx)}
-                                className={`w-full text-left p-3 rounded-xl transition-all group ${selectedFaqIndex === idx
-                                    ? 'bg-brand-50 border-brand-200 border shadow-sm'
-                                    : 'hover:bg-slate-50 border-transparent border'
-                                    }`}
-                            >
-                                <div className="flex items-start gap-3">
-                                    <span className={`text-[10px] font-black mt-1 ${selectedFaqIndex === idx ? 'text-brand-600' : 'text-slate-400'}`}>
-                                        {String(idx + 1).padStart(2, '0')}
-                                    </span>
-                                    <p className={`text-sm font-medium line-clamp-2 ${selectedFaqIndex === idx ? 'text-brand-900' : 'text-slate-600 group-hover:text-slate-900'}`}>
-                                        {faq.question}
-                                    </p>
-                                </div>
-                            </button>
-                        ))}
+                    <div className="flex-1 overflow-y-auto p-2 space-y-3">
+                        {(() => {
+                            const grouped = {};
+                            const catOrder = [];
+                            reviewData.faqs.forEach((faq, idx) => {
+                                const cat = faq.category || '常見問題';
+                                if (!grouped[cat]) { grouped[cat] = []; catOrder.push(cat); }
+                                grouped[cat].push({ faq, idx });
+                            });
+                            return catOrder.map(cat => {
+                                const isCollapsed = collapsedCategories.has(cat);
+                                return (
+                                    <div key={cat}>
+                                        <div
+                                            className="flex items-center justify-between px-2 py-2 cursor-pointer hover:bg-slate-50 rounded-lg transition-colors select-none"
+                                            onClick={() => toggleCategory(cat)}
+                                        >
+                                            <div className="flex items-center gap-1.5 min-w-0">
+                                                {isCollapsed
+                                                    ? <ChevronRight size={14} className="text-slate-500 flex-shrink-0" />
+                                                    : <ChevronDown size={14} className="text-slate-500 flex-shrink-0" />
+                                                }
+                                                <span className="text-sm font-bold text-slate-700 truncate">{cat}</span>
+                                                <span className="text-[10px] text-slate-400 flex-shrink-0">({grouped[cat].length})</span>
+                                            </div>
+                                            <button
+                                                onClick={(e) => { e.stopPropagation(); handleAddFaq(cat); }}
+                                                className="p-0.5 hover:text-brand-600 text-slate-400 rounded transition-colors flex-shrink-0"
+                                                title={`在「${cat}」新增 FAQ`}
+                                            >
+                                                <Plus size={13} />
+                                            </button>
+                                        </div>
+                                        {!isCollapsed && (
+                                            <div className="space-y-1 mt-1">
+                                                {grouped[cat].map(({ faq, idx }) => (
+                                                    <button
+                                                        key={idx}
+                                                        onClick={() => handleSelectFaq(idx)}
+                                                        className={`w-full text-left p-3 rounded-xl transition-all group ${selectedFaqIndex === idx
+                                                            ? 'bg-brand-50 border-brand-200 border shadow-sm'
+                                                            : 'hover:bg-slate-50 border-transparent border'
+                                                            }`}
+                                                    >
+                                                        <div className="flex items-start gap-3">
+                                                            <span className={`text-[10px] font-black mt-1 flex-shrink-0 ${selectedFaqIndex === idx ? 'text-brand-600' : 'text-slate-400'}`}>
+                                                                {String(idx + 1).padStart(2, '0')}
+                                                            </span>
+                                                            <p className={`text-sm font-medium line-clamp-2 ${selectedFaqIndex === idx ? 'text-brand-900' : 'text-slate-600 group-hover:text-slate-900'}`}>
+                                                                {faq.question || <span className="text-slate-300 italic font-normal">未填寫...</span>}
+                                                            </p>
+                                                        </div>
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+                                );
+                            });
+                        })()}
                     </div>
                 </div>
 
@@ -185,7 +259,7 @@ const StepReview = ({ onNext, onEdit, formData, setFormData, sessionId, agentId,
                             {isEditingFaq ? (
                                 <>
                                     <button
-                                        onClick={() => setIsEditingFaq(false)}
+                                        onClick={handleCancelEdit}
                                         className="text-xs px-3 py-1.5 text-slate-500 hover:bg-slate-100 rounded-lg transition-colors"
                                     >
                                         取消
@@ -217,16 +291,47 @@ const StepReview = ({ onNext, onEdit, formData, setFormData, sessionId, agentId,
                     </div>
                     <div className="flex-1 overflow-y-auto p-8 space-y-6">
                         <div>
+                            <label className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 block">所屬分類</label>
+                            {isEditingFaq ? (
+                                <>
+                                    <input
+                                        value={editingFaq.category ?? ''}
+                                        onChange={(e) => setEditingFaq({ ...editingFaq, category: e.target.value })}
+                                        className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-brand-500 outline-none text-slate-700 text-sm"
+                                        placeholder="輸入分類名稱"
+                                    />
+                                    {[...new Set(reviewData.faqs.map(f => f.category || '常見問題'))].length > 0 && (
+                                        <div className="flex flex-wrap gap-1.5 mt-2">
+                                            {[...new Set(reviewData.faqs.map(f => f.category || '常見問題'))].map(cat => (
+                                                <button
+                                                    key={cat}
+                                                    type="button"
+                                                    onClick={() => setEditingFaq({ ...editingFaq, category: cat })}
+                                                    className={`px-2.5 py-1 text-xs rounded-full border transition-colors ${(editingFaq.category ?? '') === cat ? 'bg-brand-100 border-brand-300 text-brand-700 font-bold' : 'bg-slate-100 border-slate-200 text-slate-500 hover:bg-brand-50 hover:border-brand-200 hover:text-brand-600'}`}
+                                                >
+                                                    {cat}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    )}
+                                </>
+                            ) : (
+                                <span className="inline-block px-3 py-1 bg-brand-50 text-brand-600 text-xs font-bold rounded-full border border-brand-100">
+                                    {currentFaq?.category || '常見問題'}
+                                </span>
+                            )}
+                        </div>
+                        <div>
                             <label className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 block">使用者可能問的問題</label>
                             {isEditingFaq ? (
                                 <div className="relative">
                                     <textarea
                                         value={editingFaq.question}
-                                        maxLength={50}
+                                        maxLength={100}
                                         onChange={(e) => setEditingFaq({ ...editingFaq, question: e.target.value })}
                                         className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-brand-500 outline-none text-slate-800 font-bold min-h-[100px]"
                                     />
-                                    <div className="text-[10px] text-slate-300 text-right pr-2 mt-1">{editingFaq.question.length}/50</div>
+                                    <div className="text-[10px] text-slate-300 text-right pr-2 mt-1">{editingFaq.question.length}/100</div>
                                 </div>
                             ) : (
                                 <div className="p-4 bg-slate-50 rounded-xl border border-slate-100 text-slate-800 font-bold text-lg leading-relaxed">
