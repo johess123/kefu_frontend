@@ -142,8 +142,14 @@ const StepWizard = ({ formData, setFormData, agentId, onComplete }) => {
             setUrlError('');
             return true;
         }
-        if (!url.startsWith('https://')) {
-            setUrlError('網址必須以 https:// 開頭');
+        try {
+            const parsed = new URL(url);
+            if (parsed.protocol !== 'https:') {
+                setUrlError('網址必須以 https:// 開頭');
+                return false;
+            }
+        } catch {
+            setUrlError('請輸入有效的網址格式（例如：https://example.com）');
             return false;
         }
         setUrlError('');
@@ -714,7 +720,7 @@ const StepWizard = ({ formData, setFormData, agentId, onComplete }) => {
                                     value={wizardNewCategoryName}
                                     maxLength={FAQ_MAX_CATEGORY}
                                     onChange={(e) => setWizardNewCategoryName(e.target.value)}
-                                    onKeyDown={(e) => e.key === 'Enter' && confirmWizardAddCategory()}
+                                    onKeyDown={(e) => e.key === 'Enter' && !e.nativeEvent.isComposing && confirmWizardAddCategory()}
                                     placeholder="例如：訂購規範與流程"
                                     autoFocus
                                     className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-slate-800 font-bold text-sm focus:ring-2 focus:ring-brand-500/10 focus:border-brand-500 outline-none"
@@ -868,7 +874,7 @@ const StepWizard = ({ formData, setFormData, agentId, onComplete }) => {
                                     type="text"
                                     value={newFieldLabel}
                                     onChange={(e) => setNewFieldLabel(e.target.value)}
-                                    onKeyDown={(e) => { if (e.key === 'Enter') addCustomField(newFieldLabel); if (e.key === 'Escape') { setSchemaInputVisible(false); setNewFieldLabel(''); } }}
+                                    onKeyDown={(e) => { if (e.key === 'Enter' && !e.nativeEvent.isComposing) addCustomField(newFieldLabel); if (e.key === 'Escape') { setSchemaInputVisible(false); setNewFieldLabel(''); } }}
                                     placeholder="欄位名稱"
                                     maxLength={20}
                                     className="w-24 px-2 py-1 border border-green-300 rounded-full text-xs focus:outline-none focus:border-green-500"

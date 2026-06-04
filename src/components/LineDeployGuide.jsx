@@ -197,6 +197,7 @@ const LineDeployGuide = ({ onClose, lineConfig, setLineConfig }) => {
                                                 value={lineConfig.accessToken}
                                                 onChange={(e) => setLineConfig({ ...lineConfig, accessToken: e.target.value })}
                                                 placeholder="貼上您的 Channel Access Token"
+                                                maxLength={512}
                                                 className="w-full bg-transparent border-none outline-none text-slate-600 placeholder:text-slate-400 text-sm font-medium font-mono min-h-[100px] resize-none"
                                             />
                                         </div>

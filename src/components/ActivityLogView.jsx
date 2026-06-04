@@ -384,6 +384,7 @@ const ActivityLogView = ({ agentId, userId }) => {
                         placeholder="搜尋 Session ID、客戶訊息或內容..."
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
+                        maxLength={200}
                         className="w-full text-sm border border-slate-200 rounded-lg pl-9 pr-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-slate-200"
                     />
                 </div>

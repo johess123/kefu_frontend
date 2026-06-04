@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { ArrowRight, ExternalLink, Globe, MessageCircle, Package, Store, X } from 'lucide-react';
 import config from '../config';
+import { safeUrl } from '../utils/urlUtils';
 
 const PLACEHOLDER_GRADIENTS = [
     'linear-gradient(135deg, #F4E3D2 0%, #EBC7A6 100%)',
@@ -239,7 +240,7 @@ const StorefrontPage = () => {
                                         <div className="mt-6 flex flex-wrap gap-3">
                                             {store.contact_line_url ? (
                                                 <a
-                                                    href={store.contact_line_url}
+                                                    href={safeUrl(store.contact_line_url)}
                                                     target="_blank"
                                                     rel="noreferrer"
                                                     className={`storefront-button inline-flex items-center gap-2 rounded-full px-5 py-3 text-sm font-semibold cursor-pointer ${
@@ -254,7 +255,7 @@ const StorefrontPage = () => {
                                             ) : null}
                                             {store.website_url ? (
                                                 <a
-                                                    href={store.website_url}
+                                                    href={safeUrl(store.website_url)}
                                                     target="_blank"
                                                     rel="noreferrer"
                                                     className={`storefront-button inline-flex items-center gap-2 rounded-full border px-5 py-3 text-sm font-medium cursor-pointer ${

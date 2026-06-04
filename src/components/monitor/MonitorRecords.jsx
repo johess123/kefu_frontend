@@ -95,7 +95,7 @@ const MonitorRecords = () => {
                         placeholder="搜尋 Admin ID 或名稱..."
                         value={adminQuery}
                         onChange={e => setAdminQuery(e.target.value)}
-                        onKeyDown={e => { if (e.key === 'Enter') handleSearch(); }}
+                        onKeyDown={e => { if (e.key === 'Enter' && !e.nativeEvent.isComposing) handleSearch(); }}
                     />
                     <select value={usageType} onChange={e => { setUsageType(e.target.value); setCurrentPage(1); }}>
                         <option value="全部">全部類別</option>

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import config from '../config';
+import { FAQ_MAX_QUESTION, FAQ_MAX_ANSWER, FAQ_MAX_CATEGORY } from '../utils/faqUtils';
 import {
     BarChart2,
     Loader2,
@@ -610,6 +611,7 @@ const ConversationAnalystView = ({ agentId, adminId, onFaqUpdated, faqCategories
                                                         <input
                                                             value={editForm.question}
                                                             onChange={(e) => setEditForm({ ...editForm, question: e.target.value })}
+                                                            maxLength={FAQ_MAX_QUESTION}
                                                             className="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-purple-200"
                                                         />
                                                     </div>
@@ -619,6 +621,7 @@ const ConversationAnalystView = ({ agentId, adminId, onFaqUpdated, faqCategories
                                                             value={editForm.answer}
                                                             onChange={(e) => setEditForm({ ...editForm, answer: e.target.value })}
                                                             rows={4}
+                                                            maxLength={FAQ_MAX_ANSWER}
                                                             className="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-purple-200 resize-none"
                                                         />
                                                     </div>
@@ -731,6 +734,7 @@ const ConversationAnalystView = ({ agentId, adminId, onFaqUpdated, faqCategories
                                         value={addFaqModal.category}
                                         onChange={(e) => setAddFaqModal(prev => ({ ...prev, category: e.target.value }))}
                                         placeholder="輸入新分類名稱"
+                                        maxLength={FAQ_MAX_CATEGORY}
                                         className="mt-2 w-full px-4 py-2.5 border border-purple-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-purple-200"
                                     />
                                 )}
