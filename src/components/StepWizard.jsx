@@ -1,10 +1,14 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Bot, ArrowLeft, ArrowRight, Trash2, Plus, CheckCircle2, Globe, Sparkles, Loader2, AlertCircle, Stethoscope, RotateCcw, Upload, Package, FileSpreadsheet, X, ChevronDown, ChevronRight, GripVertical, FolderInput } from 'lucide-react';
 import axios from 'axios';
 import Cookies from 'js-cookie';
 import config from '../config';
 import { ToneType, TONE_PROMPTS, DEFAULT_HANDOFF_OPTIONS } from '../types';
 import ConfirmDialog from './ConfirmDialog';
+import FaqImportModal from './FaqImportModal';
+import FaqAddModal from './FaqAddModal';
+import ProductImportModal from './ProductImportModal';
+import { FAQ_MAX_QUESTION, FAQ_MAX_ANSWER, FAQ_MAX_COUNT, FAQ_MAX_CATEGORY, getDefaultFaqCategory, validateFaqsForSave, validateFaqsForAnalyze, validateFaqItemForOptimize } from '../utils/faqUtils';
 
 const StepWizard = ({ formData, setFormData, agentId, onComplete }) => {
     const [qIndex, setQIndex] = useState(0);
@@ -15,18 +19,11 @@ const StepWizard = ({ formData, setFormData, agentId, onComplete }) => {
     const [isOptimizingServices, setIsOptimizingServices] = useState(false);
     const [analysisReport, setAnalysisReport] = useState(null);
     const [uploadingFaqId, setUploadingFaqId] = useState(null);
-    const [isParsingProducts, setIsParsingProducts] = useState(false);
-    const [productFileName, setProductFileName] = useState('');
-    const productFileRef = useRef(null);
+    const [showWizardProductImportModal, setShowWizardProductImportModal] = useState(false);
     const [expandedCategories, setExpandedCategories] = useState(new Set(['常見問題']));
     const [newFieldLabel, setNewFieldLabel] = useState('');
     const [schemaInputVisible, setSchemaInputVisible] = useState(false);
     const [showWizardFaqImportModal, setShowWizardFaqImportModal] = useState(false);
-    const [wizardFaqImportTab, setWizardFaqImportTab] = useState('file');
-    const [wizardFaqImportText, setWizardFaqImportText] = useState('');
-    const wizardFaqImportFileRef = useRef(null);
-    const [isParsingWizardFaqs, setIsParsingWizardFaqs] = useState(false);
-    const [parsedWizardFaqPreview, setParsedWizardFaqPreview] = useState(null);
     const [wizardCategoryOrder, setWizardCategoryOrder] = useState(['常見問題']);
     const [wizardDraggedCat, setWizardDraggedCat] = useState(null);
     const [wizardDragOverCat, setWizardDragOverCat] = useState(null);
@@ -36,6 +33,9 @@ const StepWizard = ({ formData, setFormData, agentId, onComplete }) => {
 
     const showAlert = (message) => setAlertDialog({ open: true, message });
     const closeAlert = () => setAlertDialog({ open: false, message: '' });
+    const [wizardAddFaqModal, setWizardAddFaqModal] = useState({ open: false, category: '', categoryFixed: false });
+    const [showWizardCategoryModal, setShowWizardCategoryModal] = useState(false);
+    const [wizardNewCategoryName, setWizardNewCategoryName] = useState('');
 
     useEffect(() => {
         const allCats = [...new Set((formData.faqs || []).map(f => f.category || '常見問題'))];
@@ -77,27 +77,8 @@ const StepWizard = ({ formData, setFormData, agentId, onComplete }) => {
         }
 
         if (qIndex === 2) {
-            // 過濾掉全空的 FAQ 組
-            const cleanedFaqs = formData.faqs.filter(f => f.question.trim() !== '' || f.answer.trim() !== '');
-
-            if (cleanedFaqs.length === 0) {
-                showAlert('請至少新增一組 FAQ 並填寫內容');
-                return;
-            }
-
-            // 檢查是否有半殘的 FAQ (只有 Q 或只有 A) 以及字數限制
-            const hasIncomplete = cleanedFaqs.some(f => !f.question.trim() || !f.answer.trim());
-            if (hasIncomplete) {
-                showAlert('請填寫所有 FAQ 的問題與回答，或是刪除未填寫完整的組別');
-                return;
-            }
-
-            const tooLong = cleanedFaqs.some(f => f.question.length > 100 || f.answer.length > 500);
-            if (tooLong) {
-                showAlert('部分內容超過字數限制 (問題 100 字，回答 500 字)');
-                return;
-            }
-
+            const { error, cleaned: cleanedFaqs } = validateFaqsForSave(formData.faqs);
+            if (error) { showAlert(error); return; }
             setFormData(prev => ({ ...prev, faqs: cleanedFaqs }));
         }
 
@@ -296,13 +277,10 @@ const StepWizard = ({ formData, setFormData, agentId, onComplete }) => {
     );
 
     const renderQ3 = () => {
-        const addFAQ = (category = '') => {
-            const cat = category || (formData.faqs.length > 0 ? (formData.faqs[formData.faqs.length - 1].category || '常見問題') : '常見問題');
-            const newId = Date.now().toString();
-            const newFAQ = { id: newId, question: '', answer: '', image_id: '', category: cat };
-            updateField('faqs', [...formData.faqs, newFAQ]);
-            setExpandedCategories(prev => new Set([...prev, cat]));
-            setWizardExpandedFaqItems(prev => new Set([...prev, newId]));
+        const addFAQ = (category = '', fixed = false) => {
+            if (formData.faqs.length >= FAQ_MAX_COUNT) { showAlert(`FAQ 問答已達 ${FAQ_MAX_COUNT} 組上限`); return; }
+            const cat = category || getDefaultFaqCategory(formData.faqs);
+            setWizardAddFaqModal({ open: true, category: cat, categoryFixed: fixed });
         };
 
         const renameCategory = (oldName, newName) => {
@@ -332,15 +310,20 @@ const StepWizard = ({ formData, setFormData, agentId, onComplete }) => {
         };
 
         const addNewCategory = () => {
-            const name = window.prompt('請輸入新分類名稱：');
-            if (!name || !name.trim()) return;
-            const trimmed = name.trim();
+            setWizardNewCategoryName('');
+            setShowWizardCategoryModal(true);
+        };
+
+        const confirmWizardAddCategory = () => {
+            const trimmed = wizardNewCategoryName.trim();
+            if (!trimmed) return;
             const newId = Date.now().toString();
             const newFAQ = { id: newId, question: '', answer: '', image_id: '', category: trimmed };
             updateField('faqs', [...formData.faqs, newFAQ]);
             setExpandedCategories(prev => new Set([...prev, trimmed]));
             setWizardCategoryOrder(prev => prev.includes(trimmed) ? prev : [...prev, trimmed]);
             setWizardExpandedFaqItems(prev => new Set([...prev, newId]));
+            setShowWizardCategoryModal(false);
         };
 
         const toggleWizardFaqItem = (id) =>
@@ -399,14 +382,8 @@ const StepWizard = ({ formData, setFormData, agentId, onComplete }) => {
 
         const handleOptimizeFaq = async (faqId) => {
             const faq = formData.faqs.find(f => f.id === faqId);
-            if (!faq.question.trim() || !faq.answer.trim()) {
-                showAlert('請先輸入完整的問題與回答內容才能進行優化');
-                return;
-            }
-            if (faq.question.length > 100 || faq.answer.length > 500) {
-                showAlert('內容超過字數限制 (問題 100 字，回答 500 字)');
-                return;
-            }
+            const optError = validateFaqItemForOptimize(faq);
+            if (optError) { showAlert(optError); return; }
 
             setOptimizingFaqIds(prev => new Set(prev).add(faqId));
             try {
@@ -439,22 +416,8 @@ const StepWizard = ({ formData, setFormData, agentId, onComplete }) => {
         };
 
         const handleAnalyzeFaqs = async () => {
-            if (formData.faqs.length === 0) {
-                showAlert('請先新增問答組');
-                return;
-            }
-
-            const hasIncomplete = formData.faqs.some(f => !f.question.trim() || !f.answer.trim());
-            if (hasIncomplete) {
-                showAlert('請填寫所有 FAQ 的問題與回答，再進行健檢');
-                return;
-            }
-
-            const tooLong = formData.faqs.some(f => f.question.length > 100 || f.answer.length > 500);
-            if (tooLong) {
-                showAlert('部分內容超過字數限制 (問題 100 字，回答 500 字)');
-                return;
-            }
+            const analyzeError = validateFaqsForAnalyze(formData.faqs);
+            if (analyzeError) { showAlert(analyzeError); return; }
 
             if (!formData.businessName.trim() || !formData.servicesDescription.trim()) {
                 showAlert('請先填寫第一題的商家名稱與服務內容');
@@ -498,68 +461,15 @@ const StepWizard = ({ formData, setFormData, agentId, onComplete }) => {
             }
         };
 
-        const handleWizardImportFaqs = async (source) => {
-            setIsParsingWizardFaqs(true);
-            try {
-                const fd = new FormData();
-                fd.append('brandDescription', formData.brandDescription || '');
-                fd.append('line_user_id', Cookies.get('google_user_id') || '');
-                if (source === 'file') {
-                    const file = wizardFaqImportFileRef.current?.files?.[0];
-                    if (!file) { showAlert('請選擇檔案'); setIsParsingWizardFaqs(false); return; }
-                    if (file.size > 512 * 1024) { showAlert('檔案大小不得超過 500KB'); setIsParsingWizardFaqs(false); return; }
-                    const ext = file.name.toLowerCase().split('.').pop();
-                    if (!['xlsx', 'csv'].includes(ext)) { showAlert('僅支援 .xlsx 或 .csv 格式'); setIsParsingWizardFaqs(false); return; }
-                    fd.append('file', file);
-                } else {
-                    if (!wizardFaqImportText.trim()) { showAlert('請貼上 FAQ 文字內容'); setIsParsingWizardFaqs(false); return; }
-                    fd.append('text', wizardFaqImportText);
-                }
-                const res = await axios.post(`${config.API_URL}/api/parse_faqs`, fd, {
-                    headers: { 'Content-Type': 'multipart/form-data' }
-                });
-                if (res.data.error) {
-                    showAlert('解析失敗：' + res.data.error);
-                } else if (res.data.faqs) {
-                    setParsedWizardFaqPreview(res.data.faqs);
-                    if (wizardFaqImportFileRef.current) wizardFaqImportFileRef.current.value = '';
-                }
-            } catch (err) {
-                console.error('FAQ import failed:', err);
-                showAlert('解析失敗，請稍後再試');
-            } finally {
-                setIsParsingWizardFaqs(false);
-            }
-        };
-
-        const handleConfirmWizardImportFaqs = () => {
-            if (!parsedWizardFaqPreview?.length) return;
-            const newFaqs = parsedWizardFaqPreview.map(f => ({
-                id: Math.random().toString(36).substr(2, 9),
-                question: f.question,
-                answer: f.answer,
-                image_id: '',
-                category: f.category || '常見問題',
-            }));
-            updateField('faqs', [...formData.faqs, ...newFaqs]);
-            const newCats = new Set(newFaqs.map(f => f.category));
+        const handleConfirmWizardImportFaqs = (newFaqs) => {
+            const remaining = FAQ_MAX_COUNT - formData.faqs.length;
+            if (remaining <= 0) { showAlert(`FAQ 問答已達 ${FAQ_MAX_COUNT} 組上限`); return; }
+            const toAdd = newFaqs.slice(0, remaining);
+            if (toAdd.length < newFaqs.length) showAlert(`已達 ${FAQ_MAX_COUNT} 組上限，僅新增 ${toAdd.length} 組`);
+            updateField('faqs', [...formData.faqs, ...toAdd]);
+            const newCats = new Set(toAdd.map(f => f.category));
             setExpandedCategories(prev => new Set([...prev, ...newCats]));
-            setShowWizardFaqImportModal(false);
-            setParsedWizardFaqPreview(null);
-            setWizardFaqImportText('');
-            setWizardFaqImportTab('file');
         };
-
-        const updateWizardPreviewFaq = (i, field, val) =>
-            setParsedWizardFaqPreview(prev => prev.map((f, idx) => idx === i ? { ...f, [field]: val } : f));
-
-        const removeWizardPreviewFaq = (i) =>
-            setParsedWizardFaqPreview(prev => prev.filter((_, idx) => idx !== i));
-
-        const availableWizardCategories = [...new Set([
-            ...[...new Set(formData.faqs.map(f => f.category || '常見問題'))],
-            ...(parsedWizardFaqPreview || []).map(f => f.category || '常見問題')
-        ])];
 
         return (
             <div className="space-y-4">
@@ -579,7 +489,7 @@ const StepWizard = ({ formData, setFormData, agentId, onComplete }) => {
                             {isAnalyzing ? <Loader2 size={16} className="text-blue-500 animate-spin" /> : <Stethoscope size={16} className="text-blue-500" />}
                             <span className="hidden sm:inline">AI 智能健檢</span>
                         </button>
-                        <button onClick={() => { setShowWizardFaqImportModal(true); setParsedWizardFaqPreview(null); setWizardFaqImportText(''); setWizardFaqImportTab('file'); }}
+                        <button onClick={() => setShowWizardFaqImportModal(true)}
                             className="flex items-center gap-2 px-3 py-2 bg-white border border-slate-200 text-slate-600 rounded-xl text-sm font-bold hover:bg-slate-50 transition-all shadow-sm">
                             <Upload size={16} className="text-brand-500" />
                             <span className="hidden sm:inline">匯入 FAQ</span>
@@ -649,11 +559,11 @@ const StepWizard = ({ formData, setFormData, agentId, onComplete }) => {
                                         <div className="px-4 pb-5 pt-3 space-y-4 border-t border-slate-100 bg-white">
                                             <div>
                                                 <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Question</div>
-                                                <input type="text" value={faq.question} maxLength={100}
+                                                <input type="text" value={faq.question} maxLength={FAQ_MAX_QUESTION}
                                                     onChange={(e) => updateFAQ(faq.id, 'question', e.target.value)}
                                                     placeholder="輸入常見問題..."
                                                     className="w-full bg-transparent text-base font-bold text-slate-800 placeholder:text-slate-300 outline-none p-0" />
-                                                <div className="text-[10px] text-slate-300 text-right mt-1">{faq.question?.length || 0}/100</div>
+                                                <div className="text-[10px] text-slate-300 text-right mt-1">{faq.question?.length || 0}/{FAQ_MAX_QUESTION}</div>
                                             </div>
                                             {analysisReport && analysisReport.suggestions.find(s => s.id === faq.id) && (
                                                 <div className="ml-2 p-3 bg-amber-50 border border-amber-100 rounded-xl">
@@ -673,11 +583,11 @@ const StepWizard = ({ formData, setFormData, agentId, onComplete }) => {
                                             )}
                                             <div>
                                                 <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Answer</div>
-                                                <textarea value={faq.answer} maxLength={500} rows={3}
+                                                <textarea value={faq.answer} maxLength={FAQ_MAX_ANSWER} rows={3}
                                                     onChange={(e) => updateFAQ(faq.id, 'answer', e.target.value)}
                                                     placeholder="輸入回覆內容..."
                                                     className="w-full bg-white border border-slate-200 rounded-xl p-4 text-slate-600 text-sm leading-relaxed focus:ring-2 focus:ring-brand-500/10 focus:border-brand-500 outline-none transition-all shadow-inner resize-none" />
-                                                <div className="text-[10px] text-slate-300 text-right mt-1">{faq.answer?.length || 0}/500</div>
+                                                <div className="text-[10px] text-slate-300 text-right mt-1">{faq.answer?.length || 0}/{FAQ_MAX_ANSWER}</div>
                                             </div>
                                             <div>
                                                 <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Image <span className="text-slate-300 font-normal">(選填)</span></div>
@@ -752,12 +662,13 @@ const StepWizard = ({ formData, setFormData, agentId, onComplete }) => {
                                         <input
                                             type="text"
                                             value={cat}
+                                            maxLength={FAQ_MAX_CATEGORY}
                                             onChange={(e) => renameCategory(cat, e.target.value)}
                                             onClick={(e) => e.stopPropagation()}
                                             className="flex-1 bg-transparent font-bold text-slate-700 text-sm focus:outline-none focus:border-b focus:border-brand-400 min-w-0"
                                         />
                                         <span className="text-xs text-slate-400 flex-shrink-0">{catFaqs.length} 組</span>
-                                        <button onClick={(e) => { e.stopPropagation(); addFAQ(cat); }} className="text-slate-400 hover:text-brand-600 p-1 flex-shrink-0" title="新增此分類 FAQ"><Plus size={14} /></button>
+                                        <button onClick={(e) => { e.stopPropagation(); addFAQ(cat, true); }} className="text-slate-400 hover:text-brand-600 p-1 flex-shrink-0" title="新增此分類 FAQ"><Plus size={14} /></button>
                                         <button onClick={(e) => { e.stopPropagation(); deleteCategory(cat); }} className="text-slate-400 hover:text-red-500 p-1 flex-shrink-0" title="刪除此分類"><Trash2 size={14} /></button>
                                     </div>
                                     {isExpanded && (
@@ -778,111 +689,48 @@ const StepWizard = ({ formData, setFormData, agentId, onComplete }) => {
                 )}
 
                 {showWizardFaqImportModal && (
-                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setShowWizardFaqImportModal(false)}>
-                        <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
-                        <div className="relative bg-white rounded-2xl shadow-xl w-full max-w-lg flex flex-col max-h-[85vh]" onClick={(e) => e.stopPropagation()}>
-                            <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-slate-100 flex-shrink-0">
-                                <div>
-                                    <h3 className="text-base font-bold text-slate-800">匯入 FAQ</h3>
-                                    <p className="text-xs text-slate-400 mt-0.5">AI 自動解析並整理為知識庫格式</p>
-                                </div>
-                                <button onClick={() => setShowWizardFaqImportModal(false)} className="p-1 text-slate-400 hover:text-slate-600 transition-colors"><X size={16} /></button>
+                    <FaqImportModal
+                        onClose={() => setShowWizardFaqImportModal(false)}
+                        onConfirm={handleConfirmWizardImportFaqs}
+                        brandDescription={formData.brandDescription || ''}
+                        existingCategories={[...new Set(formData.faqs.map(f => f.category || '常見問題'))]}
+                    />
+                )}
+
+                {showWizardCategoryModal && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setShowWizardCategoryModal(false)}>
+                        <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" />
+                        <div className="relative bg-white w-full max-w-sm rounded-[28px] overflow-hidden shadow-2xl" onClick={(e) => e.stopPropagation()}>
+                            <div className="p-6 border-b border-slate-100 flex items-center justify-between">
+                                <h2 className="text-lg font-bold text-slate-800">新增分類</h2>
+                                <button onClick={() => setShowWizardCategoryModal(false)} className="w-8 h-8 flex items-center justify-center text-slate-400 hover:text-slate-600 hover:bg-slate-50 rounded-full">
+                                    <X size={18} />
+                                </button>
                             </div>
-                            <div className="flex border-b border-slate-100 flex-shrink-0">
-                                <button onClick={() => { setWizardFaqImportTab('file'); setParsedWizardFaqPreview(null); }} className={`flex-1 py-3 text-sm font-semibold transition-colors ${wizardFaqImportTab === 'file' ? 'text-brand-600 border-b-2 border-brand-500' : 'text-slate-400 hover:text-slate-600'}`}>上傳檔案</button>
-                                <button onClick={() => { setWizardFaqImportTab('text'); setParsedWizardFaqPreview(null); }} className={`flex-1 py-3 text-sm font-semibold transition-colors ${wizardFaqImportTab === 'text' ? 'text-brand-600 border-b-2 border-brand-500' : 'text-slate-400 hover:text-slate-600'}`}>貼上文字</button>
+                            <div className="p-6">
+                                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 block mb-2">分類名稱</label>
+                                <input
+                                    type="text"
+                                    value={wizardNewCategoryName}
+                                    maxLength={FAQ_MAX_CATEGORY}
+                                    onChange={(e) => setWizardNewCategoryName(e.target.value)}
+                                    onKeyDown={(e) => e.key === 'Enter' && confirmWizardAddCategory()}
+                                    placeholder="例如：訂購規範與流程"
+                                    autoFocus
+                                    className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 text-slate-800 font-bold text-sm focus:ring-2 focus:ring-brand-500/10 focus:border-brand-500 outline-none"
+                                />
+                                <div className="text-[10px] text-slate-300 text-right mt-1">{wizardNewCategoryName.length}/{FAQ_MAX_CATEGORY}</div>
                             </div>
-                            <div className="flex-1 overflow-y-auto p-6 space-y-4">
-                                {wizardFaqImportTab === 'file' && !parsedWizardFaqPreview && (
-                                    <div>
-                                        <label className="flex flex-col items-center justify-center w-full h-36 border-2 border-dashed border-slate-200 rounded-2xl cursor-pointer hover:border-brand-300 hover:bg-brand-50/30 transition-colors">
-                                            <Upload size={28} className="text-slate-300 mb-2" />
-                                            <span className="text-sm font-semibold text-slate-500">點擊選擇或拖放檔案</span>
-                                            <span className="text-xs text-slate-400 mt-1">支援 .xlsx / .csv，最大 500KB</span>
-                                            <input ref={wizardFaqImportFileRef} type="file" accept=".xlsx,.csv" className="hidden" onChange={() => setParsedWizardFaqPreview(null)} />
-                                        </label>
-                                        <p className="text-xs text-slate-400 mt-3 text-center">AI 會自動識別問題與回答欄位，每次最多解析 50 組</p>
-                                    </div>
-                                )}
-                                {wizardFaqImportTab === 'text' && !parsedWizardFaqPreview && (
-                                    <div>
-                                        <textarea
-                                            value={wizardFaqImportText}
-                                            onChange={(e) => setWizardFaqImportText(e.target.value)}
-                                            placeholder={'請貼上網站 FAQ 內容...\n\n例如：\nQ: 如何退換貨？\nA: 商品到貨 7 天內可申請退換。\n\nQ: 運費怎麼計算？\nA: 滿 500 元免運。'}
-                                            className="w-full h-52 text-sm text-slate-700 bg-slate-50 border border-slate-200 rounded-xl p-4 resize-none outline-none focus:border-brand-400 focus:bg-white transition-colors"
-                                        />
-                                        <p className="text-xs text-slate-400 mt-2">AI 會自動識別問答結構，支援 Q&A、數字編號、中文標點等各種格式</p>
-                                    </div>
-                                )}
-                                {parsedWizardFaqPreview && (
-                                    <div>
-                                        <p className="text-sm font-semibold text-slate-700 mb-3">解析結果：共 {parsedWizardFaqPreview.length} 組 FAQ <span className="text-xs font-normal text-slate-400">（可直接編輯或刪除）</span></p>
-                                        <datalist id="wizard-faq-import-cats">
-                                            {availableWizardCategories.map(c => <option key={c} value={c} />)}
-                                        </datalist>
-                                        <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
-                                            {parsedWizardFaqPreview.map((f, i) => (
-                                                <div key={i} className="bg-white border border-slate-200 rounded-xl px-4 py-3 space-y-2">
-                                                    <div className="flex items-center gap-2">
-                                                        <input
-                                                            list="wizard-faq-import-cats"
-                                                            value={f.category || '常見問題'}
-                                                            onChange={(e) => updateWizardPreviewFaq(i, 'category', e.target.value)}
-                                                            className="flex-1 text-[11px] font-bold text-brand-600 bg-brand-50 border border-brand-100 rounded-full px-2.5 py-0.5 outline-none focus:border-brand-400 focus:bg-white transition-colors min-w-0"
-                                                            placeholder="分類名稱"
-                                                        />
-                                                        <button onClick={() => removeWizardPreviewFaq(i)} className="flex-shrink-0 w-5 h-5 flex items-center justify-center text-slate-300 hover:text-red-400 transition-colors" title="移除此 FAQ">
-                                                            <X size={13} />
-                                                        </button>
-                                                    </div>
-                                                    <div>
-                                                        <input
-                                                            type="text"
-                                                            value={f.question}
-                                                            maxLength={100}
-                                                            onChange={(e) => updateWizardPreviewFaq(i, 'question', e.target.value)}
-                                                            className="w-full text-sm font-semibold text-slate-800 bg-transparent border-b border-slate-100 focus:border-brand-400 outline-none py-0.5 transition-colors"
-                                                            placeholder="問題..."
-                                                        />
-                                                        <div className="text-[10px] text-slate-300 text-right">{f.question?.length || 0}/100</div>
-                                                    </div>
-                                                    <div>
-                                                        <textarea
-                                                            rows={2}
-                                                            value={f.answer}
-                                                            maxLength={500}
-                                                            onChange={(e) => updateWizardPreviewFaq(i, 'answer', e.target.value)}
-                                                            className="w-full text-xs text-slate-500 bg-slate-50 rounded-lg px-2 py-1.5 resize-none outline-none focus:bg-white focus:ring-1 focus:ring-brand-200 transition-colors"
-                                                            placeholder="回答..."
-                                                        />
-                                                        <div className="text-[10px] text-slate-300 text-right">{f.answer?.length || 0}/500</div>
-                                                    </div>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
-                            <div className="px-6 py-4 border-t border-slate-100 flex items-center justify-between gap-3 flex-shrink-0">
-                                <button onClick={() => setShowWizardFaqImportModal(false)} className="px-4 py-2.5 text-sm font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors">取消</button>
-                                {!parsedWizardFaqPreview ? (
-                                    <button
-                                        onClick={() => handleWizardImportFaqs(wizardFaqImportTab)}
-                                        disabled={isParsingWizardFaqs}
-                                        className="flex items-center gap-2 px-5 py-2.5 bg-brand-600 text-white rounded-xl text-sm font-bold hover:bg-brand-700 transition-all disabled:opacity-50"
-                                    >
-                                        {isParsingWizardFaqs ? <Loader2 size={16} className="animate-spin" /> : <Upload size={16} />}
-                                        {isParsingWizardFaqs ? 'AI 解析中...' : '開始解析'}
-                                    </button>
-                                ) : (
-                                    <div className="flex gap-2">
-                                        <button onClick={() => setParsedWizardFaqPreview(null)} className="px-4 py-2.5 text-sm font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors">重新解析</button>
-                                        <button onClick={handleConfirmWizardImportFaqs} disabled={!parsedWizardFaqPreview?.length} className="px-5 py-2.5 bg-brand-600 text-white rounded-xl text-sm font-bold hover:bg-brand-700 transition-all disabled:opacity-40">
-                                            {parsedWizardFaqPreview?.length ? `加入知識庫（${parsedWizardFaqPreview.length} 組）` : '已無可加入的 FAQ'}
-                                        </button>
-                                    </div>
-                                )}
+                            <div className="px-6 py-4 bg-slate-50/50 border-t border-slate-100 flex justify-end gap-3">
+                                <button onClick={() => setShowWizardCategoryModal(false)} className="px-5 py-2.5 rounded-xl text-sm font-bold text-slate-600 hover:bg-slate-100 transition-all">取消</button>
+                                <button
+                                    onClick={confirmWizardAddCategory}
+                                    disabled={!wizardNewCategoryName.trim()}
+                                    className="flex items-center gap-2 px-5 py-2.5 bg-brand-600 text-white rounded-xl text-sm font-bold hover:bg-brand-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                    <Plus size={16} />
+                                    新增
+                                </button>
                             </div>
                         </div>
                     </div>
@@ -921,6 +769,22 @@ const StepWizard = ({ formData, setFormData, agentId, onComplete }) => {
                         </div>
                     </div>
                 )}
+
+                <FaqAddModal
+                    open={wizardAddFaqModal.open}
+                    onClose={() => setWizardAddFaqModal({ open: false, category: '', categoryFixed: false })}
+                    categories={wizardCategoryOrder}
+                    defaultCategory={wizardAddFaqModal.category}
+                    categoryFixed={wizardAddFaqModal.categoryFixed}
+                    onSubmit={(faq) => {
+                        const newId = Date.now().toString();
+                        updateField('faqs', [...formData.faqs, { id: newId, ...faq }]);
+                        setExpandedCategories(prev => new Set([...prev, faq.category]));
+                        setWizardCategoryOrder(prev => prev.includes(faq.category) ? prev : [...prev, faq.category]);
+                        setWizardExpandedFaqItems(prev => new Set([...prev, newId]));
+                        setWizardAddFaqModal({ open: false, category: '', categoryFixed: false });
+                    }}
+                />
             </div>
         );
     };
@@ -971,52 +835,6 @@ const StepWizard = ({ formData, setFormData, agentId, onComplete }) => {
             updateField('products', (formData.products || []).map(p =>
                 p.id === id ? { ...p, custom_fields: { ...(p.custom_fields || {}), [key]: value } } : p
             ));
-        };
-
-        const handleParseProducts = async (file) => {
-            if (!file) return;
-            if (file.size > 512 * 1024) {
-                showAlert('檔案大小不得超過 500KB');
-                return;
-            }
-            const ext = file.name.toLowerCase().split('.').pop();
-            if (!['xlsx', 'csv', 'json'].includes(ext)) {
-                showAlert('僅支援 .xlsx、.csv 或 .json 格式');
-                return;
-            }
-
-            setIsParsingProducts(true);
-            setProductFileName(file.name);
-            try {
-                const fd = new FormData();
-                fd.append('file', file);
-                fd.append('brandDescription', `${formData.businessName} ${formData.servicesDescription}`.trim());
-                fd.append('line_user_id', Cookies.get('google_user_id') || '');
-                if (fieldSchema.length > 0) {
-                    fd.append('field_schema', JSON.stringify(fieldSchema));
-                }
-                const res = await axios.post(`${config.API_URL}/api/parse_products`, fd, {
-                    headers: { 'Content-Type': 'multipart/form-data' }
-                });
-                if (res.data.error) {
-                    showAlert('解析失敗：' + res.data.error);
-                } else if (res.data.products) {
-                    const newProducts = res.data.products.map(p => ({
-                        id: Math.random().toString(36).substr(2, 9),
-                        name: p.name,
-                        description: p.description,
-                        keywords: p.keywords || '',
-                        custom_fields: p.custom_fields || {},
-                    }));
-                    updateField('products', [...(formData.products || []), ...newProducts]);
-                }
-            } catch (err) {
-                console.error('Failed to parse products:', err);
-                showAlert('解析失敗，請檢查檔案格式或稍後再試');
-            } finally {
-                setIsParsingProducts(false);
-                if (productFileRef.current) productFileRef.current.value = '';
-            }
         };
 
         const products = formData.products || [];
@@ -1072,30 +890,14 @@ const StepWizard = ({ formData, setFormData, agentId, onComplete }) => {
                         <div className="flex-1">
                             <h4 className="text-sm font-bold text-green-900 mb-1">上傳你的商品資料</h4>
                             <p className="text-xs text-green-600 mb-3">支援 Excel (.xlsx)、CSV 或 JSON 檔案，AI 會自動幫你整理成結構化的商品目錄。</p>
-                            <div className="flex items-center gap-3">
-                                <label className={`flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-xl text-xs font-bold hover:bg-green-700 transition-all shadow-md shadow-green-100 cursor-pointer ${isParsingProducts ? 'opacity-50 cursor-not-allowed' : ''}`}>
-                                    {isParsingProducts ? (
-                                        <Loader2 size={14} className="animate-spin" />
-                                    ) : (
-                                        <Upload size={14} />
-                                    )}
-                                    <span>{isParsingProducts ? 'AI 解析中...' : '上傳檔案'}</span>
-                                    <input
-                                        ref={productFileRef}
-                                        type="file"
-                                        accept=".xlsx,.csv,.json"
-                                        className="hidden"
-                                        disabled={isParsingProducts}
-                                        onChange={(e) => handleParseProducts(e.target.files[0])}
-                                    />
-                                </label>
-                                {productFileName && !isParsingProducts && (
-                                    <span className="text-xs text-green-700 flex items-center gap-1">
-                                        <CheckCircle2 size={12} />
-                                        {productFileName}
-                                    </span>
-                                )}
-                            </div>
+                            <button
+                                type="button"
+                                onClick={() => setShowWizardProductImportModal(true)}
+                                className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-xl text-xs font-bold hover:bg-green-700 transition-all shadow-md shadow-green-100"
+                            >
+                                <Upload size={14} />
+                                <span>上傳檔案</span>
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -1167,7 +969,7 @@ const StepWizard = ({ formData, setFormData, agentId, onComplete }) => {
                             </div>
                         </div>
                     ))}
-                    {products.length === 0 && !isParsingProducts && (
+                    {products.length === 0 && (
                         <div className="text-center py-8 bg-slate-50 rounded-xl border border-dashed border-slate-300 text-slate-500 text-sm">
                             <Package size={32} className="mx-auto mb-2 text-slate-300" />
                             尚未新增商品，上傳檔案或手動新增
@@ -1188,6 +990,17 @@ const StepWizard = ({ formData, setFormData, agentId, onComplete }) => {
                     <Plus size={18} />
                     <span>手動新增商品</span>
                 </button>
+
+                {showWizardProductImportModal && (
+                    <ProductImportModal
+                        onClose={() => setShowWizardProductImportModal(false)}
+                        onConfirm={(newProducts) => {
+                            updateField('products', [...(formData.products || []), ...newProducts].slice(0, 50));
+                        }}
+                        brandDescription={formData.brandDescription || ''}
+                        fieldSchema={formData.productFieldSchema || []}
+                    />
+                )}
             </div>
         );
     };

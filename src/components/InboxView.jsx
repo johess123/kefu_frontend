@@ -402,6 +402,7 @@ export default function InboxView({ currentAgent }) {
                                     disabled={isSending}
                                     placeholder="輸入回覆訊息（Enter 換行，Ctrl+Enter 發送）"
                                     rows={2}
+                                    maxLength={1000}
                                     className="flex-1 resize-none rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-300 disabled:opacity-50 disabled:cursor-not-allowed"
                                 />
                                 <button

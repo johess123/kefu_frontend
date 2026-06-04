@@ -50,7 +50,7 @@ const SUBAGENT_PILL = {
 const SOURCE_DOT = {
     LINE: 'bg-green-500',
     Telegram: 'bg-blue-500',
-    test: 'bg-slate-400',
+    web: 'bg-slate-400',
     analysis: 'bg-purple-500',
     build: 'bg-indigo-500',
 };
