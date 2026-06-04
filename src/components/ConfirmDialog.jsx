@@ -74,12 +74,14 @@ export default function ConfirmDialog({
 
                 {/* 按鈕 */}
                 <div className="flex gap-2 mt-5 justify-end">
-                    <button
-                        onClick={onCancel}
-                        className="px-4 py-2 text-sm font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors"
-                    >
-                        {cancelText}
-                    </button>
+                    {onCancel && (
+                        <button
+                            onClick={onCancel}
+                            className="px-4 py-2 text-sm font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors"
+                        >
+                            {cancelText}
+                        </button>
+                    )}
                     <button
                         onClick={onConfirm}
                         className={`px-4 py-2 text-sm font-semibold text-white rounded-xl transition-colors ${

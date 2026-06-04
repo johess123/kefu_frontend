@@ -4,10 +4,19 @@ import config from '../config';
 import { Loader2, MessageSquare, UserCheck, ArrowRight, Plus, Trash2, Save, CheckCircle, ChevronRight, ChevronDown, Edit3, Package } from 'lucide-react';
 
 import Cookies from 'js-cookie';
+import ConfirmDialog from './ConfirmDialog';
 
 const StepReview = ({ onNext, onEdit, formData, setFormData, sessionId, agentId, reviewData, setReviewData, setAgentId }) => {
     const initializedRef = useRef(false);
     const [isLoading, setIsLoading] = useState(false);
+    const [alertDialog, setAlertDialog] = useState({ open: false, message: '', goBack: false });
+
+    const showError = (message, goBack = false) => setAlertDialog({ open: true, message, goBack });
+    const handleErrorConfirm = () => {
+        const shouldGoBack = alertDialog.goBack;
+        setAlertDialog({ open: false, message: '', goBack: false });
+        if (shouldGoBack && onEdit) onEdit();
+    };
     const [selectedFaqIndex, setSelectedFaqIndex] = useState(0);
     const [isEditingFaq, setIsEditingFaq] = useState(false);
     const [editingFaq, setEditingFaq] = useState({ question: '', answer: '' });
@@ -38,13 +47,30 @@ const StepReview = ({ onNext, onEdit, formData, setFormData, sessionId, agentId,
                     setEditingFaq(response.data.faqs[0]);
                 }
             } else {
-                alert('生成失敗：' + (response.data.error || '未知錯誤'));
-                if (onEdit) onEdit();
+                showError(response.data.error || '未知錯誤', true);
             }
         } catch (error) {
             console.error('Error generating data:', error);
-            alert('生成失敗，請稍後再試');
-            if (onEdit) onEdit();
+            const status = error.response?.status;
+            if (status === 422) {
+                const detail = error.response?.data?.detail;
+                const fieldMap = {
+                    businessName: '商家名稱', servicesDescription: '服務內容',
+                    websiteUrl: '網站連結', toneAvoid: '避免語氣',
+                    toneCustom: '自定義語氣指令', handoffCustomTrigger: '自訂轉接觸發詞',
+                };
+                let msg = '輸入內容格式有誤，請重新檢查';
+                if (Array.isArray(detail) && detail.length > 0) {
+                    const f = detail[0];
+                    const label = fieldMap[f.loc?.[1]] || f.loc?.[1] || '欄位';
+                    msg = f.type === 'string_too_long'
+                        ? `${label}不得超過 ${f.ctx?.max_length} 字`
+                        : `${label}格式不符，請重新填寫`;
+                }
+                showError(msg, true);
+            } else {
+                showError('生成失敗，請稍後再試', true);
+            }
         } finally {
             setIsLoading(false);
         }
@@ -83,11 +109,11 @@ const StepReview = ({ onNext, onEdit, formData, setFormData, sessionId, agentId,
                 });
                 onNext();
             } else {
-                alert(res.data.message || '設定失敗');
+                showError(res.data.message || '設定失敗');
             }
         } catch (error) {
             console.error('Error confirming setup:', error);
-            alert('設定失敗');
+            showError('設定失敗');
         } finally {
             setIsLoading(false);
         }
@@ -115,7 +141,7 @@ const StepReview = ({ onNext, onEdit, formData, setFormData, sessionId, agentId,
 
     const handleDeleteFaq = (index) => {
         if (reviewData.faqs.length <= 1) {
-            alert('至少需要保留一組 FAQ');
+            showError('至少需要保留一組 FAQ');
             return;
         }
         const newFaqs = reviewData.faqs.filter((_, i) => i !== index);
@@ -128,7 +154,7 @@ const StepReview = ({ onNext, onEdit, formData, setFormData, sessionId, agentId,
 
     const handleSaveFaq = () => {
         if (editingFaq.question.length > 100 || editingFaq.answer.length > 500) {
-            alert('內容超過字數限制 (問題 100 字，回答 500 字)');
+            showError('內容超過字數限制 (問題 100 字，回答 500 字)');
             return;
         }
         const newFaqs = [...reviewData.faqs];
@@ -439,6 +465,15 @@ const StepReview = ({ onNext, onEdit, formData, setFormData, sessionId, agentId,
                     <ArrowRight size={18} />
                 </button>
             </div>
+
+            <ConfirmDialog
+                isOpen={alertDialog.open}
+                title="提示"
+                message={alertDialog.message}
+                confirmText="確認"
+                variant="default"
+                onConfirm={handleErrorConfirm}
+            />
         </div>
     );
 };
