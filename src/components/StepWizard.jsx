@@ -4,6 +4,7 @@ import axios from 'axios';
 import Cookies from 'js-cookie';
 import config from '../config';
 import { ToneType, TONE_PROMPTS, DEFAULT_HANDOFF_OPTIONS } from '../types';
+import ConfirmDialog from './ConfirmDialog';
 import FaqImportModal from './FaqImportModal';
 import FaqAddModal from './FaqAddModal';
 import ProductImportModal from './ProductImportModal';
@@ -28,6 +29,10 @@ const StepWizard = ({ formData, setFormData, agentId, onComplete }) => {
     const [wizardDragOverCat, setWizardDragOverCat] = useState(null);
     const [wizardExpandedFaqItems, setWizardExpandedFaqItems] = useState(new Set());
     const [wizardMoveFaqModal, setWizardMoveFaqModal] = useState({ open: false, faqId: null, faqQuestion: '', currentCat: '' });
+    const [alertDialog, setAlertDialog] = useState({ open: false, message: '' });
+
+    const showAlert = (message) => setAlertDialog({ open: true, message });
+    const closeAlert = () => setAlertDialog({ open: false, message: '' });
     const [wizardAddFaqModal, setWizardAddFaqModal] = useState({ open: false, category: '', categoryFixed: false });
     const [showWizardCategoryModal, setShowWizardCategoryModal] = useState(false);
     const [wizardNewCategoryName, setWizardNewCategoryName] = useState('');
@@ -44,9 +49,36 @@ const StepWizard = ({ formData, setFormData, agentId, onComplete }) => {
     const totalQuestions = 5;
 
     const handleNext = () => {
+        if (qIndex === 0) {
+            if (formData.businessName.length > 20) {
+                showAlert('商家名稱不得超過 20 字');
+                return;
+            }
+            if (formData.servicesDescription.length > 200) {
+                showAlert('服務內容不得超過 200 字');
+                return;
+            }
+            if (formData.websiteUrl && formData.websiteUrl.length > 100) {
+                showAlert('網站連結不得超過 100 字');
+                return;
+            }
+            if (!validateUrl(formData.websiteUrl)) return;
+        }
+
+        if (qIndex === 1) {
+            if ((formData.toneAvoid || '').length > 50) {
+                showAlert('避免語氣不得超過 50 字');
+                return;
+            }
+            if ((formData.toneCustom || '').length > 200) {
+                showAlert('自定義語氣指令不得超過 200 字');
+                return;
+            }
+        }
+
         if (qIndex === 2) {
             const { error, cleaned: cleanedFaqs } = validateFaqsForSave(formData.faqs);
-            if (error) { alert(error); return; }
+            if (error) { showAlert(error); return; }
             setFormData(prev => ({ ...prev, faqs: cleanedFaqs }));
         }
 
@@ -54,6 +86,14 @@ const StepWizard = ({ formData, setFormData, agentId, onComplete }) => {
             // 過濾掉沒有名稱的空商品
             const cleanedProducts = (formData.products || []).filter(p => p.name.trim());
             setFormData(prev => ({ ...prev, products: cleanedProducts }));
+        }
+
+        if (qIndex === 4) {
+            const trigger = formData.handoffCustomTrigger;
+            if (trigger && trigger !== '其他' && trigger.length > 50) {
+                showAlert('自訂轉接觸發詞不得超過 50 字');
+                return;
+            }
         }
 
         if (qIndex < totalQuestions - 1) {
@@ -87,11 +127,11 @@ const StepWizard = ({ formData, setFormData, agentId, onComplete }) => {
             if (response.data && !response.data.error) {
                 updateField('servicesDescription', response.data.services);
             } else {
-                alert('優化失敗：' + (response.data.error || '未知錯誤'));
+                showAlert('優化失敗：' + (response.data.error || '未知錯誤'));
             }
         } catch (error) {
             console.error('Failed to optimize services:', error);
-            alert('優化過程中發生錯誤');
+            showAlert('優化過程中發生錯誤');
         } finally {
             setIsOptimizingServices(false);
         }
@@ -238,7 +278,7 @@ const StepWizard = ({ formData, setFormData, agentId, onComplete }) => {
 
     const renderQ3 = () => {
         const addFAQ = (category = '', fixed = false) => {
-            if (formData.faqs.length >= FAQ_MAX_COUNT) { alert(`FAQ 問答已達 ${FAQ_MAX_COUNT} 組上限`); return; }
+            if (formData.faqs.length >= FAQ_MAX_COUNT) { showAlert(`FAQ 問答已達 ${FAQ_MAX_COUNT} 組上限`); return; }
             const cat = category || getDefaultFaqCategory(formData.faqs);
             setWizardAddFaqModal({ open: true, category: cat, categoryFixed: fixed });
         };
@@ -299,7 +339,7 @@ const StepWizard = ({ formData, setFormData, agentId, onComplete }) => {
 
         const handleGenerateFaqs = async () => {
             if (!formData.businessName.trim() || !formData.servicesDescription.trim()) {
-                alert('請先填寫第一題的商家名稱與服務內容');
+                showAlert('請先填寫第一題的商家名稱與服務內容');
                 setQIndex(0);
                 return;
             }
@@ -327,14 +367,14 @@ const StepWizard = ({ formData, setFormData, agentId, onComplete }) => {
                     const newCats = new Set(newFaqs.map(f => f.category));
                     setExpandedCategories(prev => new Set([...prev, ...newCats]));
                     if (response.data.mode === 'extracted') {
-                        alert(`已從網站擷取 ${newFaqs.length} 筆 FAQ，共 ${newCats.size} 個分類`);
+                        showAlert(`已從網站擷取 ${newFaqs.length} 筆 FAQ，共 ${newCats.size} 個分類`);
                     }
                 } else if (response.data && response.data.error) {
-                    alert('自動產生失敗：' + response.data.error);
+                    showAlert('自動產生失敗：' + response.data.error);
                 }
             } catch (error) {
                 console.error('Failed to generate FAQs:', error);
-                alert('自動產生失敗，請手動輸入或稍後再試。');
+                showAlert('自動產生失敗，請手動輸入或稍後再試。');
             } finally {
                 setIsGeneratingFaqs(false);
             }
@@ -343,7 +383,7 @@ const StepWizard = ({ formData, setFormData, agentId, onComplete }) => {
         const handleOptimizeFaq = async (faqId) => {
             const faq = formData.faqs.find(f => f.id === faqId);
             const optError = validateFaqItemForOptimize(faq);
-            if (optError) { alert(optError); return; }
+            if (optError) { showAlert(optError); return; }
 
             setOptimizingFaqIds(prev => new Set(prev).add(faqId));
             try {
@@ -361,11 +401,11 @@ const StepWizard = ({ formData, setFormData, agentId, onComplete }) => {
                     );
                     updateField('faqs', updatedFaqs);
                 } else {
-                    alert('優化失敗：' + (response.data.error || '未知錯誤'));
+                    showAlert('優化失敗：' + (response.data.error || '未知錯誤'));
                 }
             } catch (error) {
                 console.error('Failed to optimize FAQ:', error);
-                alert('優化過程中發生錯誤');
+                showAlert('優化過程中發生錯誤');
             } finally {
                 setOptimizingFaqIds(prev => {
                     const newSet = new Set(prev);
@@ -377,10 +417,10 @@ const StepWizard = ({ formData, setFormData, agentId, onComplete }) => {
 
         const handleAnalyzeFaqs = async () => {
             const analyzeError = validateFaqsForAnalyze(formData.faqs);
-            if (analyzeError) { alert(analyzeError); return; }
+            if (analyzeError) { showAlert(analyzeError); return; }
 
             if (!formData.businessName.trim() || !formData.servicesDescription.trim()) {
-                alert('請先填寫第一題的商家名稱與服務內容');
+                showAlert('請先填寫第一題的商家名稱與服務內容');
                 setQIndex(0);
                 return;
             }
@@ -399,11 +439,11 @@ const StepWizard = ({ formData, setFormData, agentId, onComplete }) => {
                 if (response.data && !response.data.error) {
                     setAnalysisReport(response.data);
                 } else {
-                    alert('健檢失敗：' + (response.data.error || '未知錯誤'));
+                    showAlert('健檢失敗：' + (response.data.error || '未知錯誤'));
                 }
             } catch (error) {
                 console.error('Failed to analyze FAQs:', error);
-                alert('健檢過程中發生錯誤');
+                showAlert('健檢過程中發生錯誤');
             } finally {
                 setIsAnalyzing(false);
             }
@@ -423,9 +463,9 @@ const StepWizard = ({ formData, setFormData, agentId, onComplete }) => {
 
         const handleConfirmWizardImportFaqs = (newFaqs) => {
             const remaining = FAQ_MAX_COUNT - formData.faqs.length;
-            if (remaining <= 0) { alert(`FAQ 問答已達 ${FAQ_MAX_COUNT} 組上限`); return; }
+            if (remaining <= 0) { showAlert(`FAQ 問答已達 ${FAQ_MAX_COUNT} 組上限`); return; }
             const toAdd = newFaqs.slice(0, remaining);
-            if (toAdd.length < newFaqs.length) alert(`已達 ${FAQ_MAX_COUNT} 組上限，僅新增 ${toAdd.length} 組`);
+            if (toAdd.length < newFaqs.length) showAlert(`已達 ${FAQ_MAX_COUNT} 組上限，僅新增 ${toAdd.length} 組`);
             updateField('faqs', [...formData.faqs, ...toAdd]);
             const newCats = new Set(toAdd.map(f => f.category));
             setExpandedCategories(prev => new Set([...prev, ...newCats]));
@@ -563,13 +603,13 @@ const StepWizard = ({ formData, setFormData, agentId, onComplete }) => {
                                                         <input type="file" accept="image/jpeg,image/png,image/webp" className="hidden" disabled={!!uploadingFaqId}
                                                             onChange={async (e) => {
                                                                 const file = e.target.files[0]; if (!file) return;
-                                                                if (file.size > 2 * 1024 * 1024) { alert('圖片不可超過 2MB'); return; }
+                                                                if (file.size > 2 * 1024 * 1024) { showAlert('圖片不可超過 2MB'); return; }
                                                                 setUploadingFaqId(faq.id);
                                                                 try {
                                                                     const fd = new FormData(); fd.append('file', file);
                                                                     const res = await axios.post(`${config.API_URL}/api/admin/upload_image`, fd, { headers: { 'Content-Type': 'multipart/form-data' } });
                                                                     updateField('faqs', formData.faqs.map(f => f.id === faq.id ? { ...f, image_id: res.data.image_id, _preview_url: res.data.preview_url } : f));
-                                                                } catch { alert('圖片上傳失敗'); }
+                                                                } catch { showAlert('圖片上傳失敗'); }
                                                                 finally { setUploadingFaqId(null); }
                                                             }} />
                                                     </label>
@@ -756,12 +796,12 @@ const StepWizard = ({ formData, setFormData, agentId, onComplete }) => {
             const trimmed = label.trim();
             if (!trimmed) return;
             if (fieldSchema.length >= 8) {
-                alert('最多新增 8 個自訂欄位');
+                showAlert('最多新增 8 個自訂欄位');
                 return;
             }
             const key = trimmed.toLowerCase().replace(/[\s一-龥]+/g, '_').replace(/[^a-z0-9_]/g, '').replace(/^_+|_+$/g, '') || `field_${Date.now()}`;
             if (fieldSchema.some(f => f.key === key)) {
-                alert('欄位已存在');
+                showAlert('欄位已存在');
                 return;
             }
             updateField('productFieldSchema', [...fieldSchema, { key, label: trimmed, type: 'text', max_length: 100 }]);
@@ -775,7 +815,7 @@ const StepWizard = ({ formData, setFormData, agentId, onComplete }) => {
 
         const addProduct = () => {
             if ((formData.products || []).length >= 50) {
-                alert('最多只能新增 50 項商品');
+                showAlert('最多只能新增 50 項商品');
                 return;
             }
             const initCustomFields = Object.fromEntries(fieldSchema.map(f => [f.key, '']));
@@ -1094,6 +1134,15 @@ const StepWizard = ({ formData, setFormData, agentId, onComplete }) => {
                     </div>
                 </div>
             </div>
+
+            <ConfirmDialog
+                isOpen={alertDialog.open}
+                title="提示"
+                message={alertDialog.message}
+                confirmText="確認"
+                variant="default"
+                onConfirm={closeAlert}
+            />
         </div>
     );
 };
