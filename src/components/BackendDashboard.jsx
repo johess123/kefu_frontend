@@ -5190,6 +5190,7 @@ const BackendDashboard = () => {
                     onConfirm={handleConfirmImportFaqs}
                     brandDescription={currentAgent?.brand_description || ''}
                     existingCategories={categoryOrder}
+                    agentId={routeAgentId}
                 />
             )}
 
@@ -5199,6 +5200,7 @@ const BackendDashboard = () => {
                     onConfirm={handleConfirmImportProducts}
                     brandDescription={currentAgent?.config?.raw_config?.merchant_name || ''}
                     fieldSchema={productFieldSchema}
+                    agentId={routeAgentId}
                 />
             )}
 

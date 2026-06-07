@@ -19,7 +19,7 @@ const getFileIconInfo = (fileName) => {
     }
 };
 
-export default function ProductImportModal({ onClose, onConfirm, brandDescription = '', fieldSchema = [] }) {
+export default function ProductImportModal({ onClose, onConfirm, brandDescription = '', fieldSchema = [], agentId }) {
     const [tab, setTab] = useState('file');
     const [text, setText] = useState('');
     const [fileName, setFileName] = useState('');
@@ -109,6 +109,7 @@ export default function ProductImportModal({ onClose, onConfirm, brandDescriptio
             const fd = new FormData();
             fd.append('brandDescription', brandDescription);
             fd.append('line_user_id', Cookies.get('google_user_id') || '');
+            fd.append('agent_id', agentId || '');
             if (fieldSchema.length > 0) {
                 fd.append('field_schema', JSON.stringify(fieldSchema));
             }

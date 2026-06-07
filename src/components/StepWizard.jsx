@@ -703,6 +703,7 @@ const StepWizard = ({ formData, setFormData, agentId, onComplete }) => {
                         onConfirm={handleConfirmWizardImportFaqs}
                         brandDescription={formData.brandDescription || ''}
                         existingCategories={[...new Set(formData.faqs.map(f => f.category || '常見問題'))]}
+                        agentId={agentId}
                     />
                 )}
 
@@ -1034,6 +1035,7 @@ const StepWizard = ({ formData, setFormData, agentId, onComplete }) => {
                         }}
                         brandDescription={formData.brandDescription || ''}
                         fieldSchema={formData.productFieldSchema || []}
+                        agentId={agentId}
                     />
                 )}
 

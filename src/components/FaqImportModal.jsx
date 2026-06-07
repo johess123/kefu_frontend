@@ -18,7 +18,7 @@ const getFileIconInfo = (fileName) => {
     }
 };
 
-export default function FaqImportModal({ onClose, onConfirm, brandDescription = '', existingCategories = [] }) {
+export default function FaqImportModal({ onClose, onConfirm, brandDescription = '', existingCategories = [], agentId }) {
     const [tab, setTab] = useState('file');
     const [text, setText] = useState('');
     const [fileName, setFileName] = useState('');
@@ -108,6 +108,7 @@ export default function FaqImportModal({ onClose, onConfirm, brandDescription = 
             const fd = new FormData();
             fd.append('brandDescription', brandDescription);
             fd.append('line_user_id', Cookies.get('google_user_id') || '');
+            fd.append('agent_id', agentId || '');
             if (tab === 'file') {
                 const file = fileRef.current?.files?.[0];
                 if (!file) { alert('請選擇檔案'); setIsParsing(false); return; }
