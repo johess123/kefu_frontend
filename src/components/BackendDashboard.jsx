@@ -380,6 +380,7 @@ const BackendDashboard = () => {
     }, [userId]);
 
     const activeMenu = section || 'agents';
+    const [agentsMenuOpen, setAgentsMenuOpen] = useState(activeMenu === 'agents');
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [currentAgent, setCurrentAgent] = useState(location.state?.agent || null);
     const [availableSubagents, setAvailableSubagents] = useState([]);
@@ -1107,6 +1108,9 @@ const BackendDashboard = () => {
         if (activeMenu === 'playground') {
             initPlaygroundSession();
         }
+        if (activeMenu === 'agents') {
+            setAgentsMenuOpen(true);
+        }
     }, [activeMenu]);
 
     useEffect(() => {
@@ -1744,33 +1748,68 @@ const BackendDashboard = () => {
                                 )}
                                 <div className="space-y-1">
                                     {group.items.map((item) => (
-                                        <button
-                                            key={item.id}
-                                            onClick={() => {
-                                                if (item.isLocked) return;
-                                                navigate('/agent/' + routeAgentId + '/' + item.id);
-                                                setIsSidebarOpen(false);
-                                            }}
-                                            className={`
-                                                w-full flex items-center justify-between px-3 py-2.5 rounded-xl transition-all
-                                                ${item.isLocked ? 'cursor-not-allowed' : ''}
-                                                ${activeMenu === item.id
-                                                    ? 'bg-brand-50 text-brand-700 font-medium'
-                                                    : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'}
-                                            `}
-                                        >
-                                            <div className="flex items-center gap-3">
-                                                {item.icon}
-                                                <span className={item.isLocked ? 'text-slate-400' : ''}>{item.label}</span>
-                                            </div>
-                                            {item.isLocked ? (
-                                                <Lock size={14} className="text-slate-400" />
-                                            ) : item.badge && (
-                                                <span className="bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">
-                                                    {item.badge}
-                                                </span>
+                                        <div key={item.id}>
+                                            <button
+                                                onClick={() => {
+                                                    if (item.isLocked) return;
+                                                    if (item.id === 'agents') {
+                                                        setAgentsMenuOpen(prev => !prev);
+                                                        navigate('/agent/' + routeAgentId + '/agents');
+                                                    } else {
+                                                        navigate('/agent/' + routeAgentId + '/' + item.id);
+                                                    }
+                                                    setIsSidebarOpen(false);
+                                                }}
+                                                className={`
+                                                    w-full flex items-center justify-between px-3 py-2.5 rounded-xl transition-all
+                                                    ${item.isLocked ? 'cursor-not-allowed' : ''}
+                                                    ${activeMenu === item.id
+                                                        ? 'bg-brand-50 text-brand-700 font-medium'
+                                                        : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'}
+                                                `}
+                                            >
+                                                <div className="flex items-center gap-3">
+                                                    {item.icon}
+                                                    <span className={item.isLocked ? 'text-slate-400' : ''}>{item.label}</span>
+                                                </div>
+                                                {item.isLocked ? (
+                                                    <Lock size={14} className="text-slate-400" />
+                                                ) : item.id === 'agents' ? (
+                                                    <ChevronDown size={14} className={`text-slate-400 transition-transform duration-200 ${agentsMenuOpen ? 'rotate-180' : ''}`} />
+                                                ) : item.badge ? (
+                                                    <span className="bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">
+                                                        {item.badge}
+                                                    </span>
+                                                ) : null}
+                                            </button>
+                                            {item.id === 'agents' && agentsMenuOpen && (
+                                                <div className="mt-1 ml-3 pl-3 border-l-2 border-slate-100 space-y-0.5">
+                                                    {teamSubagents.filter(sub => sub.enabled).map((sub) => {
+                                                        const subPath = EDITING_TO_SUB[sub.name];
+                                                        const isActive = editingSubagent === sub.name;
+                                                        return (
+                                                            <button
+                                                                key={sub.name}
+                                                                onClick={() => {
+                                                                    if (subPath) navigate('/agent/' + routeAgentId + '/agents/' + subPath);
+                                                                    setIsSidebarOpen(false);
+                                                                }}
+                                                                className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg transition-all text-left ${
+                                                                    isActive
+                                                                        ? 'bg-brand-50 text-brand-700 font-medium'
+                                                                        : 'text-slate-500 hover:bg-slate-50 hover:text-slate-800'
+                                                                }`}
+                                                            >
+                                                                <span className={`flex-shrink-0 ${isActive ? 'text-brand-600' : 'text-slate-400'}`}>
+                                                                    {React.cloneElement(sub.icon, { size: 15 })}
+                                                                </span>
+                                                                <span className="text-[13px] truncate">{sub.title || sub.name}</span>
+                                                            </button>
+                                                        );
+                                                    })}
+                                                </div>
                                             )}
-                                        </button>
+                                        </div>
                                     ))}
                                 </div>
                             </div>
