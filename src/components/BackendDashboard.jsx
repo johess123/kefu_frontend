@@ -71,6 +71,7 @@ import LineDeployGuide from './LineDeployGuide';
 import NotifyBanner from './NotifyBanner';
 import FaqImportModal from './FaqImportModal';
 import FaqAddModal from './FaqAddModal';
+import ProductAddModal from './ProductAddModal';
 import ProductImportModal from './ProductImportModal';
 import { FAQ_MAX_QUESTION, FAQ_MAX_ANSWER, FAQ_MAX_COUNT, FAQ_MAX_CATEGORY, getDefaultFaqCategory, validateFaqsForSave, validateFaqsForAnalyze, validateFaqItemForOptimize } from '../utils/faqUtils';
 import SpotlightTour from './SpotlightTour';
@@ -5136,96 +5137,28 @@ const BackendDashboard = () => {
                 )}
 
                 {/* Add Product Modal */}
-                {showProductModal && (
-                    <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
-                        <div
-                            className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
-                            onClick={() => setShowProductModal(false)}
-                        />
-                        <div className="relative bg-white w-full max-w-xl rounded-[32px] overflow-hidden shadow-2xl">
-                            <div className="p-8 border-b border-slate-100 flex items-center justify-between">
-                                <div className="flex items-center gap-4">
-                                    <div className="w-10 h-10 bg-green-50 text-green-600 rounded-xl flex items-center justify-center border border-green-100">
-                                        <Package size={20} />
-                                    </div>
-                                    <div>
-                                        <h2 className="text-xl font-bold text-slate-800">新增商品</h2>
-                                        <p className="text-slate-400 text-xs mt-0.5">建立一筆商品資料</p>
-                                    </div>
-                                </div>
-                                <button
-                                    onClick={() => setShowProductModal(false)}
-                                    className="w-10 h-10 flex items-center justify-center text-slate-400 hover:text-slate-600 hover:bg-slate-50 rounded-full transition-all"
-                                >
-                                    <X size={20} />
-                                </button>
-                            </div>
-                            <div className="p-8 space-y-6">
-                                <div className="space-y-2">
-                                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">商品名稱</label>
-                                    <input
-                                        type="text"
-                                        value={newProduct.name}
-                                        maxLength={50}
-                                        onChange={(e) => setNewProduct({ ...newProduct, name: e.target.value })}
-                                        placeholder="輸入商品名稱..."
-                                        autoFocus
-                                        className="w-full bg-white border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-800 font-bold text-base focus:ring-2 focus:ring-green-500/10 focus:border-green-500 outline-none transition-all"
-                                    />
-                                    <div className="text-[10px] text-slate-300 text-right">{newProduct.name.length}/50</div>
-                                </div>
-                                <div className="space-y-2">
-                                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">菜單/規格說明</label>
-                                    <textarea
-                                        value={newProduct.description}
-                                        maxLength={400}
-                                        onChange={(e) => setNewProduct({ ...newProduct, description: e.target.value })}
-                                        placeholder="輸入商品說明、規格、價格等..."
-                                        className="w-full bg-white border border-slate-200 rounded-2xl p-5 text-slate-600 text-sm leading-relaxed min-h-[120px] focus:ring-2 focus:ring-green-500/10 focus:border-green-500 outline-none transition-all"
-                                    />
-                                    <div className="text-[10px] text-slate-300 text-right">{newProduct.description.length}/400</div>
-                                </div>
-                                <div className="space-y-2">
-                                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">關鍵字/別名 (選填)</label>
-                                    <input
-                                        type="text"
-                                        value={newProduct.keywords}
-                                        maxLength={100}
-                                        onChange={(e) => setNewProduct({ ...newProduct, keywords: e.target.value })}
-                                        placeholder="例：珍奶、波霸、大杯紅茶..."
-                                        className="w-full bg-white border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-600 text-sm focus:ring-2 focus:ring-green-500/10 focus:border-green-500 outline-none transition-all"
-                                    />
-                                    <div className="text-[10px] text-slate-300 text-right">{(newProduct.keywords || '').length}/100</div>
-                                </div>
-                            </div>
-                            <div className="px-8 py-6 bg-slate-50/50 border-t border-slate-100 flex justify-end gap-3">
-                                <button
-                                    onClick={() => setShowProductModal(false)}
-                                    className="px-6 py-2.5 rounded-xl text-sm font-bold text-slate-600 hover:bg-slate-100 transition-all"
-                                >
-                                    取消
-                                </button>
-                                <button
-                                    onClick={() => {
-                                        const newProdId = Date.now().toString();
-                                        const initCustomFields = Object.fromEntries(productFieldSchema.map(f => [f.key, '']));
-                                        setEditingProducts([...editingProducts, { id: newProdId, name: newProduct.name, description: newProduct.description, keywords: newProduct.keywords, custom_fields: initCustomFields }]);
-                                        setExpandedProductItems(prev => new Set([...prev, newProdId]));
-                                        setShowProductModal(false);
-                                        setTimeout(() => {
-                                            productsEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                                        }, 100);
-                                    }}
-                                    disabled={!newProduct.name.trim() || !newProduct.description.trim()}
-                                    className="flex items-center gap-2 px-6 py-2.5 bg-green-600 text-white rounded-xl text-sm font-bold hover:bg-green-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                                >
-                                    <Plus size={16} />
-                                    新增
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                )}
+                <ProductAddModal
+                    open={showProductModal}
+                    onClose={() => setShowProductModal(false)}
+                    onSubmit={(newProd) => {
+                        const newProdId = Date.now().toString();
+                        const initCustomFields = Object.fromEntries(productFieldSchema.map(f => [f.key, '']));
+                        setEditingProducts([...editingProducts, {
+                            id: newProdId,
+                            name: newProd.name,
+                            description: newProd.description,
+                            keywords: newProd.keywords,
+                            image_id: newProd.image_id,
+                            _preview_url: newProd._preview_url,
+                            custom_fields: initCustomFields
+                        }]);
+                        setExpandedProductItems(prev => new Set([...prev, newProdId]));
+                        setShowProductModal(false);
+                        setTimeout(() => {
+                            productsEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        }, 100);
+                    }}
+                />
 
                 {/* Pending Notification to match Image 3 */}
                 {/* <div className="fixed bottom-8 right-8 lg:bottom-12 lg:right-12">
@@ -5278,7 +5211,7 @@ const BackendDashboard = () => {
                             <button onClick={() => setMoveFaqModal({ open: false, idx: null, faqQuestion: '', currentCat: '' })} className="p-1 text-slate-400 hover:text-slate-600 transition-colors"><X size={16} /></button>
                         </div>
                         <p className="text-xs text-slate-400 mb-4 truncate">「{moveFaqModal.faqQuestion || '此問答'}」</p>
-                        <div className="space-y-2">
+                        <div className="space-y-2 max-h-60 overflow-y-auto custom-scrollbar">
                             {categoryOrder.filter(c => c !== moveFaqModal.currentCat && editingFaqs.some(f => (f.category || '常見問題') === c || c === moveFaqModal.currentCat)).filter(c => c !== moveFaqModal.currentCat).length === 0 ? (
                                 <p className="text-sm text-slate-400 italic text-center py-6">沒有其他分類</p>
                             ) : categoryOrder.filter(c => c !== moveFaqModal.currentCat).map(targetCat => (
