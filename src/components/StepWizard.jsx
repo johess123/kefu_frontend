@@ -7,6 +7,7 @@ import { ToneType, TONE_PROMPTS, DEFAULT_HANDOFF_OPTIONS } from '../types';
 import ConfirmDialog from './ConfirmDialog';
 import FaqImportModal from './FaqImportModal';
 import FaqAddModal from './FaqAddModal';
+import ProductAddModal from './ProductAddModal';
 import ProductImportModal from './ProductImportModal';
 import { FAQ_MAX_QUESTION, FAQ_MAX_ANSWER, FAQ_MAX_COUNT, FAQ_MAX_CATEGORY, getDefaultFaqCategory, validateFaqsForSave, validateFaqsForAnalyze, validateFaqItemForOptimize } from '../utils/faqUtils';
 
@@ -20,6 +21,8 @@ const StepWizard = ({ formData, setFormData, agentId, onComplete }) => {
     const [analysisReport, setAnalysisReport] = useState(null);
     const [uploadingFaqId, setUploadingFaqId] = useState(null);
     const [showWizardProductImportModal, setShowWizardProductImportModal] = useState(false);
+    const [showWizardProductModal, setShowWizardProductModal] = useState(false);
+    const [uploadingProductId, setUploadingProductId] = useState(null);
     const [expandedCategories, setExpandedCategories] = useState(new Set(['常見問題']));
     const [newFieldLabel, setNewFieldLabel] = useState('');
     const [schemaInputVisible, setSchemaInputVisible] = useState(false);
@@ -752,7 +755,7 @@ const StepWizard = ({ formData, setFormData, agentId, onComplete }) => {
                                 <button onClick={() => setWizardMoveFaqModal({ open: false, faqId: null, faqQuestion: '', currentCat: '' })} className="p-1 text-slate-400 hover:text-slate-600"><X size={16} /></button>
                             </div>
                             <p className="text-xs text-slate-400 mb-4 truncate">「{wizardMoveFaqModal.faqQuestion || '此問答'}」</p>
-                            <div className="space-y-2">
+                            <div className="space-y-2 max-h-60 overflow-y-auto custom-scrollbar">
                                 {wizardCategoryOrder.filter(c => c !== wizardMoveFaqModal.currentCat).length === 0 ? (
                                     <p className="text-sm text-slate-400 italic text-center py-6">沒有其他分類</p>
                                 ) : wizardCategoryOrder.filter(c => c !== wizardMoveFaqModal.currentCat).map(targetCat => (
@@ -824,9 +827,7 @@ const StepWizard = ({ formData, setFormData, agentId, onComplete }) => {
                 showAlert('最多只能新增 50 項商品');
                 return;
             }
-            const initCustomFields = Object.fromEntries(fieldSchema.map(f => [f.key, '']));
-            const newProduct = { id: Date.now().toString(), name: '', description: '', keywords: '', custom_fields: initCustomFields };
-            updateField('products', [...(formData.products || []), newProduct]);
+            setShowWizardProductModal(true);
         };
 
         const removeProduct = (id) => {
@@ -957,6 +958,34 @@ const StepWizard = ({ formData, setFormData, agentId, onComplete }) => {
                                         onChange={(e) => updateProduct(product.id, 'keywords', e.target.value)}
                                     />
                                 </div>
+                                <div className="flex items-start gap-2">
+                                    <span className="text-xs font-black text-green-400 uppercase mt-2 w-8">圖片</span>
+                                    <div className="flex-1">
+                                        {product.image_id ? (
+                                            <div className="flex items-center gap-3">
+                                                <img src={product._preview_url || product.preview_url || ''} alt="商品附圖" className="w-14 h-14 object-cover rounded-xl border border-slate-200" onError={(e) => { e.target.style.display = 'none'; }} />
+                                                <button onClick={() => updateProduct(product.id, 'image_id', '')} className="flex items-center gap-1.5 px-3 py-2 bg-white border border-red-200 text-red-500 rounded-xl text-xs font-bold hover:bg-red-50"><Trash2 size={14} />移除圖片</button>
+                                            </div>
+                                        ) : (
+                                            <label className="flex items-center gap-2 px-4 py-3 bg-white border border-dashed border-slate-200 rounded-xl cursor-pointer hover:border-green-300 hover:bg-green-50/50 transition-all">
+                                                {uploadingProductId === product.id ? <Loader2 size={16} className="animate-spin text-green-500" /> : <Upload size={16} className="text-slate-400" />}
+                                                <span className="text-xs text-slate-500">{uploadingProductId === product.id ? '上傳中...' : '上傳圖片 (jpg/png/webp, 2MB)'}</span>
+                                                <input type="file" accept="image/jpeg,image/png,image/webp" className="hidden" disabled={!!uploadingProductId}
+                                                    onChange={async (e) => {
+                                                        const file = e.target.files[0]; if (!file) return;
+                                                        if (file.size > 2 * 1024 * 1024) { showAlert('圖片不可超過 2MB'); return; }
+                                                        setUploadingProductId(product.id);
+                                                        try {
+                                                            const fd = new FormData(); fd.append('file', file);
+                                                            const res = await axios.post(`${config.API_URL}/api/admin/upload_image`, fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+                                                            updateField('products', (formData.products || []).map(p => p.id === product.id ? { ...p, image_id: res.data.image_id, _preview_url: res.data.preview_url } : p));
+                                                        } catch { showAlert('圖片上傳失敗'); }
+                                                        finally { setUploadingProductId(null); }
+                                                    }} />
+                                            </label>
+                                        )}
+                                    </div>
+                                </div>
                                 {/* 自訂欄位 */}
                                 {fieldSchema.map(f => (
                                     <div key={f.key} className="flex items-center gap-2">
@@ -1005,6 +1034,28 @@ const StepWizard = ({ formData, setFormData, agentId, onComplete }) => {
                         }}
                         brandDescription={formData.brandDescription || ''}
                         fieldSchema={formData.productFieldSchema || []}
+                    />
+                )}
+
+                {showWizardProductModal && (
+                    <ProductAddModal
+                        open={showWizardProductModal}
+                        onClose={() => setShowWizardProductModal(false)}
+                        onSubmit={(newProd) => {
+                            const newProdId = Date.now().toString();
+                            const initCustomFields = Object.fromEntries(fieldSchema.map(f => [f.key, '']));
+                            const productData = {
+                                id: newProdId,
+                                name: newProd.name,
+                                description: newProd.description,
+                                keywords: newProd.keywords,
+                                image_id: newProd.image_id,
+                                _preview_url: newProd._preview_url,
+                                custom_fields: initCustomFields
+                            };
+                            updateField('products', [...(formData.products || []), productData]);
+                            setShowWizardProductModal(false);
+                        }}
                     />
                 )}
             </div>
