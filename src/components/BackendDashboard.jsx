@@ -442,6 +442,9 @@ const BackendDashboard = () => {
         triggers: [],
         custom: ''
     });
+    const [replyMode, setReplyMode] = useState('auto');   // 'auto' | 'manual'
+    const [isSavingReplyMode, setIsSavingReplyMode] = useState(false);
+    const [inboxAttentionCount, setInboxAttentionCount] = useState(0);  // 收件匣紅點：需處理的對話數
     const [isSaving, setIsSaving] = useState(false);
     const [optimizingIndices, setOptimizingIndices] = useState(new Set());
     const [expandedCategories, setExpandedCategories] = useState(new Set(['常見問題']));
@@ -754,6 +757,7 @@ const BackendDashboard = () => {
                 }
             }
             setHandoffConfig({ triggers, custom });
+            setReplyMode(rawConfig.reply_mode === 'manual' ? 'manual' : 'auto');
 
             // Set root config for editing
             setRootConfig({
@@ -1597,6 +1601,49 @@ const BackendDashboard = () => {
         }
     };
 
+    // 收件匣紅點：每 12 秒輪詢「需要真人處理的對話數」，不論目前在哪個頁面都更新
+    useEffect(() => {
+        const aId = currentAgent?._id;
+        const adminId = currentAgent?.admin_id;
+        if (!aId || !adminId) return;
+        let cancelled = false;
+        const fetchCount = async () => {
+            try {
+                const res = await axios.get(`${config.API_URL}/api/inbox/agents/${aId}/attention-count?userId=${adminId}`);
+                if (!cancelled) setInboxAttentionCount(res.data?.count || 0);
+            } catch (e) { /* 靜默失敗，不影響主畫面 */ }
+        };
+        fetchCount();
+        const id = setInterval(fetchCount, 12000);
+        return () => { cancelled = true; clearInterval(id); };
+    }, [currentAgent?._id, currentAgent?.admin_id]);
+
+    const handleSaveReplyMode = async (mode) => {
+        const prev = replyMode;
+        setReplyMode(mode);   // 樂觀更新
+        try {
+            setIsSavingReplyMode(true);
+            const res = await axios.post(`${config.API_URL}/api/admin/agent/${currentAgent._id}/update_reply_mode`, {
+                userId: currentAgent.admin_id,
+                reply_mode: mode
+            });
+            if (res.data.status === 'ok') {
+                const agentRes = await axios.get(`${config.API_URL}/api/admin/agent/${currentAgent._id}`, {
+                    params: { userId: currentAgent.admin_id }
+                });
+                setCurrentAgent(agentRes.data);
+            } else {
+                throw new Error('update_reply_mode failed');
+            }
+        } catch (error) {
+            console.error('Failed to save reply mode:', error);
+            setReplyMode(prev);   // 回滾
+            alert('回覆模式儲存失敗，請稍後再試。');
+        } finally {
+            setIsSavingReplyMode(false);
+        }
+    };
+
     const handleSaveRootConfig = async () => {
         try {
             setIsSaving(true);
@@ -1696,7 +1743,7 @@ const BackendDashboard = () => {
         },
         {
             group: '客戶互動', items: [
-                { id: 'inbox', label: '對話收件匣', icon: <MessageSquare size={20} /> },
+                { id: 'inbox', label: '對話收件匣', icon: <MessageSquare size={20} />, badge: inboxAttentionCount > 0 ? (inboxAttentionCount > 99 ? '99+' : inboxAttentionCount) : undefined },
                 { id: 'crm', label: '客戶管理 (CRM)', icon: <UserCircle size={20} /> },
                 { id: 'channels', label: '渠道串接', icon: <Globe size={20} /> }
             ]
@@ -2518,6 +2565,53 @@ const BackendDashboard = () => {
                                                         <p className="text-slate-500 text-sm">管理 AI 轉接真人的邏輯。AI 會根據此設定決定何時尋求人類協助。</p>
                                                     </div>
                                                 </div>
+                                            </div>
+
+                                            {/* 回覆模式切換（綁整個機器人，全域生效） */}
+                                            <div className="bg-white rounded-[32px] border border-slate-200 shadow-xl shadow-slate-200/50 overflow-hidden mb-6">
+                                                <div className="p-8 border-b border-slate-100 bg-slate-50/30">
+                                                    <h3 className="font-bold text-slate-700 flex items-center gap-3">
+                                                        <Shield size={18} className="text-brand-600" />
+                                                        回覆模式（整個機器人生效）
+                                                    </h3>
+                                                    <p className="text-slate-500 text-xs mt-2">
+                                                        切換 AI 回答要直接送出，還是先由真人在「對話收件匣」審核後再送。
+                                                    </p>
+                                                </div>
+                                                <div className="p-8 grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                    {[
+                                                        { key: 'auto', title: 'AI 自動回覆', desc: '客戶一問，AI 立即回答並送出（現況）。AI 無法處理時會依設定轉接真人。' },
+                                                        { key: 'manual', title: '人工審核後送出', desc: 'AI 產生草稿但不送出，真人在收件匣編輯／確認後才發送給客戶。此模式下停用自動轉接真人。' },
+                                                    ].map(opt => {
+                                                        const active = replyMode === opt.key;
+                                                        return (
+                                                            <button
+                                                                key={opt.key}
+                                                                disabled={isSavingReplyMode || active}
+                                                                onClick={() => handleSaveReplyMode(opt.key)}
+                                                                className={`text-left p-5 rounded-2xl border transition-all ${active
+                                                                    ? 'bg-slate-900 border-slate-900 text-white shadow-lg'
+                                                                    : 'bg-white border-slate-100 text-slate-600 hover:border-slate-300 shadow-sm'
+                                                                    } disabled:cursor-default`}
+                                                            >
+                                                                <div className="flex items-center gap-2 mb-1.5">
+                                                                    <div className={`w-4 h-4 rounded-full border flex items-center justify-center ${active ? 'bg-brand-500 border-brand-500' : 'bg-slate-50 border-slate-300'}`}>
+                                                                        {active && <Check size={11} className="text-white" />}
+                                                                    </div>
+                                                                    <span className="text-sm font-bold">{opt.title}</span>
+                                                                </div>
+                                                                <p className={`text-xs leading-relaxed ${active ? 'text-slate-300' : 'text-slate-400'}`}>{opt.desc}</p>
+                                                            </button>
+                                                        );
+                                                    })}
+                                                </div>
+                                                {replyMode === 'manual' && (
+                                                    <div className="px-8 pb-6 -mt-2">
+                                                        <p className="text-xs text-amber-600 bg-amber-50 border border-amber-100 rounded-xl px-4 py-3">
+                                                            人工審核模式已啟用：所有 AI 回答會以「草稿」形式出現在對話收件匣，需真人按下發送才會送給客戶；此模式下不會自動轉接真人。
+                                                        </p>
+                                                    </div>
+                                                )}
                                             </div>
 
                                             {/* Status Banner */}

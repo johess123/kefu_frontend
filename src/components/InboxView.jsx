@@ -17,6 +17,8 @@ export default function InboxView({ currentAgent }) {
     const [activeTab, setActiveTab] = useState('open');
     const [isClosing, setIsClosing] = useState(false);
     const [lineQuota, setLineQuota] = useState(null);
+    const [draftEdits, setDraftEdits] = useState({});   // chat_id -> 編輯中的草稿文字
+    const [draftBusy, setDraftBusy] = useState({});     // chat_id -> 發送/捨棄處理中
     const messagesEndRef = useRef(null);
     const isSendingRef = useRef(false);
 
@@ -51,9 +53,9 @@ export default function InboxView({ currentAgent }) {
         }
     }, [agentId, adminId, currentAgent]);
 
-    const fetchMessages = useCallback(async (sessionId) => {
+    const fetchMessages = useCallback(async (sessionId, silent = false) => {
         if (!sessionId || !agentId || !adminId) return;
-        setIsLoadingMessages(true);
+        if (!silent) setIsLoadingMessages(true);
         try {
             const res = await axios.get(
                 `${API}/api/inbox/sessions/${sessionId}/messages?userId=${adminId}&agent_id=${agentId}`
@@ -62,7 +64,7 @@ export default function InboxView({ currentAgent }) {
         } catch (err) {
             console.error('Failed to fetch messages', err);
         } finally {
-            setIsLoadingMessages(false);
+            if (!silent) setIsLoadingMessages(false);
         }
     }, [agentId, adminId]);
 
@@ -80,7 +82,69 @@ export default function InboxView({ currentAgent }) {
     const handleSelectSession = (sess) => {
         setSelectedSession(sess);
         setMessages([]);
+        setDraftEdits({});
         fetchMessages(sess.session_id);
+    };
+
+    // 輪詢：選定對話時每 4 秒靜默重抓訊息，讓人工審核模式的 AI 草稿能即時出現
+    useEffect(() => {
+        if (!selectedSession) return;
+        const id = setInterval(() => {
+            fetchMessages(selectedSession.session_id, true);
+        }, 4000);
+        return () => clearInterval(id);
+    }, [selectedSession, fetchMessages]);
+
+    const handleSendDraft = async (msg) => {
+        if (!selectedSession || draftBusy[msg.chat_id]) return;
+        const edited = draftEdits[msg.chat_id];
+        const finalText = (edited !== undefined ? edited : msg.content) || '';
+        if (!finalText.trim()) return;
+
+        setDraftBusy(prev => ({ ...prev, [msg.chat_id]: true }));
+        const payload = { agent_id: agentId };
+        if (edited !== undefined && edited !== msg.content) payload.message = edited;
+        try {
+            await axios.post(
+                `${API}/api/inbox/sessions/${selectedSession.session_id}/drafts/${msg.chat_id}/send?userId=${adminId}`,
+                payload
+            );
+            if (getChannel(selectedSession) === 'line') {
+                setLineQuota(prev =>
+                    prev && prev.type !== 'none'
+                        ? { ...prev, used: prev.used + 1, remaining: prev.remaining - 1 }
+                        : prev
+                );
+            }
+            await fetchMessages(selectedSession.session_id, true);
+            fetchSessions();
+            fetchLineQuota();
+        } catch (err) {
+            console.error('Failed to send draft', err);
+            alert('草稿發送失敗，請稍後再試。');
+        } finally {
+            setDraftBusy(prev => ({ ...prev, [msg.chat_id]: false }));
+        }
+    };
+
+    const handleDiscardDraft = async (msg) => {
+        if (!selectedSession || draftBusy[msg.chat_id]) return;
+        if (!window.confirm('確定要捨棄這則 AI 草稿嗎？客戶將不會收到。')) return;
+
+        setDraftBusy(prev => ({ ...prev, [msg.chat_id]: true }));
+        try {
+            await axios.post(
+                `${API}/api/inbox/sessions/${selectedSession.session_id}/drafts/${msg.chat_id}/discard?userId=${adminId}`,
+                { agent_id: agentId }
+            );
+            setMessages(prev => prev.filter(m => m.chat_id !== msg.chat_id));
+            fetchSessions();
+        } catch (err) {
+            console.error('Failed to discard draft', err);
+            alert('捨棄失敗，請稍後再試。');
+        } finally {
+            setDraftBusy(prev => ({ ...prev, [msg.chat_id]: false }));
+        }
     };
 
     const handleSend = async () => {
@@ -299,16 +363,28 @@ export default function InboxView({ currentAgent }) {
                                     >
                                         <div className="flex items-start justify-between gap-2">
                                             <div className="flex items-center gap-1.5 min-w-0">
-                                                <span className="font-medium text-slate-800 text-sm truncate">{sess.user_name}</span>
+                                                {sess.needs_attention && (
+                                                    <span
+                                                        className="w-2 h-2 rounded-full bg-red-500 flex-shrink-0"
+                                                        title={sess.has_draft ? 'AI 草稿待審' : '客戶等待回覆'}
+                                                    />
+                                                )}
+                                                <span className={`text-sm truncate ${sess.needs_attention ? 'font-bold text-slate-900' : 'font-medium text-slate-800'}`}>{sess.user_name}</span>
                                                 <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold flex-shrink-0 ${ch === 'telegram' ? 'bg-sky-100 text-sky-600' : 'bg-green-100 text-green-600'}`}>
                                                     {ch === 'telegram' ? 'TG' : 'LINE'}
                                                 </span>
                                             </div>
-                                            <span className={`text-xs px-1.5 py-0.5 rounded-full flex-shrink-0 ${sess.mode === 'human' ? 'bg-orange-100 text-orange-600' : 'bg-blue-100 text-blue-600'}`}>
-                                                {sess.mode === 'human' ? '人工' : 'AI'}
-                                            </span>
+                                            {sess.has_draft ? (
+                                                <span className="text-xs px-1.5 py-0.5 rounded-full flex-shrink-0 bg-amber-100 text-amber-700 font-medium">
+                                                    草稿待審
+                                                </span>
+                                            ) : (
+                                                <span className={`text-xs px-1.5 py-0.5 rounded-full flex-shrink-0 ${sess.mode === 'human' ? 'bg-orange-100 text-orange-600' : 'bg-blue-100 text-blue-600'}`}>
+                                                    {sess.mode === 'human' ? '人工' : 'AI'}
+                                                </span>
+                                            )}
                                         </div>
-                                        <p className="text-xs text-slate-400 mt-0.5 truncate">{sess.last_message || '（無訊息）'}</p>
+                                        <p className={`text-xs mt-0.5 truncate ${sess.needs_attention ? 'text-slate-600 font-medium' : 'text-slate-400'}`}>{sess.last_message || '（無訊息）'}</p>
                                         <p className="text-xs text-slate-300 mt-0.5">{formatTime(sess.last_time)}</p>
                                     </button>
                                 );
@@ -363,9 +439,63 @@ export default function InboxView({ currentAgent }) {
                                     <div className="flex items-center justify-center h-16 text-slate-400 text-sm">尚無訊息</div>
                                 ) : (
                                     messages.map((msg, idx) => {
+                                        if (msg.is_draft) {
+                                            const editVal = draftEdits[msg.chat_id] !== undefined ? draftEdits[msg.chat_id] : (msg.content || '');
+                                            const busy = !!draftBusy[msg.chat_id];
+                                            return (
+                                                <div key={msg.chat_id || idx} className="flex justify-end">
+                                                    <div className="max-w-[80%] w-full">
+                                                        <p className="text-xs mb-1 text-right text-amber-500 font-medium">
+                                                            AI 草稿待審 · {msg.time}
+                                                        </p>
+                                                        <div className="rounded-2xl border-2 border-dashed border-amber-300 bg-amber-50 p-3">
+                                                            <textarea
+                                                                value={editVal}
+                                                                onChange={(e) => setDraftEdits(prev => ({ ...prev, [msg.chat_id]: e.target.value }))}
+                                                                disabled={busy}
+                                                                rows={3}
+                                                                maxLength={1000}
+                                                                className="w-full resize-none rounded-xl border border-amber-200 bg-white px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-300 disabled:opacity-50"
+                                                            />
+                                                            {msg.image_urls && msg.image_urls.length > 0 && (
+                                                                <div className="flex flex-wrap gap-2 mt-2">
+                                                                    {msg.image_urls.map((url, imgIdx) => (
+                                                                        <a key={imgIdx} href={safeUrl(url)} target="_blank" rel="noopener noreferrer">
+                                                                            <img
+                                                                                src={safeUrl(url)}
+                                                                                alt=""
+                                                                                className="max-w-[120px] max-h-[120px] rounded-lg object-cover border border-amber-200"
+                                                                                onError={(e) => { e.target.style.display = 'none'; }}
+                                                                            />
+                                                                        </a>
+                                                                    ))}
+                                                                </div>
+                                                            )}
+                                                            <div className="flex justify-end gap-2 mt-2">
+                                                                <button
+                                                                    onClick={() => handleDiscardDraft(msg)}
+                                                                    disabled={busy}
+                                                                    className="text-xs px-3 py-1.5 rounded-lg bg-white text-slate-500 hover:bg-red-50 hover:text-red-600 border border-slate-200 hover:border-red-200 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                                                                >
+                                                                    捨棄
+                                                                </button>
+                                                                <button
+                                                                    onClick={() => handleSendDraft(msg)}
+                                                                    disabled={busy || !editVal.trim()}
+                                                                    className="text-xs px-4 py-1.5 rounded-lg bg-brand-500 text-white hover:bg-brand-600 disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex items-center gap-1.5"
+                                                                >
+                                                                    <Send size={12} />
+                                                                    {busy ? '發送中...' : '發送'}
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            );
+                                        }
                                         const style = bubbleStyle(msg.sender);
                                         return (
-                                            <div key={idx} className={`flex ${style.wrapper}`}>
+                                            <div key={msg.chat_id || idx} className={`flex ${style.wrapper}`}>
                                                 <div className="max-w-[70%]">
                                                     <p className={`text-xs mb-1 ${style.label} ${msg.sender !== 'user' ? 'text-right' : ''}`}>
                                                         {senderLabel(msg.sender)} · {msg.time}
