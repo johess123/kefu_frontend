@@ -21,6 +21,7 @@ export default function InboxView({ currentAgent }) {
     const [draftBusy, setDraftBusy] = useState({});     // chat_id -> 發送/捨棄處理中
     const messagesEndRef = useRef(null);
     const isSendingRef = useRef(false);
+    const prevMessageCountRef = useRef(0);
 
     const agentId = currentAgent?._id;
     const adminId = currentAgent?.admin_id;
@@ -74,9 +75,12 @@ export default function InboxView({ currentAgent }) {
     }, [fetchSessions, fetchLineQuota]);
 
     useEffect(() => {
-        if (messagesEndRef.current) {
-            messagesEndRef.current.scrollIntoView({ behavior: 'instant' });
+        if (messages.length > prevMessageCountRef.current) {
+            if (messagesEndRef.current) {
+                messagesEndRef.current.scrollIntoView({ behavior: 'instant' });
+            }
         }
+        prevMessageCountRef.current = messages.length;
     }, [messages]);
 
     const handleSelectSession = (sess) => {
@@ -222,6 +226,19 @@ export default function InboxView({ currentAgent }) {
     const formatTime = (timeStr) => {
         if (!timeStr) return '';
         return timeStr;
+    };
+
+    const formatDateLabel = (dateStr) => {
+        if (!dateStr) return '';
+        const today = new Date();
+        const yesterday = new Date(today);
+        yesterday.setDate(today.getDate() - 1);
+        const toYMD = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        if (dateStr === toYMD(today)) return '今天';
+        if (dateStr === toYMD(yesterday)) return '昨天';
+        const d = new Date(dateStr);
+        const weekDays = ['日', '一', '二', '三', '四', '五', '六'];
+        return `${d.getMonth() + 1}月${d.getDate()}日（週${weekDays[d.getDay()]}）`;
     };
 
     const senderLabel = (sender) => {
@@ -439,11 +456,21 @@ export default function InboxView({ currentAgent }) {
                                     <div className="flex items-center justify-center h-16 text-slate-400 text-sm">尚無訊息</div>
                                 ) : (
                                     messages.map((msg, idx) => {
+                                        const showDateSep = msg.date && (idx === 0 || messages[idx - 1].date !== msg.date);
+                                        const dateSep = showDateSep ? (
+                                            <div key={`date-${msg.date}-${idx}`} className="flex items-center justify-center my-2">
+                                                <span className="text-xs text-slate-400 bg-slate-100 px-3 py-0.5 rounded-full">
+                                                    {formatDateLabel(msg.date)}
+                                                </span>
+                                            </div>
+                                        ) : null;
                                         if (msg.is_draft) {
                                             const editVal = draftEdits[msg.chat_id] !== undefined ? draftEdits[msg.chat_id] : (msg.content || '');
                                             const busy = !!draftBusy[msg.chat_id];
                                             return (
-                                                <div key={msg.chat_id || idx} className="flex justify-end">
+                                                <React.Fragment key={msg.chat_id || idx}>
+                                                {dateSep}
+                                                <div className="flex justify-end">
                                                     <div className="max-w-[80%] w-full">
                                                         <p className="text-xs mb-1 text-right text-amber-500 font-medium">
                                                             AI 草稿待審 · {msg.time}
@@ -491,11 +518,14 @@ export default function InboxView({ currentAgent }) {
                                                         </div>
                                                     </div>
                                                 </div>
+                                                </React.Fragment>
                                             );
                                         }
                                         const style = bubbleStyle(msg.sender);
                                         return (
-                                            <div key={msg.chat_id || idx} className={`flex ${style.wrapper}`}>
+                                            <React.Fragment key={msg.chat_id || idx}>
+                                            {dateSep}
+                                            <div className={`flex ${style.wrapper}`}>
                                                 <div className="max-w-[70%]">
                                                     <p className={`text-xs mb-1 ${style.label} ${msg.sender !== 'user' ? 'text-right' : ''}`}>
                                                         {senderLabel(msg.sender)} · {msg.time}
@@ -521,6 +551,7 @@ export default function InboxView({ currentAgent }) {
                                                     )}
                                                 </div>
                                             </div>
+                                            </React.Fragment>
                                         );
                                     })
                                 )}
