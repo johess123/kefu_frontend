@@ -27,6 +27,7 @@ const ACTION_BADGES = {
     reply: { label: 'REPLY', className: 'bg-blue-100 text-blue-700' },
     analysis: { label: 'ANALYSIS', className: 'bg-purple-100 text-purple-700' },
     build: { label: 'BUILD', className: 'bg-indigo-100 text-indigo-700' },
+    evolution: { label: 'EVOLVE', className: 'bg-amber-100 text-amber-700' },
 };
 
 /* ── Agent identity mapping ── */
@@ -37,6 +38,8 @@ const AGENT_IDENTITY = {
     handoff_expert: { name: '協作專員', dot: 'bg-orange-500' },
     conversation_analyst: { name: '數據分析師', dot: 'bg-purple-500' },
     builder: { name: 'Agent 建置', dot: 'bg-indigo-500' },
+    style_evolver: { name: '風格進化', dot: 'bg-amber-500' },
+    fact_fixer: { name: '事實修正', dot: 'bg-rose-500' },
 };
 
 const SUBAGENT_PILL = {
@@ -68,12 +71,24 @@ function deriveCardMeta(log) {
     const faqEvt = events.find(e => e.action === 'faq_matched');
     const analysisEvt = events.find(e => e.action === 'analysis_completed');
     const buildEvt = events.find(e => ['faq_generated', 'faq_optimized', 'faq_health_checked', 'website_crawled', 'form_parsed', 'services_optimized'].includes(e.action));
+    const styleEvt = events.find(e => e.action === 'style_evolved');
+    const factFixEvt = events.find(e => e.action === 'fact_fix_suggested');
 
     let agentKey = 'faq_expert';
     let actionType = 'reply';
     let summary = '';
 
-    if (isBuild || buildEvt) {
+    if (factFixEvt) {
+        agentKey = 'fact_fixer';
+        actionType = 'evolution';
+        const d = factFixEvt.detail || {};
+        summary = `AI 答錯被抓到，已備好 ${d.suggestions_created ?? 0} 則修正建議待確認`;
+    } else if (styleEvt) {
+        agentKey = 'style_evolver';
+        actionType = 'evolution';
+        const d = styleEvt.detail || {};
+        summary = `AI 從 ${d.signal_count ?? 0} 次真人編輯學到新的回覆風格`;
+    } else if (isBuild || buildEvt) {
         agentKey = 'builder';
         actionType = 'build';
         const d = buildEvt?.detail || {};
@@ -111,7 +126,7 @@ function deriveCardMeta(log) {
     const agent = AGENT_IDENTITY[agentKey] || { name: 'AI 主控', dot: 'bg-slate-400' };
     const badge = ACTION_BADGES[actionType];
 
-    return { agent, badge, summary, agentKey, actionType, events, isAnalysis, isBuild, handoffEvt, faqEvt, productEvt, analysisEvt, buildEvt };
+    return { agent, badge, summary, agentKey, actionType, events, isAnalysis, isBuild, handoffEvt, faqEvt, productEvt, analysisEvt, buildEvt, styleEvt };
 }
 
 /* ── Build reasoning lines from events ── */
@@ -167,6 +182,17 @@ function buildReasoning(events) {
             const d = evt.detail || {};
             lines.push(`優化商家服務內容描述。`);
             if (d.business_name) pills.push({ label: d.business_name, type: 'builder' });
+        } else if (evt.action === 'style_evolved') {
+            const d = evt.detail || {};
+            lines.push(`從真人客服 ${d.signal_count ?? 0} 次一致的編輯習慣，學到新的回覆風格並通過黃金考卷驗證後套用。`);
+            if (d.new_style_profile) pills.push({ label: `新風格: ${d.new_style_profile.slice(0, 40)}`, type: 'builder' });
+            if (d.previous_style_profile) pills.push({ label: `舊風格: ${d.previous_style_profile.slice(0, 30)}`, type: 'builder' });
+        } else if (evt.action === 'fact_fix_suggested') {
+            const d = evt.detail || {};
+            lines.push(`偵測到 AI 對 ${d.suggestions_created ?? 0} 個問題的事實答錯，已備好修正建議，請到「數據分析師」確認套用。`);
+            (d.sample_questions || []).slice(0, 3).forEach(q => {
+                if (q) pills.push({ label: q.slice(0, 30), type: 'conversation_analyst' });
+            });
         }
     }
 

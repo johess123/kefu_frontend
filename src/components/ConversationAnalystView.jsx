@@ -121,6 +121,8 @@ const ConversationAnalystView = ({ agentId, adminId, onFaqUpdated, faqCategories
         setAddFaqModal({
             open: true,
             suggestionId: suggestion._id,
+            type: suggestion.suggestion_type || 'add',
+            oldAnswer: suggestion.target_faq_old_answer || '',
             question: suggestion.suggested_question,
             answer: suggestion.suggested_answer,
             category: faqCategories[0] || '常見問題'
@@ -563,6 +565,15 @@ const ConversationAnalystView = ({ agentId, adminId, onFaqUpdated, faqCategories
                                                     <span className="px-2.5 py-1 text-[10px] font-bold bg-purple-50 text-purple-600 border border-purple-100 rounded-full">
                                                         {suggestion.frequency} 次
                                                     </span>
+                                                    {suggestion.suggestion_type === 'update' ? (
+                                                        <span className="px-2.5 py-1 text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200 rounded-full">
+                                                            🔧 修正既有 FAQ
+                                                        </span>
+                                                    ) : (
+                                                        <span className="px-2.5 py-1 text-[10px] font-bold bg-emerald-50 text-emerald-600 border border-emerald-100 rounded-full">
+                                                            ➕ 新增 FAQ
+                                                        </span>
+                                                    )}
                                                 </div>
                                                 <p className="text-sm font-bold text-slate-800">{suggestion.suggested_question}</p>
                                                 <p className="text-xs text-slate-500 mt-1 line-clamp-2">{suggestion.suggested_answer}</p>
@@ -580,7 +591,7 @@ const ConversationAnalystView = ({ agentId, adminId, onFaqUpdated, faqCategories
                                                             ) : (
                                                                 <Plus size={14} />
                                                             )}
-                                                            加入 FAQ
+                                                            {suggestion.suggestion_type === 'update' ? '更新 FAQ' : '加入 FAQ'}
                                                         </button>
                                                         <button
                                                             onClick={(e) => { e.stopPropagation(); handleIgnore(suggestion._id); }}
@@ -655,6 +666,14 @@ const ConversationAnalystView = ({ agentId, adminId, onFaqUpdated, faqCategories
                                                             </button>
                                                         )}
                                                     </div>
+                                                    {suggestion.suggestion_type === 'update' && (
+                                                        <div className="bg-amber-50/60 rounded-xl border border-amber-200 p-4 mb-4">
+                                                            <p className="text-xs font-bold text-amber-700 mb-2">將修正既有 FAQ「{suggestion.suggested_question}」的答案：</p>
+                                                            <p className="text-xs text-slate-400 line-through mb-1">舊：{suggestion.target_faq_old_answer}</p>
+                                                            <p className="text-sm text-slate-800 font-medium">新：{suggestion.suggested_answer}</p>
+                                                            <p className="text-[11px] text-amber-600 mt-2">採納後直接更新來源，不會產生重複 FAQ。</p>
+                                                        </div>
+                                                    )}
                                                     <div className="bg-white rounded-xl border border-slate-100 p-4 mb-4">
                                                         <p className="text-sm font-bold text-slate-800 mb-2">Q: {suggestion.suggested_question}</p>
                                                         <p className="text-sm text-slate-600">A: {suggestion.suggested_answer}</p>
@@ -698,8 +717,12 @@ const ConversationAnalystView = ({ agentId, adminId, onFaqUpdated, faqCategories
                         {/* Header */}
                         <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-slate-100 flex-shrink-0">
                             <div>
-                                <h3 className="text-base font-bold text-slate-800">加入 FAQ 知識庫</h3>
-                                <p className="text-xs text-slate-400 mt-0.5">確認或修改後加入，選擇所屬分類</p>
+                                <h3 className="text-base font-bold text-slate-800">
+                                    {addFaqModal.type === 'update' ? '修正既有 FAQ' : '加入 FAQ 知識庫'}
+                                </h3>
+                                <p className="text-xs text-slate-400 mt-0.5">
+                                    {addFaqModal.type === 'update' ? '確認後直接更新來源 FAQ，不會新增重複項目' : '確認或修改後加入，選擇所屬分類'}
+                                </p>
                             </div>
                             <button onClick={() => setAddFaqModal(prev => ({ ...prev, open: false }))}
                                 className="p-1 text-slate-400 hover:text-slate-600 transition-colors">
@@ -708,8 +731,14 @@ const ConversationAnalystView = ({ agentId, adminId, onFaqUpdated, faqCategories
                         </div>
                         {/* Body */}
                         <div className="flex-1 overflow-y-auto p-6 space-y-5">
-                            {/* Category */}
-                            <div>
+                            {addFaqModal.type === 'update' && addFaqModal.oldAnswer && (
+                                <div className="bg-amber-50/60 rounded-xl border border-amber-200 p-3">
+                                    <p className="text-[11px] font-bold text-amber-700 mb-1">將取代來源 FAQ 的舊答案：</p>
+                                    <p className="text-xs text-slate-400 line-through">{addFaqModal.oldAnswer}</p>
+                                </div>
+                            )}
+                            {/* Category（更新既有 FAQ 不需選分類） */}
+                            <div className={addFaqModal.type === 'update' ? 'hidden' : ''}>
                                 <label className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-2 block">分類</label>
                                 <select
                                     value={faqCategories.includes(addFaqModal.category) ? addFaqModal.category : '__new__'}
@@ -778,7 +807,7 @@ const ConversationAnalystView = ({ agentId, adminId, onFaqUpdated, faqCategories
                                 disabled={!addFaqModal.question.trim() || !addFaqModal.answer.trim()}
                                 className="flex items-center gap-2 px-5 py-2.5 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white rounded-xl text-sm font-bold transition-all shadow-md shadow-purple-200">
                                 <Plus size={16} />
-                                確認加入 FAQ
+                                {addFaqModal.type === 'update' ? '確認修正 FAQ' : '確認加入 FAQ'}
                             </button>
                         </div>
                     </div>
