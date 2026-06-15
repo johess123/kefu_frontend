@@ -574,6 +574,21 @@ const ConversationAnalystView = ({ agentId, adminId, onFaqUpdated, faqCategories
                                                             ➕ 新增 FAQ
                                                         </span>
                                                     )}
+                                                    {suggestion.analysis_type === 'handoff_gap' && (
+                                                        <span className="px-2.5 py-1 text-[10px] font-bold bg-rose-50 text-rose-600 border border-rose-200 rounded-full" title="客人被轉真人後，真人的實際回答整理而成">
+                                                            🆘 來自轉人工
+                                                        </span>
+                                                    )}
+                                                    {suggestion.analysis_type === 'edit_feedback' && (
+                                                        <span className="px-2.5 py-1 text-[10px] font-bold bg-indigo-50 text-indigo-600 border border-indigo-200 rounded-full">
+                                                            ✍️ 真人編輯修正
+                                                        </span>
+                                                    )}
+                                                    {suggestion.analysis_type === 'faq_gap' && (
+                                                        <span className="px-2.5 py-1 text-[10px] font-bold bg-slate-50 text-slate-500 border border-slate-200 rounded-full">
+                                                            💬 對話缺口
+                                                        </span>
+                                                    )}
                                                 </div>
                                                 <p className="text-sm font-bold text-slate-800">{suggestion.suggested_question}</p>
                                                 <p className="text-xs text-slate-500 mt-1 line-clamp-2">{suggestion.suggested_answer}</p>
