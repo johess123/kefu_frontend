@@ -897,7 +897,7 @@ const StepWizard = ({ formData, setFormData, agentId, onComplete }) => {
                         </div>
                         <div className="flex-1">
                             <h4 className="text-sm font-bold text-green-900 mb-1">上傳你的商品資料</h4>
-                            <p className="text-xs text-green-600 mb-3">支援 Excel (.xlsx)、CSV 或 JSON 檔案，AI 會自動幫你整理成結構化的商品目錄。</p>
+                            <p className="text-xs text-green-600 mb-3">支援 Excel (.xlsx) 或 CSV 檔案，AI 會自動幫你整理成結構化的商品目錄。</p>
                             <button
                                 type="button"
                                 onClick={() => setShowWizardProductImportModal(true)}

@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { X, Upload, Loader2, File, FileSpreadsheet, FileCode } from 'lucide-react';
+import { X, Upload, Loader2, File, FileSpreadsheet } from 'lucide-react';
 import axios from 'axios';
 import Cookies from 'js-cookie';
 import config from '../config';
@@ -12,8 +12,6 @@ const getFileIconInfo = (fileName) => {
         case 'xlsx':
         case 'csv':
             return { Icon: FileSpreadsheet, color: '#059669' };
-        case 'json':
-            return { Icon: FileCode, color: '#0F766E' };
         default:
             return { Icon: File, color: '#6B7280' };
     }
