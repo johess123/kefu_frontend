@@ -1,16 +1,100 @@
-import { useState, useRef } from 'react';
-import { X, Upload, Loader2 } from 'lucide-react';
+import React, { useState, useRef } from 'react';
+import { X, Upload, Loader2, File, FileSpreadsheet } from 'lucide-react';
 import axios from 'axios';
 import Cookies from 'js-cookie';
 import config from '../config';
 
-export default function ProductImportModal({ onClose, onConfirm, brandDescription = '', fieldSchema = [] }) {
+const getFileIconInfo = (fileName) => {
+    if (!fileName) return { Icon: File, color: '#6B7280' };
+    const ext = fileName.toLowerCase().split('.').pop();
+    switch (ext) {
+        case 'xls':
+        case 'xlsx':
+        case 'csv':
+            return { Icon: FileSpreadsheet, color: '#059669' };
+        default:
+            return { Icon: File, color: '#6B7280' };
+    }
+};
+
+export default function ProductImportModal({ onClose, onConfirm, brandDescription = '', fieldSchema = [], agentId }) {
     const [tab, setTab] = useState('file');
     const [text, setText] = useState('');
     const [fileName, setFileName] = useState('');
     const fileRef = useRef(null);
     const [isParsing, setIsParsing] = useState(false);
     const [preview, setPreview] = useState(null);
+    const [isDragActive, setIsDragActive] = useState(false);
+    const dragCounter = useRef(0);
+
+    const handleDrag = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (tab === 'file' && !preview) {
+            if (e.type === "dragenter") {
+                dragCounter.current++;
+                setIsDragActive(true);
+            } else if (e.type === "dragleave") {
+                dragCounter.current--;
+                if (dragCounter.current <= 0) {
+                    setIsDragActive(false);
+                }
+            }
+        }
+    };
+
+    const handleDrop = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setIsDragActive(false);
+        dragCounter.current = 0;
+        if (tab === 'file' && !preview) {
+            if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+                const file = e.dataTransfer.files[0];
+                const ext = file.name.toLowerCase().split('.').pop();
+                if (!['xlsx', 'csv'].includes(ext)) {
+                    alert('僅支援 .xlsx 或 .csv 格式');
+                    return;
+                }
+                if (file.size > 512 * 1024) {
+                    alert('檔案大小不得超過 500KB');
+                    return;
+                }
+                setPreview(null);
+                setFileName(file.name);
+                if (fileRef.current) {
+                    const dataTransfer = new DataTransfer();
+                    dataTransfer.items.add(file);
+                    fileRef.current.files = dataTransfer.files;
+                }
+            }
+        }
+    };
+
+    const handleFileChange = (e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        
+        const ext = file.name.toLowerCase().split('.').pop();
+        if (!['xlsx', 'csv'].includes(ext)) {
+            alert('僅支援 .xlsx 或 .csv 格式');
+            if (fileRef.current) fileRef.current.value = '';
+            return;
+        }
+        if (file.size > 512 * 1024) {
+            alert('檔案大小不得超過 500KB');
+            if (fileRef.current) fileRef.current.value = '';
+            return;
+        }
+        
+        setPreview(null);
+        setFileName(file.name);
+    };
+
+    React.useEffect(() => {
+        setIsDragActive(false);
+        dragCounter.current = 0;
+    }, [tab, preview]);
 
     const handleClose = () => {
         if (fileRef.current) fileRef.current.value = '';
@@ -23,6 +107,7 @@ export default function ProductImportModal({ onClose, onConfirm, brandDescriptio
             const fd = new FormData();
             fd.append('brandDescription', brandDescription);
             fd.append('line_user_id', Cookies.get('google_user_id') || '');
+            fd.append('agent_id', agentId || '');
             if (fieldSchema.length > 0) {
                 fd.append('field_schema', JSON.stringify(fieldSchema));
             }
@@ -74,9 +159,24 @@ export default function ProductImportModal({ onClose, onConfirm, brandDescriptio
     };
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={handleClose}>
+        <div 
+            onDragEnter={handleDrag}
+            onDragOver={handleDrag}
+            onDragLeave={handleDrag}
+            onDrop={handleDrop}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4" 
+            onClick={handleClose}
+        >
             <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
             <div className="relative bg-white rounded-2xl shadow-xl w-full max-w-lg flex flex-col max-h-[85vh]" onClick={(e) => e.stopPropagation()}>
+                {isDragActive && (
+                    <div className="absolute inset-0 bg-brand-500/10 backdrop-blur-[2px] border-4 border-dashed border-brand-500 rounded-2xl z-50 flex flex-col items-center justify-center pointer-events-none transition-all duration-150">
+                        <div className="w-16 h-16 bg-white rounded-full shadow-lg flex items-center justify-center mb-3">
+                            <Upload size={32} className="text-brand-600 animate-bounce" />
+                        </div>
+                        <p className="text-sm font-bold text-brand-700">放開檔案以進行解析</p>
+                    </div>
+                )}
                 <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-slate-100 flex-shrink-0">
                     <div>
                         <h3 className="text-base font-bold text-slate-800">匯入商品</h3>
@@ -91,15 +191,26 @@ export default function ProductImportModal({ onClose, onConfirm, brandDescriptio
                 <div className="flex-1 overflow-y-auto p-6 space-y-4">
                     {tab === 'file' && !preview && (
                         <div>
-                            <label className={`flex flex-col items-center justify-center w-full h-36 border-2 border-dashed rounded-2xl cursor-pointer transition-colors ${fileName ? 'border-brand-400 bg-brand-50/50' : 'border-slate-200 hover:border-brand-300 hover:bg-brand-50/30'}`}>
+                            <label 
+                                className={`flex flex-col items-center justify-center w-full h-36 border-2 border-dashed rounded-2xl cursor-pointer transition-colors ${
+                                    fileName 
+                                        ? 'border-brand-400 bg-brand-50/50' 
+                                        : 'border-slate-200 hover:border-brand-300 hover:bg-brand-50/30'
+                                }`}
+                            >
                                 {fileName ? (
-                                    <>
-                                        <div className="w-10 h-10 rounded-full bg-brand-100 flex items-center justify-center mb-2">
-                                            <Upload size={20} className="text-brand-500" />
-                                        </div>
-                                        <span className="text-sm font-semibold text-brand-600 max-w-[240px] truncate px-2">{fileName}</span>
-                                        <span className="text-xs text-slate-400 mt-1">點擊可重新選擇</span>
-                                    </>
+                                    (() => {
+                                        const { Icon, color } = getFileIconInfo(fileName);
+                                        return (
+                                            <>
+                                                <div className="w-10 h-10 rounded-full flex items-center justify-center mb-2" style={{ backgroundColor: `${color}15` }}>
+                                                    <Icon size={20} style={{ color }} />
+                                                </div>
+                                                <span className="text-sm font-semibold text-slate-700 max-w-[240px] truncate px-2">{fileName}</span>
+                                                <span className="text-xs text-slate-400 mt-1">點擊可重新選擇</span>
+                                            </>
+                                        );
+                                    })()
                                 ) : (
                                     <>
                                         <Upload size={28} className="text-slate-300 mb-2" />
@@ -107,7 +218,7 @@ export default function ProductImportModal({ onClose, onConfirm, brandDescriptio
                                         <span className="text-xs text-slate-400 mt-1">支援 .xlsx / .csv，最大 500KB</span>
                                     </>
                                 )}
-                                <input ref={fileRef} type="file" accept=".xlsx,.csv" className="hidden" onChange={(e) => { setPreview(null); setFileName(e.target.files?.[0]?.name || ''); }} />
+                                <input ref={fileRef} type="file" accept=".xlsx,.csv" className="hidden" onChange={handleFileChange} />
                             </label>
                             <p className="text-xs text-slate-400 mt-3 text-center">AI 會自動識別商品名稱與說明，每次最多解析 50 項</p>
                         </div>
