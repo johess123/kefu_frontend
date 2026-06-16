@@ -23,7 +23,10 @@ import {
     Eye,
     MessageCircle,
     User,
-    Bot
+    Bot,
+    Package,
+    Sparkles,
+    HelpCircle
 } from 'lucide-react';
 
 const ConversationAnalystView = ({ agentId, adminId, onFaqUpdated, faqCategories = [] }) => {
@@ -44,6 +47,12 @@ const ConversationAnalystView = ({ agentId, adminId, onFaqUpdated, faqCategories
     const [expandedUserId, setExpandedUserId] = useState(null);
     const [selectedTheme, setSelectedTheme] = useState('all');
     const [addFaqModal, setAddFaqModal] = useState({ open: false, suggestionId: null, question: '', answer: '', category: '常見問題' });
+    // 知識建議依 target_kind 分頁：faq | product | style
+    const [kindTab, setKindTab] = useState('faq');
+    const [styleSuggestions, setStyleSuggestions] = useState([]);
+    const [isLoadingStyle, setIsLoadingStyle] = useState(false);
+    const [styleBusyId, setStyleBusyId] = useState(null);
+    const [productModal, setProductModal] = useState({ open: false, suggestionId: null, isUpdate: false, name: '', description: '', keywords: '', hint: '', oldSnapshot: '' });
 
     const fetchPreview = useCallback(async (previewDays) => {
         if (!agentId) return;
@@ -88,10 +97,30 @@ const ConversationAnalystView = ({ agentId, adminId, onFaqUpdated, faqCategories
         }
     }, [agentId]);
 
+    const fetchStyleSuggestions = useCallback(async () => {
+        if (!agentId) return;
+        setIsLoadingStyle(true);
+        try {
+            const res = await axios.get(`${config.API_URL}/api/evolution/${agentId}/style-suggestions`, {
+                params: { userId: adminId }
+            });
+            setStyleSuggestions(res.data.suggestions || []);
+        } catch (err) {
+            console.error('Failed to fetch style suggestions:', err);
+            setStyleSuggestions([]);
+        } finally {
+            setIsLoadingStyle(false);
+        }
+    }, [agentId, adminId]);
+
     useEffect(() => {
         fetchStats();
         fetchSuggestions(activeTab);
     }, [fetchStats, fetchSuggestions, activeTab]);
+
+    useEffect(() => {
+        if (kindTab === 'style') fetchStyleSuggestions();
+    }, [kindTab, fetchStyleSuggestions]);
 
     useEffect(() => {
         fetchPreview(days);
@@ -146,6 +175,76 @@ const ConversationAnalystView = ({ agentId, adminId, onFaqUpdated, faqCategories
             alert(err.response?.data?.detail || '加入 FAQ 失敗');
         } finally {
             setAcceptingId(null);
+        }
+    };
+
+    const openProductModal = (suggestion) => {
+        const isUpdate = suggestion.suggestion_type === 'update' && !!suggestion.target_product_id;
+        setProductModal({
+            open: true,
+            suggestionId: suggestion._id,
+            isUpdate,
+            name: suggestion.suggested_question || '',
+            description: '',
+            keywords: '',
+            hint: suggestion.suggested_answer || '',
+            oldSnapshot: suggestion.target_product_old || ''
+        });
+    };
+
+    const handleAcceptProduct = async () => {
+        const { suggestionId, isUpdate, name, description, keywords } = productModal;
+        setAcceptingId(suggestionId);
+        setProductModal(prev => ({ ...prev, open: false }));
+        // 更新時留空的 keywords 省略不送，後端 exclude_unset 會保留商品原值
+        const payload = { is_update: isUpdate, name, description };
+        if (!isUpdate || keywords.trim()) payload.keywords = keywords;
+        try {
+            await axios.post(
+                `${config.API_URL}/api/analysis/${agentId}/suggestions/${suggestionId}/accept-product?userId=${adminId}`,
+                payload
+            );
+            await fetchSuggestions(activeTab);
+            await fetchStats();
+            if (onFaqUpdated) onFaqUpdated();
+        } catch (err) {
+            console.error('Accept product failed:', err);
+            alert(err.response?.data?.detail || '加入商品失敗');
+        } finally {
+            setAcceptingId(null);
+        }
+    };
+
+    const handleApproveStyle = async (suggestionId) => {
+        setStyleBusyId(suggestionId);
+        try {
+            await axios.post(
+                `${config.API_URL}/api/evolution/${agentId}/style-suggestions/${suggestionId}/approve?userId=${adminId}`,
+                { agent_id: agentId }
+            );
+            await fetchStyleSuggestions();
+            if (onFaqUpdated) onFaqUpdated();
+        } catch (err) {
+            console.error('Approve style failed:', err);
+            alert(err.response?.data?.detail || '套用風格失敗');
+        } finally {
+            setStyleBusyId(null);
+        }
+    };
+
+    const handleRejectStyle = async (suggestionId) => {
+        setStyleBusyId(suggestionId);
+        try {
+            await axios.post(
+                `${config.API_URL}/api/evolution/${agentId}/style-suggestions/${suggestionId}/reject?userId=${adminId}`,
+                { agent_id: agentId }
+            );
+            await fetchStyleSuggestions();
+        } catch (err) {
+            console.error('Reject style failed:', err);
+            alert(err.response?.data?.detail || '操作失敗');
+        } finally {
+            setStyleBusyId(null);
         }
     };
 
@@ -211,7 +310,13 @@ const ConversationAnalystView = ({ agentId, adminId, onFaqUpdated, faqCategories
         { key: 'accepted', label: '歷史紀錄' }
     ];
 
-    const statusFiltered = suggestions.filter(s => s.status === activeTab);
+    // 先依 target_kind 分流（缺欄位的舊資料視為 faq），再依狀態分頁
+    const kindFiltered = suggestions.filter(s =>
+        kindTab === 'product' ? s.target_kind === 'product' : s.target_kind !== 'product'
+    );
+    const faqPendingCount = suggestions.filter(s => s.target_kind !== 'product' && s.status === 'pending').length;
+    const productPendingCount = suggestions.filter(s => s.target_kind === 'product' && s.status === 'pending').length;
+    const statusFiltered = kindFiltered.filter(s => s.status === activeTab);
 
     // 提取所有不重複的 theme 值
     const themeOptions = [...new Set(statusFiltered.map(s => s.theme).filter(Boolean))];
@@ -486,28 +591,127 @@ const ConversationAnalystView = ({ agentId, adminId, onFaqUpdated, faqCategories
                 <div className="p-8 border-b border-slate-100 bg-slate-50/30">
                     <div className="flex items-center justify-between">
                         <div>
-                            <h3 className="text-lg font-bold text-slate-800">FAQ 建議</h3>
+                            <h3 className="text-lg font-bold text-slate-800">知識與風格建議</h3>
                             <p className="text-xs text-slate-400 mt-1 uppercase tracking-widest font-bold">Suggestions</p>
                         </div>
-                        <div className="flex items-center gap-1 bg-slate-100 rounded-xl p-1">
-                            {tabs.map(tab => (
-                                <button
-                                    key={tab.key}
-                                    onClick={() => { setActiveTab(tab.key); setSelectedTheme('all'); }}
-                                    className={`px-4 py-2 text-xs font-bold rounded-lg transition-all ${
-                                        activeTab === tab.key
-                                            ? 'bg-white text-slate-900 shadow-sm'
-                                            : 'text-slate-500 hover:text-slate-700'
-                                    }`}
-                                >
-                                    {tab.label}
-                                </button>
-                            ))}
-                        </div>
+                        {kindTab !== 'style' && (
+                            <div className="flex items-center gap-1 bg-slate-100 rounded-xl p-1">
+                                {tabs.map(tab => (
+                                    <button
+                                        key={tab.key}
+                                        onClick={() => { setActiveTab(tab.key); setSelectedTheme('all'); }}
+                                        className={`px-4 py-2 text-xs font-bold rounded-lg transition-all ${
+                                            activeTab === tab.key
+                                                ? 'bg-white text-slate-900 shadow-sm'
+                                                : 'text-slate-500 hover:text-slate-700'
+                                        }`}
+                                    >
+                                        {tab.label}
+                                    </button>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                    {/* Kind 分頁：FAQ / 商品 / 風格 */}
+                    <div className="flex items-center gap-2 mt-5">
+                        {[
+                            { key: 'faq', label: 'FAQ 建議', Icon: HelpCircle, count: faqPendingCount },
+                            { key: 'product', label: '商品建議', Icon: Package, count: productPendingCount },
+                            { key: 'style', label: '風格建議', Icon: Sparkles, count: styleSuggestions.length },
+                        ].map(({ key, label, Icon, count }) => (
+                            <button
+                                key={key}
+                                onClick={() => { setKindTab(key); setSelectedTheme('all'); setExpandedId(null); }}
+                                className={`flex items-center gap-1.5 px-4 py-2 text-xs font-bold rounded-xl border transition-all ${
+                                    kindTab === key
+                                        ? 'bg-purple-600 text-white border-purple-600 shadow-sm'
+                                        : 'bg-white text-slate-500 border-slate-200 hover:border-purple-200'
+                                }`}
+                            >
+                                <Icon size={14} />
+                                {label}
+                                {count > 0 && (
+                                    <span className={`px-1.5 py-0.5 rounded-full text-[10px] ${
+                                        kindTab === key ? 'bg-white/25 text-white' : 'bg-purple-50 text-purple-600'
+                                    }`}>{count}</span>
+                                )}
+                            </button>
+                        ))}
                     </div>
                 </div>
 
                 <div className="p-6">
+                    {/* 風格建議審核（Track B 不再自動套用） */}
+                    {kindTab === 'style' && (
+                        isLoadingStyle ? (
+                            <div className="flex items-center justify-center py-16">
+                                <Loader2 size={24} className="animate-spin text-purple-500" />
+                            </div>
+                        ) : styleSuggestions.length === 0 ? (
+                            <div className="text-center py-16 bg-slate-50 rounded-2xl border border-dashed border-slate-200">
+                                <Sparkles size={40} className="text-slate-300 mx-auto mb-3" />
+                                <p className="text-slate-400 text-sm">目前沒有待審的風格建議。當 AI 偵測到你常以一致方式調整回覆語氣時，會在這裡徵詢你是否套用。</p>
+                            </div>
+                        ) : (
+                            <div className="space-y-4">
+                                {styleSuggestions.map((s) => (
+                                    <div key={s._id} className="border border-slate-100 rounded-2xl overflow-hidden bg-white">
+                                        <div className="p-5 bg-purple-50/40 border-b border-purple-100">
+                                            <div className="flex items-center gap-2 mb-2">
+                                                <span className="px-2.5 py-1 text-[10px] font-bold bg-purple-50 text-purple-600 border border-purple-100 rounded-full">語氣類型：{s.bucket || 'other'}</span>
+                                                <span className="px-2.5 py-1 text-[10px] font-bold bg-amber-50 text-amber-600 border border-amber-100 rounded-full">{s.signal_count || 0} 次一致訊號</span>
+                                                <span className="px-2.5 py-1 text-[10px] font-bold bg-green-50 text-green-600 border border-green-100 rounded-full">✓ 已通過黃金考卷</span>
+                                            </div>
+                                            <p className="text-sm font-bold text-slate-800">AI 偵測到你常這樣調整回覆風格，要套用嗎？</p>
+                                            <p className="text-[11px] text-slate-500 mt-1">套用只會調整「怎麼說」（語氣、排版、稱呼），不會改動任何商品或政策事實。套用前會再跑一次黃金考卷確認事實零退步。</p>
+                                        </div>
+                                        <div className="p-5 space-y-3">
+                                            <div>
+                                                <p className="text-xs font-bold text-slate-400 mb-1">目前風格</p>
+                                                <p className="text-xs text-slate-500 bg-slate-50 rounded-xl border border-slate-100 p-3 whitespace-pre-wrap">{s.previous_style_profile || '（無）'}</p>
+                                            </div>
+                                            <div>
+                                                <p className="text-xs font-bold text-purple-500 mb-1">建議的新風格</p>
+                                                <p className="text-sm text-slate-800 bg-purple-50/50 rounded-xl border border-purple-100 p-3 whitespace-pre-wrap">{s.candidate_style_profile}</p>
+                                            </div>
+                                            {Array.isArray(s.examples) && s.examples.length > 0 && (
+                                                <details className="text-xs">
+                                                    <summary className="cursor-pointer text-slate-500 font-bold">參考的修改前後範例（{s.examples.length}）</summary>
+                                                    <div className="mt-2 space-y-2">
+                                                        {s.examples.map((ex, i) => (
+                                                            <div key={i} className="bg-slate-50 rounded-lg border border-slate-100 p-3">
+                                                                <p className="text-slate-400 line-through whitespace-pre-wrap">AI：{ex.ai_draft}</p>
+                                                                <p className="text-slate-700 mt-1 whitespace-pre-wrap">真人：{ex.human_final}</p>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                </details>
+                                            )}
+                                            <div className="flex items-center justify-end gap-2 pt-1">
+                                                <button
+                                                    onClick={() => handleRejectStyle(s._id)}
+                                                    disabled={styleBusyId === s._id}
+                                                    className="flex items-center gap-1.5 px-4 py-2 bg-slate-100 hover:bg-slate-200 disabled:opacity-50 text-slate-500 rounded-xl text-xs font-bold transition-all"
+                                                >
+                                                    <X size={14} />略過
+                                                </button>
+                                                <button
+                                                    onClick={() => handleApproveStyle(s._id)}
+                                                    disabled={styleBusyId === s._id}
+                                                    className="flex items-center gap-1.5 px-5 py-2 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-purple-200"
+                                                >
+                                                    {styleBusyId === s._id ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
+                                                    套用此風格
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )
+                    )}
+
+                    {kindTab !== 'style' && (<>
                     {/* Theme Filter */}
                     {!isLoadingSuggestions && statusFiltered.length > 0 && themeOptions.length > 0 && (
                         <div className="mb-4">
@@ -534,9 +738,9 @@ const ConversationAnalystView = ({ agentId, adminId, onFaqUpdated, faqCategories
                         <div className="text-center py-16 bg-slate-50 rounded-2xl border border-dashed border-slate-200">
                             <BarChart2 size={40} className="text-slate-300 mx-auto mb-3" />
                             <p className="text-slate-400 text-sm">
-                                {activeTab === 'pending'
-                                    ? '目前沒有待處理的 FAQ 建議。執行分析來發現新的 FAQ 缺口。'
-                                    : '尚無已採納的 FAQ 建議。'}
+                                {kindTab === 'product'
+                                    ? (activeTab === 'pending' ? '目前沒有待處理的商品建議。' : '尚無已採納的商品建議。')
+                                    : (activeTab === 'pending' ? '目前沒有待處理的 FAQ 建議。執行分析來發現新的 FAQ 缺口。' : '尚無已採納的 FAQ 建議。')}
                             </p>
                         </div>
                     ) : (
@@ -567,11 +771,11 @@ const ConversationAnalystView = ({ agentId, adminId, onFaqUpdated, faqCategories
                                                     </span>
                                                     {suggestion.suggestion_type === 'update' ? (
                                                         <span className="px-2.5 py-1 text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200 rounded-full">
-                                                            🔧 修正既有 FAQ
+                                                            🔧 {suggestion.target_kind === 'product' ? '修正既有商品' : '修正既有 FAQ'}
                                                         </span>
                                                     ) : (
                                                         <span className="px-2.5 py-1 text-[10px] font-bold bg-emerald-50 text-emerald-600 border border-emerald-100 rounded-full">
-                                                            ➕ 新增 FAQ
+                                                            ➕ {suggestion.target_kind === 'product' ? '新增商品' : '新增 FAQ'}
                                                         </span>
                                                     )}
                                                     {suggestion.analysis_type === 'handoff_gap' && (
@@ -597,7 +801,7 @@ const ConversationAnalystView = ({ agentId, adminId, onFaqUpdated, faqCategories
                                                 {suggestion.status === 'pending' && (
                                                     <>
                                                         <button
-                                                            onClick={(e) => { e.stopPropagation(); openAddFaqModal(suggestion); }}
+                                                            onClick={(e) => { e.stopPropagation(); suggestion.target_kind === 'product' ? openProductModal(suggestion) : openAddFaqModal(suggestion); }}
                                                             disabled={acceptingId === suggestion._id}
                                                             className="flex items-center gap-1.5 px-3 py-2 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white rounded-xl text-xs font-bold transition-all"
                                                         >
@@ -606,7 +810,9 @@ const ConversationAnalystView = ({ agentId, adminId, onFaqUpdated, faqCategories
                                                             ) : (
                                                                 <Plus size={14} />
                                                             )}
-                                                            {suggestion.suggestion_type === 'update' ? '更新 FAQ' : '加入 FAQ'}
+                                                            {suggestion.target_kind === 'product'
+                                                                ? (suggestion.suggestion_type === 'update' ? '更新商品' : '加入商品')
+                                                                : (suggestion.suggestion_type === 'update' ? '更新 FAQ' : '加入 FAQ')}
                                                         </button>
                                                         <button
                                                             onClick={(e) => { e.stopPropagation(); handleIgnore(suggestion._id); }}
@@ -719,6 +925,7 @@ const ConversationAnalystView = ({ agentId, adminId, onFaqUpdated, faqCategories
                             ))}
                         </div>
                     )}
+                    </>)}
                 </div>
             </div>
 
@@ -823,6 +1030,97 @@ const ConversationAnalystView = ({ agentId, adminId, onFaqUpdated, faqCategories
                                 className="flex items-center gap-2 px-5 py-2.5 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white rounded-xl text-sm font-bold transition-all shadow-md shadow-purple-200">
                                 <Plus size={16} />
                                 {addFaqModal.type === 'update' ? '確認修正 FAQ' : '確認加入 FAQ'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Add / Update Product Modal */}
+            {productModal.open && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
+                    onClick={() => setProductModal(prev => ({ ...prev, open: false }))}>
+                    <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
+                    <div className="relative bg-white rounded-2xl shadow-xl w-full max-w-lg flex flex-col max-h-[90vh]"
+                        onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-slate-100 flex-shrink-0">
+                            <div>
+                                <h3 className="text-base font-bold text-slate-800">
+                                    {productModal.isUpdate ? '更新既有商品' : '加入商品知識庫'}
+                                </h3>
+                                <p className="text-xs text-slate-400 mt-0.5">
+                                    請把偵測到的修正填到正確的商品欄位（系統不會自動覆寫）
+                                </p>
+                            </div>
+                            <button onClick={() => setProductModal(prev => ({ ...prev, open: false }))}
+                                className="p-1 text-slate-400 hover:text-slate-600 transition-colors">
+                                <X size={16} />
+                            </button>
+                        </div>
+                        <div className="flex-1 overflow-y-auto p-6 space-y-5">
+                            {productModal.hint && (
+                                <div className="bg-indigo-50/60 rounded-xl border border-indigo-200 p-3">
+                                    <p className="text-[11px] font-bold text-indigo-700 mb-1">真人回覆內容（修正提示，請自行整理成商品欄位）：</p>
+                                    <p className="text-xs text-slate-600 whitespace-pre-wrap">{productModal.hint}</p>
+                                </div>
+                            )}
+                            {productModal.isUpdate && productModal.oldSnapshot && (
+                                <div className="bg-amber-50/60 rounded-xl border border-amber-200 p-3">
+                                    <p className="text-[11px] font-bold text-amber-700 mb-1">將更新的既有商品：</p>
+                                    <p className="text-xs text-slate-500 whitespace-pre-wrap">{productModal.oldSnapshot}</p>
+                                </div>
+                            )}
+                            <div>
+                                <label className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-2 block">商品名稱</label>
+                                <input
+                                    type="text"
+                                    value={productModal.name}
+                                    maxLength={50}
+                                    onChange={(e) => setProductModal(prev => ({ ...prev, name: e.target.value }))}
+                                    className="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-purple-200"
+                                    placeholder="商品名稱..."
+                                />
+                                <div className="text-[10px] text-slate-300 text-right mt-1">{productModal.name.length}/50</div>
+                            </div>
+                            <div>
+                                <label className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-2 block">商品描述</label>
+                                <textarea
+                                    value={productModal.description}
+                                    maxLength={400}
+                                    rows={5}
+                                    onChange={(e) => setProductModal(prev => ({ ...prev, description: e.target.value }))}
+                                    className="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-purple-200 resize-none"
+                                    placeholder="商品描述（價格、規格、供應狀況...）"
+                                />
+                                <div className="text-[10px] text-slate-300 text-right mt-1">{productModal.description.length}/400</div>
+                            </div>
+                            <div>
+                                <label className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-2 block">關鍵字（選填）</label>
+                                <input
+                                    type="text"
+                                    value={productModal.keywords}
+                                    maxLength={100}
+                                    onChange={(e) => setProductModal(prev => ({ ...prev, keywords: e.target.value }))}
+                                    className="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-purple-200"
+                                    placeholder="例如：草莓, 蛋糕, 生日"
+                                />
+                                {productModal.isUpdate && (
+                                    <p className="text-[10px] text-slate-400 mt-1">留空則保留商品原本的關鍵字與自訂欄位</p>
+                                )}
+                            </div>
+                        </div>
+                        <div className="px-6 py-4 border-t border-slate-100 flex items-center justify-between gap-3 flex-shrink-0">
+                            <button
+                                onClick={() => setProductModal(prev => ({ ...prev, open: false }))}
+                                className="px-4 py-2.5 text-sm font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors">
+                                取消
+                            </button>
+                            <button
+                                onClick={handleAcceptProduct}
+                                disabled={!productModal.name.trim() || !productModal.description.trim()}
+                                className="flex items-center gap-2 px-5 py-2.5 bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white rounded-xl text-sm font-bold transition-all shadow-md shadow-purple-200">
+                                <Package size={16} />
+                                {productModal.isUpdate ? '確認更新商品' : '確認加入商品'}
                             </button>
                         </div>
                     </div>
