@@ -4,6 +4,9 @@ import Cookies from 'js-cookie';
 import config from '../config';
 import { FAQ_MAX_QUESTION, FAQ_MAX_ANSWER, FAQ_MAX_COUNT, FAQ_MAX_CATEGORY } from '../utils/faqUtils';
 import axios from 'axios';
+import ChargeConfirmDialog from './ChargeConfirmDialog';
+import { useAuth } from '../context/AuthContext';
+import { isInsufficientBalanceError } from '../utils/pricing';
 
 const getFileIconInfo = (fileName) => {
     if (!fileName) return { Icon: File, color: '#6B7280' };
@@ -26,6 +29,8 @@ export default function FaqImportModal({ onClose, onConfirm, brandDescription = 
     const [isParsing, setIsParsing] = useState(false);
     const [preview, setPreview] = useState(null);
     const [isDragActive, setIsDragActive] = useState(false);
+    const [showChargeConfirm, setShowChargeConfirm] = useState(false);
+    const { userBalance, refreshUserBalance } = useAuth();
     const dragCounter = useRef(0);
 
     const handleDrag = (e) => {
@@ -102,6 +107,18 @@ export default function FaqImportModal({ onClose, onConfirm, brandDescription = 
         onClose();
     };
 
+    const requestParse = () => {
+        // 先做輸入驗證，通過才跳確認扣費
+        if (tab === 'file') {
+            const file = fileRef.current?.files?.[0];
+            if (!file) { alert('請選擇檔案'); return; }
+        } else if (!text.trim()) {
+            alert('請貼上 FAQ 文字內容');
+            return;
+        }
+        setShowChargeConfirm(true);
+    };
+
     const handleParse = async () => {
         setIsParsing(true);
         try {
@@ -127,11 +144,16 @@ export default function FaqImportModal({ onClose, onConfirm, brandDescription = 
                 alert('解析失敗：' + res.data.error);
             } else if (res.data.faqs) {
                 setPreview(res.data.faqs);
+                refreshUserBalance();
                 if (fileRef.current) fileRef.current.value = '';
             }
         } catch (err) {
-            console.error('FAQ import failed:', err);
-            alert('解析失敗，請稍後再試');
+            if (isInsufficientBalanceError(err)) {
+                alert('點數不足，請先前往「升級方案」儲值。');
+            } else {
+                console.error('FAQ import failed:', err);
+                alert('解析失敗，請稍後再試');
+            }
         } finally {
             setIsParsing(false);
         }
@@ -290,7 +312,7 @@ export default function FaqImportModal({ onClose, onConfirm, brandDescription = 
                     <button onClick={handleClose} className="px-4 py-2.5 text-sm font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors">取消</button>
                     {!preview ? (
                         <button
-                            onClick={handleParse}
+                            onClick={requestParse}
                             disabled={isParsing}
                             className="flex items-center gap-2 px-5 py-2.5 bg-brand-600 text-white rounded-xl text-sm font-bold hover:bg-brand-700 transition-all disabled:opacity-50"
                         >
@@ -307,6 +329,15 @@ export default function FaqImportModal({ onClose, onConfirm, brandDescription = 
                     )}
                 </div>
             </div>
+
+            <ChargeConfirmDialog
+                isOpen={showChargeConfirm}
+                featureKey="parse_faqs"
+                featureLabel="匯入 FAQ"
+                balance={userBalance}
+                onConfirm={() => { setShowChargeConfirm(false); handleParse(); }}
+                onCancel={() => setShowChargeConfirm(false)}
+            />
         </div>
     );
 }

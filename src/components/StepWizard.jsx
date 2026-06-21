@@ -5,6 +5,9 @@ import Cookies from 'js-cookie';
 import config from '../config';
 import { ToneType, TONE_PROMPTS, DEFAULT_HANDOFF_OPTIONS } from '../types';
 import ConfirmDialog from './ConfirmDialog';
+import ChargeConfirmDialog from './ChargeConfirmDialog';
+import { useAuth } from '../context/AuthContext';
+import { isInsufficientBalanceError } from '../utils/pricing';
 import FaqImportModal from './FaqImportModal';
 import FaqAddModal from './FaqAddModal';
 import ProductAddModal from './ProductAddModal';
@@ -12,6 +15,10 @@ import ProductImportModal from './ProductImportModal';
 import { FAQ_MAX_QUESTION, FAQ_MAX_ANSWER, FAQ_MAX_COUNT, FAQ_MAX_CATEGORY, getDefaultFaqCategory, validateFaqsForSave, validateFaqsForAnalyze, validateFaqItemForOptimize } from '../utils/faqUtils';
 
 const StepWizard = ({ formData, setFormData, agentId, onComplete }) => {
+    const { userBalance, refreshUserBalance } = useAuth();
+    const [chargeConfirm, setChargeConfirm] = useState({ open: false, featureKey: '', featureLabel: '', onConfirm: null });
+    const closeChargeConfirm = () => setChargeConfirm(c => ({ ...c, open: false }));
+    const askCharge = (featureKey, featureLabel, run) => setChargeConfirm({ open: true, featureKey, featureLabel, onConfirm: run });
     const [qIndex, setQIndex] = useState(0);
     const [isGeneratingFaqs, setIsGeneratingFaqs] = useState(false);
     const [urlError, setUrlError] = useState('');
@@ -116,8 +123,12 @@ const StepWizard = ({ formData, setFormData, agentId, onComplete }) => {
         setFormData(prev => ({ ...prev, [field]: value }));
     };
 
-    const handleOptimizeServices = async () => {
+    const handleOptimizeServices = () => {
         if (!formData.servicesDescription.trim()) return;
+        askCharge('optimize_services', '優化商家服務內容', doOptimizeServices);
+    };
+
+    const doOptimizeServices = async () => {
         setIsOptimizingServices(true);
         try {
             const line_user_id = Cookies.get('google_user_id');
@@ -129,12 +140,17 @@ const StepWizard = ({ formData, setFormData, agentId, onComplete }) => {
             });
             if (response.data && !response.data.error) {
                 updateField('servicesDescription', response.data.services);
+                refreshUserBalance();
             } else {
                 showAlert('優化失敗：' + (response.data.error || '未知錯誤'));
             }
         } catch (error) {
-            console.error('Failed to optimize services:', error);
-            showAlert('優化過程中發生錯誤');
+            if (isInsufficientBalanceError(error)) {
+                showAlert('點數不足，請先前往「升級方案」儲值。');
+            } else {
+                console.error('Failed to optimize services:', error);
+                showAlert('優化過程中發生錯誤');
+            }
         } finally {
             setIsOptimizingServices(false);
         }
@@ -346,13 +362,16 @@ const StepWizard = ({ formData, setFormData, agentId, onComplete }) => {
             updateField('faqs', formData.faqs.map(f => f.id === id ? { ...f, [field]: value } : f));
         };
 
-        const handleGenerateFaqs = async () => {
+        const handleGenerateFaqs = () => {
             if (!formData.businessName.trim() || !formData.servicesDescription.trim()) {
                 showAlert('請先填寫第一題的商家名稱與服務內容');
                 setQIndex(0);
                 return;
             }
+            askCharge('generate_faqs', '一鍵生成 FAQ', doGenerateFaqs);
+        };
 
+        const doGenerateFaqs = async () => {
             setIsGeneratingFaqs(true);
             try {
                 const line_user_id = Cookies.get('google_user_id');
@@ -375,6 +394,7 @@ const StepWizard = ({ formData, setFormData, agentId, onComplete }) => {
                     updateField('faqs', [...formData.faqs, ...newFaqs]);
                     const newCats = new Set(newFaqs.map(f => f.category));
                     setExpandedCategories(prev => new Set([...prev, ...newCats]));
+                    refreshUserBalance();
                     if (response.data.mode === 'extracted') {
                         showAlert(`已從網站擷取 ${newFaqs.length} 筆 FAQ，共 ${newCats.size} 個分類`);
                     }
@@ -382,18 +402,26 @@ const StepWizard = ({ formData, setFormData, agentId, onComplete }) => {
                     showAlert('自動產生失敗：' + response.data.error);
                 }
             } catch (error) {
-                console.error('Failed to generate FAQs:', error);
-                showAlert('自動產生失敗，請手動輸入或稍後再試。');
+                if (isInsufficientBalanceError(error)) {
+                    showAlert('點數不足，請先前往「升級方案」儲值。');
+                } else {
+                    console.error('Failed to generate FAQs:', error);
+                    showAlert('自動產生失敗，請手動輸入或稍後再試。');
+                }
             } finally {
                 setIsGeneratingFaqs(false);
             }
         };
 
-        const handleOptimizeFaq = async (faqId) => {
+        const handleOptimizeFaq = (faqId) => {
             const faq = formData.faqs.find(f => f.id === faqId);
             const optError = validateFaqItemForOptimize(faq);
             if (optError) { showAlert(optError); return; }
+            askCharge('optimize_faq', '優化單筆 FAQ', () => doOptimizeFaq(faqId));
+        };
 
+        const doOptimizeFaq = async (faqId) => {
+            const faq = formData.faqs.find(f => f.id === faqId);
             setOptimizingFaqIds(prev => new Set(prev).add(faqId));
             try {
                 const line_user_id = Cookies.get('google_user_id');
@@ -409,12 +437,17 @@ const StepWizard = ({ formData, setFormData, agentId, onComplete }) => {
                         f.id === faqId ? { ...f, question: response.data.q, answer: response.data.a } : f
                     );
                     updateField('faqs', updatedFaqs);
+                    refreshUserBalance();
                 } else {
                     showAlert('優化失敗：' + (response.data.error || '未知錯誤'));
                 }
             } catch (error) {
-                console.error('Failed to optimize FAQ:', error);
-                showAlert('優化過程中發生錯誤');
+                if (isInsufficientBalanceError(error)) {
+                    showAlert('點數不足，請先前往「升級方案」儲值。');
+                } else {
+                    console.error('Failed to optimize FAQ:', error);
+                    showAlert('優化過程中發生錯誤');
+                }
             } finally {
                 setOptimizingFaqIds(prev => {
                     const newSet = new Set(prev);
@@ -424,7 +457,7 @@ const StepWizard = ({ formData, setFormData, agentId, onComplete }) => {
             }
         };
 
-        const handleAnalyzeFaqs = async () => {
+        const handleAnalyzeFaqs = () => {
             const analyzeError = validateFaqsForAnalyze(formData.faqs);
             if (analyzeError) { showAlert(analyzeError); return; }
 
@@ -433,7 +466,10 @@ const StepWizard = ({ formData, setFormData, agentId, onComplete }) => {
                 setQIndex(0);
                 return;
             }
+            askCharge('analyze_faqs', 'FAQ 智能健檢', doAnalyzeFaqs);
+        };
 
+        const doAnalyzeFaqs = async () => {
             setIsAnalyzing(true);
             try {
                 const line_user_id = Cookies.get('google_user_id');
@@ -447,12 +483,17 @@ const StepWizard = ({ formData, setFormData, agentId, onComplete }) => {
 
                 if (response.data && !response.data.error) {
                     setAnalysisReport(response.data);
+                    refreshUserBalance();
                 } else {
                     showAlert('健檢失敗：' + (response.data.error || '未知錯誤'));
                 }
             } catch (error) {
-                console.error('Failed to analyze FAQs:', error);
-                showAlert('健檢過程中發生錯誤');
+                if (isInsufficientBalanceError(error)) {
+                    showAlert('點數不足，請先前往「升級方案」儲值。');
+                } else {
+                    console.error('Failed to analyze FAQs:', error);
+                    showAlert('健檢過程中發生錯誤');
+                }
             } finally {
                 setIsAnalyzing(false);
             }
@@ -1201,6 +1242,15 @@ const StepWizard = ({ formData, setFormData, agentId, onComplete }) => {
                 confirmText="確認"
                 variant="default"
                 onConfirm={closeAlert}
+            />
+
+            <ChargeConfirmDialog
+                isOpen={chargeConfirm.open}
+                featureKey={chargeConfirm.featureKey}
+                featureLabel={chargeConfirm.featureLabel}
+                balance={userBalance}
+                onConfirm={() => { closeChargeConfirm(); chargeConfirm.onConfirm?.(); }}
+                onCancel={closeChargeConfirm}
             />
         </div>
     );

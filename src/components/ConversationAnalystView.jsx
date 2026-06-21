@@ -2,6 +2,9 @@ import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import config from '../config';
 import { FAQ_MAX_QUESTION, FAQ_MAX_ANSWER, FAQ_MAX_CATEGORY } from '../utils/faqUtils';
+import ChargeConfirmDialog from './ChargeConfirmDialog';
+import { useAuth } from '../context/AuthContext';
+import { isInsufficientBalanceError } from '../utils/pricing';
 import {
     BarChart2,
     Loader2,
@@ -27,6 +30,8 @@ import {
 } from 'lucide-react';
 
 const ConversationAnalystView = ({ agentId, adminId, onFaqUpdated, faqCategories = [] }) => {
+    const { userBalance, refreshUserBalance } = useAuth();
+    const [showChargeConfirm, setShowChargeConfirm] = useState(false);
     const [stats, setStats] = useState(null);
     const [suggestions, setSuggestions] = useState([]);
     const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -97,7 +102,9 @@ const ConversationAnalystView = ({ agentId, adminId, onFaqUpdated, faqCategories
         fetchPreview(days);
     }, [fetchPreview, days]);
 
-    const handleRunAnalysis = async () => {
+    const handleRunAnalysis = () => setShowChargeConfirm(true);
+
+    const doRunAnalysis = async () => {
         setIsAnalyzing(true);
         setAnalysisResult(null);
         try {
@@ -107,11 +114,17 @@ const ConversationAnalystView = ({ agentId, adminId, onFaqUpdated, faqCategories
                 days
             });
             setAnalysisResult(res.data);
+            refreshUserBalance();
             await fetchStats();
             await fetchSuggestions(activeTab);
         } catch (err) {
-            console.error('Analysis failed:', err);
-            setAnalysisResult({ error: err.response?.data?.detail || '分析失敗' });
+            if (isInsufficientBalanceError(err)) {
+                setAnalysisResult({ error: '點數不足，請先前往「升級方案」儲值。' });
+            } else {
+                console.error('Analysis failed:', err);
+                const detail = err.response?.data?.detail;
+                setAnalysisResult({ error: typeof detail === 'string' ? detail : '分析失敗' });
+            }
         } finally {
             setIsAnalyzing(false);
         }
@@ -784,6 +797,15 @@ const ConversationAnalystView = ({ agentId, adminId, onFaqUpdated, faqCategories
                     </div>
                 </div>
             )}
+
+            <ChargeConfirmDialog
+                isOpen={showChargeConfirm}
+                featureKey="analysis_run"
+                featureLabel="FAQ 分析"
+                balance={userBalance}
+                onConfirm={() => { setShowChargeConfirm(false); doRunAnalysis(); }}
+                onCancel={() => setShowChargeConfirm(false)}
+            />
         </div>
     );
 };
