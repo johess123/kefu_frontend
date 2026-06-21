@@ -108,9 +108,10 @@ export default function InboxView({ currentAgent }) {
         setDraftBusy(prev => ({ ...prev, [msg.chat_id]: true }));
         const payload = { agent_id: agentId };
         if (edited !== undefined && edited !== msg.content) payload.message = edited;
+        const draftSessionId = msg.session_id || selectedSession.session_id;
         try {
             await axios.post(
-                `${API}/api/inbox/sessions/${selectedSession.session_id}/drafts/${msg.chat_id}/send?userId=${adminId}`,
+                `${API}/api/inbox/sessions/${draftSessionId}/drafts/${msg.chat_id}/send?userId=${adminId}`,
                 payload
             );
             if (getChannel(selectedSession) === 'line') {
@@ -136,9 +137,10 @@ export default function InboxView({ currentAgent }) {
         if (!window.confirm('確定要捨棄這則 AI 草稿嗎？客戶將不會收到。')) return;
 
         setDraftBusy(prev => ({ ...prev, [msg.chat_id]: true }));
+        const draftSessionId = msg.session_id || selectedSession.session_id;
         try {
             await axios.post(
-                `${API}/api/inbox/sessions/${selectedSession.session_id}/drafts/${msg.chat_id}/discard?userId=${adminId}`,
+                `${API}/api/inbox/sessions/${draftSessionId}/drafts/${msg.chat_id}/discard?userId=${adminId}`,
                 { agent_id: agentId }
             );
             setMessages(prev => prev.filter(m => m.chat_id !== msg.chat_id));
