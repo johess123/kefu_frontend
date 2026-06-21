@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import axios from 'axios';
 import Cookies from 'js-cookie';
 import config from '../config';
+import { fetchPricing } from '../utils/pricing';
 
 const AuthContext = createContext(null);
 
@@ -48,10 +49,14 @@ export const AuthProvider = ({ children }) => {
             setUserName(savedUserName || '');
             setIsAuthorized(true);
             setIsMonitorAllowed(Cookies.get('is_monitor') === 'true');
+            // 由 cookie 還原登入時，餘額不在 cookie 內，需主動向後端取得一次
+            refreshUserBalance(savedUserId);
         }
         if (savedUserEmail) setUserEmail(savedUserEmail);
         if (savedUserPicture) setUserPicture(savedUserPicture);
         setIsVerifying(false);
+        // 預先載入定價（套餐 + 各功能 coins），供 BillingView 與確認扣費 modal 使用
+        fetchPricing();
     }, []);
 
     const logout = () => {

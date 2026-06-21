@@ -5,10 +5,15 @@ import { Loader2, MessageSquare, UserCheck, ArrowRight, Plus, Trash2, Save, Chec
 
 import Cookies from 'js-cookie';
 import ConfirmDialog from './ConfirmDialog';
+import ChargeConfirmDialog from './ChargeConfirmDialog';
+import { useAuth } from '../context/AuthContext';
+import { isInsufficientBalanceError } from '../utils/pricing';
 
 const StepReview = ({ onNext, onEdit, formData, setFormData, sessionId, agentId, reviewData, setReviewData, setAgentId }) => {
+    const { userBalance, refreshUserBalance } = useAuth();
     const initializedRef = useRef(false);
     const [isLoading, setIsLoading] = useState(false);
+    const [showGenConfirm, setShowGenConfirm] = useState(false);
     const [alertDialog, setAlertDialog] = useState({ open: false, message: '', goBack: false });
 
     const showError = (message, goBack = false) => setAlertDialog({ open: true, message, goBack });
@@ -42,6 +47,7 @@ const StepReview = ({ onNext, onEdit, formData, setFormData, sessionId, agentId,
             });
             if (response.data && !response.data.error) {
                 setReviewData(response.data);
+                refreshUserBalance();
                 if (response.data.faqs && response.data.faqs.length > 0) {
                     setSelectedFaqIndex(0);
                     setEditingFaq(response.data.faqs[0]);
@@ -50,6 +56,10 @@ const StepReview = ({ onNext, onEdit, formData, setFormData, sessionId, agentId,
                 showError(response.data.error || '未知錯誤', true);
             }
         } catch (error) {
+            if (isInsufficientBalanceError(error)) {
+                showError('點數不足，請先前往「升級方案」儲值。', true);
+                return;
+            }
             console.error('Error generating data:', error);
             const status = error.response?.status;
             if (status === 422) {
@@ -77,9 +87,10 @@ const StepReview = ({ onNext, onEdit, formData, setFormData, sessionId, agentId,
     };
 
     useEffect(() => {
+        // 不再自動生成；先跳確認扣費，使用者確認後才呼叫 /generate_prompt
         if (!reviewData && !isLoading && !initializedRef.current) {
             initializedRef.current = true;
-            handleGenerate();
+            setShowGenConfirm(true);
         }
     }, []);
 
@@ -181,8 +192,30 @@ const StepReview = ({ onNext, onEdit, formData, setFormData, sessionId, agentId,
     if (isLoading || !reviewData) {
         return (
             <div className="flex flex-col items-center justify-center h-[600px]">
-                <Loader2 className="animate-spin text-brand-600 w-12 h-12 mb-4" />
-                <span className="text-lg font-medium text-slate-600">正在處理中...</span>
+                {isLoading ? (
+                    <>
+                        <Loader2 className="animate-spin text-brand-600 w-12 h-12 mb-4" />
+                        <span className="text-lg font-medium text-slate-600">正在處理中...</span>
+                    </>
+                ) : (
+                    <span className="text-lg font-medium text-slate-500">請確認以開始 AI 生成</span>
+                )}
+                <ChargeConfirmDialog
+                    isOpen={showGenConfirm}
+                    featureKey="generate_prompt"
+                    featureLabel="解析表單並生成"
+                    balance={userBalance}
+                    onConfirm={() => { setShowGenConfirm(false); handleGenerate(); }}
+                    onCancel={() => { setShowGenConfirm(false); onEdit?.(); }}
+                />
+                <ConfirmDialog
+                    isOpen={alertDialog.open}
+                    title="提示"
+                    message={alertDialog.message}
+                    confirmText="確認"
+                    variant="default"
+                    onConfirm={handleErrorConfirm}
+                />
             </div>
         );
     }

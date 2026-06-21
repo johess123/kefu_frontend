@@ -8,6 +8,7 @@ import StepDeploy from '../components/StepDeploy';
 import { MessageSquare, ListChecks, PlayCircle, RefreshCw, Rocket, Loader2, Home } from 'lucide-react';
 import axios from 'axios';
 import config from '../config';
+import { useAuth } from '../context/AuthContext';
 
 const StepTab = ({ active, icon, label, disabled, onClick }) => (
     <button
@@ -26,6 +27,7 @@ const StepTab = ({ active, icon, label, disabled, onClick }) => (
 
 const WizardPage = () => {
     const { agentId: routeAgentId } = useParams();
+    const { userBalance } = useAuth();
     const location = useLocation();
     const navigate = useNavigate();
 
@@ -208,7 +210,7 @@ const WizardPage = () => {
         <div className="min-h-screen bg-slate-50 flex flex-col font-sans text-slate-900">
             <header className="bg-white border-b border-slate-200 h-16 flex items-center justify-between px-4 lg:px-8 sticky top-0 z-50">
                 <div
-                    className="flex items-center gap-2 cursor-pointer hover:opacity-80 transition-opacity"
+                    className="flex-1 flex items-center gap-2 cursor-pointer hover:opacity-80 transition-opacity"
                     onClick={() => navigate('/')}
                 >
                     <div className="bg-brand-600 text-white p-1.5 rounded-lg">
@@ -217,7 +219,7 @@ const WizardPage = () => {
                     <span className="font-bold text-slate-800 tracking-tight hidden sm:block">首頁</span>
                 </div>
 
-                <div className="flex items-center space-x-1 sm:space-x-8">
+                <div className="flex items-center space-x-1 sm:space-x-8 flex-shrink-0">
                     <StepTab
                         active={currentStep === AppStep.WIZARD}
                         icon={<ListChecks size={18} />}
@@ -250,7 +252,12 @@ const WizardPage = () => {
                     />
                 </div>
 
-                <div className="flex items-center gap-4">
+                <div className="flex-1 flex items-center justify-end gap-4">
+                    {/* 點數餘額 */}
+                    <div className="flex items-center gap-1.5 bg-amber-50 border border-amber-100 text-amber-700 font-bold py-1.5 px-3 rounded-xl text-sm">
+                        <span className="text-amber-500">🪙</span>
+                        <span>{(userBalance || 0).toLocaleString()}</span>
+                    </div>
                     <div className="hidden md:flex items-center gap-2">
                         <span className="relative flex h-3 w-3">
                             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>

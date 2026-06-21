@@ -3,61 +3,51 @@ import { Zap, Target, Sparkles, CheckCircle2, Loader2, AlertCircle } from 'lucid
 import { useAuth } from '../context/AuthContext';
 import axios from 'axios';
 import config from '../config';
+import { fetchPricing } from '../utils/pricing';
 import { useSearchParams, useParams } from 'react-router-dom';
 
-const PLANS = [
-    {
-        id: 'emergency',
-        title: '單日急救包',
+// 各套餐的展示樣式（價格與點數一律以後端 /api/pricing 為準）
+const PLAN_STYLES = {
+    starter: {
         subtitle: '主打：一杯咖啡錢，試水溫',
-        price: 99,
-        points: '2000',
         badge: '超值單體驗',
         themeColor: 'from-blue-500 to-indigo-600',
         shadowColor: 'shadow-blue-200',
-        features: [
-            '2,000 點 AI 額度',
-            '無期限使用',
-            '全功能開放',
-            'Line / Telegram 部署支援'
-        ]
+        extraFeatures: ['無期限使用', '全功能開放', 'Line / Telegram 部署支援'],
     },
-    {
-        id: 'weekend',
-        title: '週末代班包',
+    business: {
         subtitle: '週末無憂，代班必備',
-        price: 290,
-        points: '6500',
-        bonus: '700',
         badge: '人氣首選',
         featured: true,
         themeColor: 'from-brand-500 to-purple-600',
         shadowColor: 'shadow-brand-200',
-        features: [
-            '6,500 點 AI 額度',
-            '含額外贈送 700 點',
-            '無期限使用，彈性十足',
-            '熱門方案，CP 值最高'
-        ]
+        extraFeatures: ['每百點單價更低（約 9 折）', '無期限使用，彈性十足', '熱門方案，CP 值最高'],
     },
-    {
-        id: 'regular',
-        title: '常態營運包',
+    enterprise: {
         subtitle: '最長期的夥伴，最省的回饋',
-        price: 490,
-        points: '12000',
-        bonus: '2200',
         badge: '點數最多',
         themeColor: 'from-amber-400 to-orange-500',
         shadowColor: 'shadow-amber-200',
-        features: [
-            '12,000 點 AI 額度',
-            '含額外贈送 2,200 點',
-            '常態營運最划算選擇',
-            '大用量商家首選'
-        ]
-    }
-];
+        extraFeatures: ['每百點單價最低（約 83 折）', '常態營運最划算選擇', '大用量商家首選'],
+    },
+};
+
+const buildPlan = (pkg) => {
+    const style = PLAN_STYLES[pkg.id] || {};
+    return {
+        id: pkg.id,
+        title: pkg.title,
+        price: pkg.price,
+        points: pkg.coins.toLocaleString(),
+        rawPoints: pkg.coins,
+        subtitle: style.subtitle || '',
+        badge: style.badge || '方案',
+        featured: !!style.featured,
+        themeColor: style.themeColor || 'from-slate-400 to-slate-600',
+        shadowColor: style.shadowColor || 'shadow-slate-200',
+        features: [`${pkg.coins.toLocaleString()} 點 AI 額度`, ...(style.extraFeatures || [])],
+    };
+};
 
 const BillingView = () => {
     const { userId, refreshUserBalance } = useAuth();
@@ -65,6 +55,13 @@ const BillingView = () => {
     const [searchParams] = useSearchParams();
     const [loadingPlan, setLoadingPlan] = useState(null);
     const [message, setMessage] = useState(null);
+    const [plans, setPlans] = useState([]);
+
+    useEffect(() => {
+        fetchPricing().then((pricing) => {
+            setPlans((pricing.packages || []).map(buildPlan));
+        });
+    }, []);
 
     useEffect(() => {
         const result = searchParams.get('result');
@@ -152,7 +149,7 @@ const BillingView = () => {
                 {/* Background ambient glow */}
                 <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[400px] bg-brand-500/5 blur-[120px] pointer-events-none rounded-full"></div>
 
-                {PLANS.map((plan) => (
+                {plans.map((plan) => (
                     <div
                         key={plan.id}
                         className={`group relative flex flex-col h-full bg-white rounded-[40px] p-8 border ${plan.featured ? 'border-brand-500 border-2' : 'border-slate-100'} shadow-xl hover:shadow-2xl transition-all duration-500 hover:-translate-y-2 overflow-hidden`}
