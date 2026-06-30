@@ -40,7 +40,7 @@ const ConfirmModal = ({ icon, iconBg, iconColor, title, description, confirmText
 
 const AgentHome = () => {
     const navigate = useNavigate();
-    const { userId, userName, userEmail, userPicture, isMonitorAllowed, logout } = useAuth();
+    const { userId, userName, userEmail, userPicture, userBalance, isMonitorAllowed, logout } = useAuth();
     const [agents, setAgents] = useState([]);
     const [loading, setLoading] = useState(true);
     const [showOnboarding, setShowOnboarding] = useState(
@@ -131,6 +131,11 @@ const AgentHome = () => {
 
                     {/* Actions */}
                     <div className="flex items-center gap-2">
+                        {/* 點數餘額 */}
+                        <div className="flex items-center gap-1.5 bg-amber-50 border border-amber-100 text-amber-700 font-bold py-2 px-3 rounded-xl text-sm">
+                            <span className="text-amber-500">🪙</span>
+                            <span>{(userBalance || 0).toLocaleString()}</span>
+                        </div>
                         {isMonitorAllowed && (
                             <button
                                 onClick={() => navigate('/monitor')}

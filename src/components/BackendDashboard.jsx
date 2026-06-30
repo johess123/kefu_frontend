@@ -52,6 +52,7 @@ import {
     Upload,
     FileSpreadsheet,
     Activity,
+    Coins,
     FolderInput,
     GripVertical,
     LogOut,
@@ -63,9 +64,11 @@ import Cookies from 'js-cookie';
 import { DEFAULT_HANDOFF_OPTIONS, ToneType, TONE_PROMPTS } from '../types';
 import InboxView from './InboxView';
 import ConversationAnalystView from './ConversationAnalystView';
+import CoinUsageView from './CoinUsageView';
 import ActivityLogView from './ActivityLogView';
 import BillingView from './BillingView';
 import ConfirmDialog from './ConfirmDialog';
+import ChargeConfirmDialog from './ChargeConfirmDialog';
 import ImageLightbox from './ImageLightbox';
 import LineDeployGuide from './LineDeployGuide';
 import NotifyBanner from './NotifyBanner';
@@ -81,6 +84,7 @@ import ActivityIntroModal from './ActivityIntroModal';
 import CrmIntroModal from './CrmIntroModal';
 import { useAuth } from '../context/AuthContext';
 import { safeUrl } from '../utils/urlUtils';
+import { isInsufficientBalanceError } from '../utils/pricing';
 
 const SUB_SECTION_MAP = {
     'knowledge-base': 'Knowledge Base',
@@ -527,6 +531,11 @@ const BackendDashboard = () => {
         setConfirmDialog({ isOpen: true, title, message, onConfirm, confirmText, cancelText, variant });
     const closeConfirm = () =>
         setConfirmDialog(prev => ({ ...prev, isOpen: false }));
+
+    // 確認扣費 dialog state
+    const [chargeConfirm, setChargeConfirm] = useState({ open: false, featureKey: '', featureLabel: '', onConfirm: null });
+    const closeChargeConfirm = () => setChargeConfirm(c => ({ ...c, open: false }));
+    const askCharge = (featureKey, featureLabel, run) => setChargeConfirm({ open: true, featureKey, featureLabel, onConfirm: run });
 
     // CRM states
     const [crmUsers, setCrmUsers] = useState([]);
@@ -1126,6 +1135,7 @@ const BackendDashboard = () => {
         playgroundMessagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
     }, [playgroundMessages]);
 
+    // 後台 playground 為測試用途，不扣費（正式 LINE / Telegram 對話才扣費）
     const handlePlaygroundSend = async (textToSend = playgroundInput) => {
         const msgText = textToSend.trim();
         const hasImage = !!playgroundAttachedFile;
@@ -1231,29 +1241,24 @@ const BackendDashboard = () => {
 
             if (response.data && !response.data.error) {
                 setAnalysisReport(response.data);
+                refreshUserBalance();
             } else {
                 alert('健檢失敗：' + (response.data.error || '未知錯誤'));
             }
         } catch (error) {
-            console.error('Failed to analyze FAQs:', error);
-            alert('健檢過程中發生錯誤');
+            if (isInsufficientBalanceError(error)) {
+                alert('點數不足，請先前往「升級方案」儲值。');
+            } else {
+                console.error('Failed to analyze FAQs:', error);
+                alert('健檢過程中發生錯誤');
+            }
         } finally {
             setIsAnalyzing(false);
         }
     };
 
     const handleAnalyzeFaqs = () => {
-        openConfirm({
-            title: 'AI 智能健檢',
-            message: '進行 FAQ 知識庫健檢會消耗點數，確定要繼續嗎？',
-            confirmText: '確定健檢',
-            cancelText: '取消',
-            variant: 'default',
-            onConfirm: () => {
-                validateAndAnalyzeFaqs();
-                closeConfirm();
-            }
-        });
+        askCharge('analyze_faqs', 'FAQ 智能健檢', validateAndAnalyzeFaqs);
     };
 
     const applySuggestion = (idx, optimizedQ, optimizedA) => {
@@ -1298,12 +1303,17 @@ const BackendDashboard = () => {
                     answer: response.data.a
                 };
                 setEditingFaqs(newFaqs);
+                refreshUserBalance();
             } else {
                 alert('優化失敗：' + (response.data.error || '未知錯誤'));
             }
         } catch (error) {
-            console.error('Failed to optimize FAQ:', error);
-            alert('優化過程中發生錯誤');
+            if (isInsufficientBalanceError(error)) {
+                alert('點數不足，請先前往「升級方案」儲值。');
+            } else {
+                console.error('Failed to optimize FAQ:', error);
+                alert('優化過程中發生錯誤');
+            }
         } finally {
             setOptimizingIndices(prev => {
                 const newSet = new Set(prev);
@@ -1780,6 +1790,11 @@ const BackendDashboard = () => {
                 { id: 'inbox', label: '對話收件匣', icon: <MessageSquare size={20} />, badge: inboxAttentionCount > 0 ? (inboxAttentionCount > 99 ? '99+' : inboxAttentionCount) : undefined },
                 { id: 'crm', label: '客戶管理 (CRM)', icon: <UserCircle size={20} /> },
                 { id: 'channels', label: '渠道串接', icon: <Globe size={20} /> }
+            ]
+        },
+        {
+            group: '帳務', items: [
+                { id: 'coin-usage', label: '點數紀錄', icon: <Coins size={20} /> }
             ]
         },
         {
@@ -2261,7 +2276,7 @@ const BackendDashboard = () => {
                                                                                                     <span className="text-[9px] text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full flex-shrink-0 max-w-[80px] truncate">{cat}</span>
                                                                                                     <span className="flex-1 text-sm font-semibold text-slate-700 truncate min-w-0">{faq.question ? faq.question : <span className="text-slate-300 font-normal italic">未填寫問題...</span>}</span>
                                                                                                     <div className="flex items-center gap-1 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
-                                                                                                        <button onClick={() => openConfirm({ title: 'AI 優化', message: `AI 優化「${faq.question || '此問答'}」將會消耗點數，確定繼續嗎？`, confirmText: '確定優化', cancelText: '取消', variant: 'default', onConfirm: () => { handleOptimizeFaq(idx); closeConfirm(); } })} disabled={optimizingIndices.has(idx)} className="w-7 h-7 flex items-center justify-center text-slate-300 hover:text-brand-600 rounded-lg transition-all disabled:opacity-50" title="AI 優化">
+                                                                                                        <button onClick={() => askCharge('optimize_faq', '優化單筆 FAQ', () => handleOptimizeFaq(idx))} disabled={optimizingIndices.has(idx)} className="w-7 h-7 flex items-center justify-center text-slate-300 hover:text-brand-600 rounded-lg transition-all disabled:opacity-50" title="AI 優化">
                                                                                                             {optimizingIndices.has(idx) ? <Loader2 size={13} className="animate-spin text-brand-600" /> : <Sparkles size={13} />}
                                                                                                         </button>
                                                                                                         <button onClick={() => setMoveFaqModal({ open: true, idx, faqQuestion: faq.question, currentCat: cat })} className="w-7 h-7 flex items-center justify-center text-slate-300 hover:text-brand-500 rounded-lg transition-all" title="移動到其他分類">
@@ -3629,6 +3644,10 @@ const BackendDashboard = () => {
                                             }}
                                         />
                                     </>
+                                );
+                            case 'coin-usage':
+                                return (
+                                    <CoinUsageView agentId={routeAgentId} userId={userId} agentName={currentAgent?.name || ''} />
                                 );
                             case 'activity-logs':
                                 return (
@@ -5404,6 +5423,15 @@ const BackendDashboard = () => {
                 variant={confirmDialog.variant}
                 onConfirm={confirmDialog.onConfirm}
                 onCancel={closeConfirm}
+            />
+
+            <ChargeConfirmDialog
+                isOpen={chargeConfirm.open}
+                featureKey={chargeConfirm.featureKey}
+                featureLabel={chargeConfirm.featureLabel}
+                balance={userBalance}
+                onConfirm={() => { closeChargeConfirm(); chargeConfirm.onConfirm?.(); }}
+                onCancel={closeChargeConfirm}
             />
 
             {/* 欄位設定 Modal */}
