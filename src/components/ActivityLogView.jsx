@@ -117,7 +117,10 @@ const normalizeFaq = (f) => ({
 
 /* Build the retrieval / reasoning model from a chat log's events. */
 function extractRetrieval(events = []) {
-    const result = { faqs: [], faqMiss: false, products: [], handoff: null, handoffChecked: false };
+    const result = {
+        faqs: [], faqMiss: false, products: [], handoff: null, handoffChecked: false,
+        styleEvolution: null, factFix: null,
+    };
     for (const evt of events) {
         switch (evt.action) {
             case 'faq_matched':
@@ -136,6 +139,23 @@ function extractRetrieval(events = []) {
                 result.handoffChecked = true;
                 result.handoff = { triggered: false, reason: evt.detail?.reason || '' };
                 break;
+            case 'style_evolved': {
+                const d = evt.detail || {};
+                result.styleEvolution = {
+                    signalCount: d.signal_count ?? 0,
+                    newProfile: d.new_style_profile || '',
+                    previousProfile: d.previous_style_profile || '',
+                };
+                break;
+            }
+            case 'fact_fix_suggested': {
+                const d = evt.detail || {};
+                result.factFix = {
+                    suggestionsCreated: d.suggestions_created ?? 0,
+                    sampleQuestions: (d.sample_questions || []).filter(Boolean),
+                };
+                break;
+            }
             default:
                 break;
         }
@@ -209,6 +229,43 @@ const ChatTurnDetail = ({ log }) => {
                 </div>
             )}
 
+            {/* Style evolution */}
+            {r.styleEvolution && (
+                <div>
+                    <SectionLabel icon={Sparkles}>風格進化</SectionLabel>
+                    <div className="bg-amber-50/60 border border-amber-100 rounded-lg px-3 py-2">
+                        <p className="text-[13px] text-slate-700">
+                            從真人客服 <span className="font-semibold">{r.styleEvolution.signalCount}</span> 次一致的編輯習慣學到新的回覆風格，通過黃金考卷驗證後套用。
+                        </p>
+                        {r.styleEvolution.newProfile && (
+                            <p className="text-[12px] text-slate-600 mt-1 leading-relaxed"><span className="text-amber-600 font-medium">新風格：</span>{r.styleEvolution.newProfile}</p>
+                        )}
+                        {r.styleEvolution.previousProfile && (
+                            <p className="text-[12px] text-slate-400 mt-0.5 leading-relaxed"><span className="font-medium">舊風格：</span>{r.styleEvolution.previousProfile}</p>
+                        )}
+                    </div>
+                </div>
+            )}
+
+            {/* Fact fix suggestions */}
+            {r.factFix && (
+                <div>
+                    <SectionLabel icon={Stethoscope}>事實修正建議</SectionLabel>
+                    <div className="bg-rose-50/60 border border-rose-100 rounded-lg px-3 py-2">
+                        <p className="text-[13px] text-slate-700">
+                            偵測到 AI 答錯，已備好 <span className="font-semibold">{r.factFix.suggestionsCreated}</span> 則修正建議，請到「數據分析師」確認套用。
+                        </p>
+                        {r.factFix.sampleQuestions.length > 0 && (
+                            <ul className="mt-1.5 space-y-0.5">
+                                {r.factFix.sampleQuestions.slice(0, 3).map((q, i) => (
+                                    <li key={i} className="text-[12px] text-slate-500 leading-relaxed">· {q}</li>
+                                ))}
+                            </ul>
+                        )}
+                    </div>
+                </div>
+            )}
+
             {/* AI response */}
             {log.ai_response && (
                 <div>
@@ -254,6 +311,8 @@ const ChatTurn = ({ log }) => {
     if (r.faqs.length) tags.push({ label: `FAQ ×${r.faqs.length}`, cls: 'bg-blue-50 text-blue-600' });
     if (r.products.length) tags.push({ label: `商品 ×${r.products.length}`, cls: 'bg-emerald-50 text-emerald-600' });
     if (isHandoff) tags.push({ label: '轉真人', cls: 'bg-red-50 text-red-600' });
+    if (r.styleEvolution) tags.push({ label: '風格進化', cls: 'bg-amber-50 text-amber-600' });
+    if (r.factFix) tags.push({ label: '事實修正', cls: 'bg-rose-50 text-rose-600' });
 
     return (
         <div className={`rounded-xl border transition-all ${open ? 'border-slate-200 shadow-sm bg-white' : 'border-slate-100 bg-white hover:bg-slate-50'}`}>

@@ -449,6 +449,7 @@ const BackendDashboard = () => {
     const [replyMode, setReplyMode] = useState('auto');   // 'auto' | 'manual'
     const [isSavingReplyMode, setIsSavingReplyMode] = useState(false);
     const [inboxAttentionCount, setInboxAttentionCount] = useState(0);  // 收件匣紅點：需處理的對話數
+    const [factFixPendingCount, setFactFixPendingCount] = useState(0);  // 數據分析師紅點：AI 答錯待確認的事實修正數
     const [isSaving, setIsSaving] = useState(false);
     const [optimizingIndices, setOptimizingIndices] = useState(new Set());
     const [expandedCategories, setExpandedCategories] = useState(new Set(['常見問題']));
@@ -461,8 +462,10 @@ const BackendDashboard = () => {
         website_url: '',
         tone: '親切有溫度',
         tone_avoid: '',
-        tone_custom: ''
+        tone_custom: '',
+        style_profile: ''
     });
+    const [isRollingBackStyle, setIsRollingBackStyle] = useState(false);
     const [isStatsLoading, setIsStatsLoading] = useState(false);
     const [showAllHistory, setShowAllHistory] = useState(false);
     const [isBrandInfoExpanded, setIsBrandInfoExpanded] = useState(false);
@@ -775,7 +778,8 @@ const BackendDashboard = () => {
                 website_url: rawConfig.website_url || '',
                 tone: rawConfig.tone || '親切有溫度',
                 tone_avoid: rawConfig.tone_avoid || '',
-                tone_custom: rawConfig.tone_custom || ''
+                tone_custom: rawConfig.tone_custom || '',
+                style_profile: rawConfig.style_profile || ''
             });
 
             // Sync LINE config
@@ -1205,7 +1209,13 @@ const BackendDashboard = () => {
     const resetPlaygroundChat = () => {
         setPlaygroundMessages([{ role: 'model', text: '你好！我是你的 AI 智能客服，有什麼可以幫你的嗎？' }]);
         setLastResponseInfo(null);
-        // Optional: refresh session ID
+        // 後端徹底重置：刪除測試 sessions 與對話，從全新 session 開始（含解除測試中誤觸的轉真人狀態）
+        const resetUserId = Cookies.get('google_user_id');
+        if (currentAgent?._id && resetUserId) {
+            axios.post(`${config.API_URL}/api/admin/agent/${currentAgent._id}/playground/reset`, null, {
+                params: { userId: resetUserId },
+            }).catch((err) => console.error('Playground backend reset failed:', err));
+        }
         axios.get(`${config.API_URL}/api/init_session`).then(res => setPlaygroundSessionId(res.data.session_id));
     };
 
@@ -1622,6 +1632,10 @@ const BackendDashboard = () => {
                 const res = await axios.get(`${config.API_URL}/api/inbox/agents/${aId}/attention-count?userId=${adminId}`);
                 if (!cancelled) setInboxAttentionCount(res.data?.count || 0);
             } catch (e) { /* 靜默失敗，不影響主畫面 */ }
+            try {
+                const sres = await axios.get(`${config.API_URL}/api/analysis/${aId}/stats`);
+                if (!cancelled) setFactFixPendingCount(sres.data?.edit_feedback_pending_count || 0);
+            } catch (e) { /* 靜默失敗 */ }
         };
         fetchCount();
         const id = setInterval(fetchCount, 12000);
@@ -1651,6 +1665,26 @@ const BackendDashboard = () => {
             alert('回覆模式儲存失敗，請稍後再試。');
         } finally {
             setIsSavingReplyMode(false);
+        }
+    };
+
+    const handleRollbackStyle = async () => {
+        if (!window.confirm('確定要還原上一次 AI 自動學到的風格嗎？這會回到學習前的版本。')) return;
+        try {
+            setIsRollingBackStyle(true);
+            const res = await axios.post(
+                `${config.API_URL}/api/evolution/${currentAgent._id}/rollback`,
+                { agent_id: currentAgent._id },
+                { params: { userId: currentAgent.admin_id } }
+            );
+            const restored = res.data?.restored_style_profile ?? '';
+            setRootConfig(prev => ({ ...prev, style_profile: restored }));
+            alert('已還原到上一次自動學習前的風格。');
+        } catch (error) {
+            console.error('Rollback style failed:', error);
+            alert(error.response?.data?.detail || '還原失敗，可能尚無可還原的自動學習紀錄。');
+        } finally {
+            setIsRollingBackStyle(false);
         }
     };
 
@@ -1747,7 +1781,7 @@ const BackendDashboard = () => {
         },
         {
             group: 'AI 團隊管理', items: [
-                { id: 'agents', label: '虛擬團隊 (Agents)', icon: <Users size={20} /> },
+                { id: 'agents', label: '虛擬團隊 (Agents)', icon: <Users size={20} />, badge: factFixPendingCount > 0 ? (factFixPendingCount > 99 ? '99+' : factFixPendingCount) : undefined },
                 { id: 'activity-logs', label: '團隊運作日誌', icon: <Activity size={20} /> }
             ]
         },
@@ -3086,6 +3120,35 @@ const BackendDashboard = () => {
                                                                         />
                                                                         <div className="text-[10px] text-slate-500 text-right pr-4 mt-1">{(rootConfig.tone_avoid || '').length}/50</div>
                                                                     </div>
+                                                                </div>
+
+                                                                {/* AI 自動學到的風格（Track B 進化結果，可見可編輯可還原） */}
+                                                                <div className="rounded-2xl border border-amber-200 bg-amber-50/50 p-5">
+                                                                    <div className="flex items-center justify-between mb-2">
+                                                                        <label className="text-xs font-bold text-amber-700 uppercase tracking-widest flex items-center gap-1.5">
+                                                                            ✨ AI 自動學到的風格
+                                                                        </label>
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={handleRollbackStyle}
+                                                                            disabled={isRollingBackStyle}
+                                                                            className="text-[11px] font-bold text-amber-600 hover:text-amber-800 disabled:opacity-40 transition-colors"
+                                                                        >
+                                                                            {isRollingBackStyle ? '還原中...' : '↩ 還原上次自動學習'}
+                                                                        </button>
+                                                                    </div>
+                                                                    <p className="text-[11px] text-amber-600/80 mb-3">
+                                                                        系統會從真人客服在收件匣的編輯習慣，自動學習你的品牌語氣（如表情符號、排版偏好）。你可以在此微調或清空。
+                                                                    </p>
+                                                                    <textarea
+                                                                        value={rootConfig.style_profile}
+                                                                        maxLength={300}
+                                                                        rows={3}
+                                                                        onChange={(e) => setRootConfig({ ...rootConfig, style_profile: e.target.value })}
+                                                                        className="w-full px-4 py-3 bg-white text-slate-800 rounded-xl outline-none border border-amber-200 focus:border-amber-400 transition-all text-sm resize-none placeholder:text-slate-400"
+                                                                        placeholder="（尚未學到任何風格。當真人在收件匣編輯 AI 草稿、累積一致的風格修改後，這裡會自動出現學到的風格。）"
+                                                                    />
+                                                                    <div className="text-[10px] text-amber-500/70 text-right mt-1">{(rootConfig.style_profile || '').length}/300</div>
                                                                 </div>
                                                             </div>
 
