@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import axios from 'axios';
 import config from '../config';
-import { RefreshCw, Send, MessageSquare } from 'lucide-react';
+import { RefreshCw, Send, MessageSquare, Search, PanelRightOpen, PanelRightClose, Loader2 } from 'lucide-react';
 import { safeUrl } from '../utils/urlUtils';
+import CrmMemberPanel, { getTagColor } from './CrmMemberPanel';
 
 const API = config.API_URL;
 
@@ -14,8 +15,10 @@ export default function InboxView({ currentAgent }) {
     const [isSending, setIsSending] = useState(false);
     const [isLoadingSessions, setIsLoadingSessions] = useState(false);
     const [isLoadingMessages, setIsLoadingMessages] = useState(false);
-    const [activeTab, setActiveTab] = useState('open');
-    const [isClosing, setIsClosing] = useState(false);
+    const [searchQuery, setSearchQuery] = useState('');
+    const [isTogglingMode, setIsTogglingMode] = useState(false);
+    const [isCrmPanelOpen, setIsCrmPanelOpen] = useState(true);
+    const [crmUsers, setCrmUsers] = useState([]);
     const [lineQuota, setLineQuota] = useState(null);
     const [draftEdits, setDraftEdits] = useState({});   // chat_id -> 編輯中的草稿文字
     const [draftBusy, setDraftBusy] = useState({});     // chat_id -> 發送/捨棄處理中
@@ -31,7 +34,7 @@ export default function InboxView({ currentAgent }) {
         setIsLoadingSessions(true);
         try {
             const res = await axios.get(
-                `${API}/api/inbox/agents/${agentId}/sessions?userId=${adminId}&tab=${activeTab}`
+                `${API}/api/inbox/agents/${agentId}/sessions?userId=${adminId}`
             );
             setSessions(res.data.sessions || []);
         } catch (err) {
@@ -39,7 +42,18 @@ export default function InboxView({ currentAgent }) {
         } finally {
             setIsLoadingSessions(false);
         }
-    }, [agentId, adminId, activeTab]);
+    }, [agentId, adminId]);
+
+    // CRM 會員資料（右側面板用）：沿用既有 CRM API，不新增路由
+    const fetchCrmUsers = useCallback(async () => {
+        if (!agentId || !adminId) return;
+        try {
+            const res = await axios.get(`${API}/api/inbox/agents/${agentId}/users?userId=${adminId}`);
+            setCrmUsers(res.data.users || []);
+        } catch (err) {
+            console.error('Failed to fetch CRM users', err);
+        }
+    }, [agentId, adminId]);
 
     const fetchLineQuota = useCallback(async () => {
         if (!agentId || !adminId) return;
@@ -72,7 +86,8 @@ export default function InboxView({ currentAgent }) {
     useEffect(() => {
         fetchSessions();
         fetchLineQuota();
-    }, [fetchSessions, fetchLineQuota]);
+        fetchCrmUsers();
+    }, [fetchSessions, fetchLineQuota, fetchCrmUsers]);
 
     useEffect(() => {
         if (messages.length > prevMessageCountRef.current) {
@@ -88,6 +103,7 @@ export default function InboxView({ currentAgent }) {
         setMessages([]);
         setDraftEdits({});
         fetchMessages(sess.session_id);
+        fetchCrmUsers();
     };
 
     // 輪詢：選定對話時每 4 秒靜默重抓訊息，讓人工審核模式的 AI 草稿能即時出現
@@ -207,23 +223,72 @@ export default function InboxView({ currentAgent }) {
         }
     };
 
-    const handleClose = async () => {
-        if (!selectedSession || isClosing) return;
-        setIsClosing(true);
+    // AI / 人工模式切換：呼叫期間鎖定 Toggle，成功才更新畫面（失敗即維持原狀 = 回滾）
+    const handleToggleMode = async () => {
+        if (!selectedSession || isTogglingMode) return;
+        const newMode = selectedSession.mode === 'human' ? 'ai' : 'human';
+        setIsTogglingMode(true);
         try {
             await axios.post(
-                `${API}/api/inbox/sessions/${selectedSession.session_id}/close?userId=${adminId}`,
-                { agent_id: agentId }
+                `${API}/api/inbox/sessions/${selectedSession.session_id}/toggle-mode?userId=${adminId}`,
+                { agent_id: agentId, mode: newMode }
             );
-            setSelectedSession(null);
-            setActiveTab('done');
+            setSelectedSession(prev => prev ? { ...prev, mode: newMode } : prev);
+            setSessions(prev => prev.map(s =>
+                s.session_id === selectedSession.session_id ? { ...s, mode: newMode } : s
+            ));
+        } catch (err) {
+            console.error('Failed to toggle mode', err);
+            alert('模式切換失敗，請稍後再試。');
         } finally {
-            setIsClosing(false);
+            setIsTogglingMode(false);
         }
     };
 
     const getChannel = (sess) =>
         sess?.channel || (sess?.session_id?.startsWith('telegram_') ? 'telegram' : 'line');
+
+    // 依「客戶名稱」與「已綁定標籤」即時過濾
+    const filteredSessions = sessions.filter(sess => {
+        const q = searchQuery.trim().toLowerCase();
+        if (!q) return true;
+        const nameMatch = (sess.user_name || '').toLowerCase().includes(q);
+        const tagMatch = (sess.tags || []).some(tag => (tag || '').toLowerCase().includes(q));
+        return nameMatch || tagMatch;
+    });
+
+    // 右側 CRM 面板顯示的會員資料；member 尚未建檔時以 session 資訊組出預設值
+    const selectedMember = (() => {
+        if (!selectedSession) return null;
+        const ch = getChannel(selectedSession);
+        const found = crmUsers.find(u =>
+            u.line_id === selectedSession.user_id && (u.channel || 'line') === ch
+        );
+        return found || {
+            line_id: selectedSession.user_id,
+            user_name: selectedSession.user_name,
+            channel: ch,
+            last_time: selectedSession.last_time,
+            tags: selectedSession.tags || [],
+            notes: '',
+        };
+    })();
+
+    // 標籤/備註更新後同步 CRM 快取與左側卡片標籤
+    const handleMemberUpdate = (updated) => {
+        const chOf = (u) => u.channel || 'line';
+        setCrmUsers(prev => {
+            const exists = prev.some(u => u.line_id === updated.line_id && chOf(u) === chOf(updated));
+            return exists
+                ? prev.map(u => (u.line_id === updated.line_id && chOf(u) === chOf(updated)) ? { ...u, ...updated } : u)
+                : [...prev, updated];
+        });
+        setSessions(prev => prev.map(s =>
+            (s.user_id === updated.line_id && getChannel(s) === chOf(updated))
+                ? { ...s, tags: updated.tags || [] }
+                : s
+        ));
+    };
 
     const formatTime = (timeStr) => {
         if (!timeStr) return '';
@@ -347,31 +412,31 @@ export default function InboxView({ currentAgent }) {
             <div className="flex flex-1 gap-4 overflow-hidden">
                 {/* Left: session list */}
                 <div className="w-80 flex-shrink-0 bg-white rounded-2xl border border-slate-200 flex flex-col overflow-hidden">
-                    {/* Tab buttons */}
-                    <div className="flex border-b border-slate-100">
-                        <button
-                            onClick={() => { setActiveTab('open'); setSelectedSession(null); }}
-                            className={`flex-1 py-2.5 text-sm font-semibold transition-colors ${activeTab === 'open' ? 'text-brand-600 border-b-2 border-brand-500' : 'text-slate-400 hover:text-slate-600'}`}
-                        >
-                            待處理 (OPEN)
-                        </button>
-                        <button
-                            onClick={() => { setActiveTab('done'); setSelectedSession(null); }}
-                            className={`flex-1 py-2.5 text-sm font-semibold transition-colors ${activeTab === 'done' ? 'text-brand-600 border-b-2 border-brand-500' : 'text-slate-400 hover:text-slate-600'}`}
-                        >
-                            已結案 (DONE)
-                        </button>
+                    {/* 搜尋：名稱 / 標籤 即時過濾 */}
+                    <div className="px-3 py-2.5 border-b border-slate-100">
+                        <div className="relative">
+                            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-300" />
+                            <input
+                                type="text"
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                                placeholder="搜尋名稱、標籤..."
+                                className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-8 pr-3 py-2 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-brand-300 focus:border-brand-400 transition-all"
+                            />
+                        </div>
                     </div>
                     <div className="px-4 py-2 border-b border-slate-100 text-xs text-slate-400">
-                        共 {sessions.length} 筆
+                        共 {filteredSessions.length} 筆
                     </div>
                     <div className="flex-1 overflow-y-auto">
                         {isLoadingSessions ? (
                             <div className="flex items-center justify-center h-24 text-slate-400 text-sm">載入中...</div>
-                        ) : sessions.length === 0 ? (
-                            <div className="flex items-center justify-center h-24 text-slate-400 text-sm">尚無對話紀錄</div>
+                        ) : filteredSessions.length === 0 ? (
+                            <div className="flex items-center justify-center h-24 text-slate-400 text-sm">
+                                {searchQuery.trim() ? '找不到符合的對話' : '尚無對話紀錄'}
+                            </div>
                         ) : (
-                            sessions.map((sess) => {
+                            filteredSessions.map((sess) => {
                                 const isSelected = selectedSession?.session_id === sess.session_id;
                                 const ch = getChannel(sess);
                                 return (
@@ -405,6 +470,15 @@ export default function InboxView({ currentAgent }) {
                                         </div>
                                         <p className={`text-xs mt-0.5 truncate ${sess.needs_attention ? 'text-slate-600 font-medium' : 'text-slate-400'}`}>{sess.last_message || '（無訊息）'}</p>
                                         <p className="text-xs text-slate-300 mt-0.5">{formatTime(sess.last_time)}</p>
+                                        {(sess.tags || []).length > 0 && (
+                                            <div className="flex flex-wrap gap-1 mt-1.5">
+                                                {sess.tags.map(tag => (
+                                                    <span key={tag} className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold border ${getTagColor(tag)}`}>
+                                                        {tag}
+                                                    </span>
+                                                ))}
+                                            </div>
+                                        )}
                                     </button>
                                 );
                             })
@@ -436,18 +510,32 @@ export default function InboxView({ currentAgent }) {
                                     </div>
                                     <p className="text-xs text-slate-400">{selectedSession.session_id}</p>
                                 </div>
-                                <span className={`ml-auto text-xs px-2 py-1 rounded-full ${selectedSession.mode === 'human' ? 'bg-orange-100 text-orange-600' : 'bg-blue-100 text-blue-600'}`}>
-                                    {selectedSession.mode === 'human' ? '人工客服模式' : 'AI 模式'}
-                                </span>
-                                {activeTab === 'open' && (
+                                {/* AI / 人工模式 Toggle：ai = 綠（AI 自動回覆）、human = 紅（真人接管） */}
+                                <div className="ml-auto flex items-center gap-2">
+                                    <span className={`text-xs font-semibold ${selectedSession.mode === 'human' ? 'text-red-600' : 'text-green-600'}`}>
+                                        {selectedSession.mode === 'human' ? '人工客服模式' : 'AI 模式'}
+                                    </span>
                                     <button
-                                        onClick={handleClose}
-                                        disabled={isClosing}
-                                        className="text-xs px-3 py-1.5 rounded-lg bg-slate-100 text-slate-600 hover:bg-red-50 hover:text-red-600 border border-slate-200 hover:border-red-200 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                                        onClick={handleToggleMode}
+                                        disabled={isTogglingMode}
+                                        title={selectedSession.mode === 'human' ? '切換回 AI 自動回覆（結案）' : '切換為真人客服接管'}
+                                        className={`relative w-11 h-6 rounded-full transition-colors flex-shrink-0 ${selectedSession.mode === 'human' ? 'bg-red-500' : 'bg-green-500'} ${isTogglingMode ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'}`}
                                     >
-                                        {isClosing ? '結案中...' : '標記結案'}
+                                        <span
+                                            className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-all flex items-center justify-center ${selectedSession.mode === 'human' ? 'left-[22px]' : 'left-0.5'}`}
+                                        >
+                                            {isTogglingMode && <Loader2 size={12} className="animate-spin text-slate-400" />}
+                                        </span>
                                     </button>
-                                )}
+                                </div>
+                                {/* CRM 面板收合按鈕 */}
+                                <button
+                                    onClick={() => setIsCrmPanelOpen(prev => !prev)}
+                                    title={isCrmPanelOpen ? '收合客戶資訊面板' : '展開客戶資訊面板'}
+                                    className={`w-8 h-8 rounded-lg flex items-center justify-center border transition-colors flex-shrink-0 ${isCrmPanelOpen ? 'bg-brand-50 text-brand-600 border-brand-200' : 'bg-white text-slate-400 border-slate-200 hover:text-slate-600 hover:bg-slate-50'}`}
+                                >
+                                    {isCrmPanelOpen ? <PanelRightClose size={16} /> : <PanelRightOpen size={16} />}
+                                </button>
                             </div>
 
                             {/* Messages */}
@@ -583,6 +671,37 @@ export default function InboxView({ currentAgent }) {
                         </>
                     )}
                 </div>
+
+                {/* Right: 客戶 CRM 資訊面板（可收合） */}
+                {selectedSession && isCrmPanelOpen && selectedMember && (
+                    <div className="w-80 flex-shrink-0 bg-white rounded-2xl border border-slate-200 flex flex-col overflow-hidden">
+                        <div className="px-4 py-3 border-b border-slate-100 flex items-center gap-2">
+                            <div className="w-8 h-8 bg-brand-50 rounded-full flex items-center justify-center flex-shrink-0">
+                                <span className="text-brand-600 font-bold text-sm">
+                                    {(selectedMember.user_name || '?').charAt(0).toUpperCase()}
+                                </span>
+                            </div>
+                            <div className="flex-1 min-w-0">
+                                <p className="text-sm font-semibold text-slate-800 truncate">{selectedMember.user_name}</p>
+                                <p className="text-[10px] text-slate-400 font-mono truncate">{selectedMember.line_id}</p>
+                            </div>
+                            <button
+                                onClick={() => setIsCrmPanelOpen(false)}
+                                className="w-7 h-7 rounded-full hover:bg-slate-100 flex items-center justify-center transition-colors flex-shrink-0 text-slate-400"
+                                title="收合面板"
+                            >
+                                <PanelRightClose size={14} />
+                            </button>
+                        </div>
+                        <div className="flex-1 overflow-y-auto p-4 space-y-6">
+                            <CrmMemberPanel
+                                user={selectedMember}
+                                currentAgent={currentAgent}
+                                onUserUpdate={handleMemberUpdate}
+                            />
+                        </div>
+                    </div>
+                )}
             </div>
         </div>
     );
