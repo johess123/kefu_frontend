@@ -58,7 +58,8 @@ import {
     LogOut,
     SlidersHorizontal,
     ToggleLeft,
-    ToggleRight
+    ToggleRight,
+    MessagesSquare
 } from 'lucide-react';
 import Cookies from 'js-cookie';
 import { DEFAULT_HANDOFF_OPTIONS, ToneType, TONE_PROMPTS } from '../types';
@@ -73,6 +74,7 @@ import ImageLightbox from './ImageLightbox';
 import LineDeployGuide from './LineDeployGuide';
 import NotifyBanner from './NotifyBanner';
 import FaqImportModal from './FaqImportModal';
+import ChatLogImportModal from './ChatLogImportModal';
 import FaqAddModal from './FaqAddModal';
 import ProductAddModal from './ProductAddModal';
 import ProductImportModal from './ProductImportModal';
@@ -228,6 +230,7 @@ const BackendDashboard = () => {
     const [uploadingProductIdx, setUploadingProductIdx] = useState(null);
     const [showProductImportModal, setShowProductImportModal] = useState(false);
     const [showFaqImportModal, setShowFaqImportModal] = useState(false);
+    const [showChatLogImportModal, setShowChatLogImportModal] = useState(false);
     const kbCardRef = React.useRef(null);
     const escalationCardRef = React.useRef(null);
     const analystCardRef = React.useRef(null);
@@ -4550,6 +4553,21 @@ const BackendDashboard = () => {
                     brandDescription={currentAgent?.brand_description || ''}
                     existingCategories={categoryOrder}
                     agentId={routeAgentId}
+                    onOpenChatLogImport={() => {
+                        setShowFaqImportModal(false);
+                        setShowChatLogImportModal(true);
+                    }}
+                />
+            )}
+
+            {showChatLogImportModal && (
+                <ChatLogImportModal
+                    onClose={() => setShowChatLogImportModal(false)}
+                    agentId={routeAgentId}
+                    adminId={currentAgent?.admin_id}
+                    merchantName={currentAgent?.config?.raw_config?.merchant_name || currentAgent?.name || ''}
+                    existingCategories={categoryOrder}
+                    onConfirm={handleConfirmImportFaqs}
                 />
             )}
 

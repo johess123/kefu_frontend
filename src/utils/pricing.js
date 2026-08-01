@@ -15,6 +15,7 @@ const FALLBACK_FEATURES = {
     generate_prompt: 25,
     chat: 100,
     analysis_run: 100,
+    history_import: 300,
 };
 
 /** 取得定價（packages + features），結果快取於記憶體。 */
