@@ -650,6 +650,13 @@ export default function ChatLogImportModal({
                         const cats = Object.keys(byCat)
                             .sort((a, b) => byCat[b].length - byCat[a].length);
                         const needCheck = items.filter(f => f.time_bomb || f.duplicate_group).length;
+                        // duplicate_group → 這一組有哪些條目（同組的可能被分類拆散到不同區塊）
+                        const peers = {};
+                        items.forEach((f, i) => {
+                            if (f.duplicate_group > 0) {
+                                (peers[f.duplicate_group] = peers[f.duplicate_group] || []).push(i);
+                            }
+                        });
                         return (
                             <div>
                                 <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 mb-1">
@@ -662,7 +669,9 @@ export default function ChatLogImportModal({
                                 </div>
                                 {needCheck > 0 && (
                                     <p className="text-xs text-amber-700 mb-3">
-                                        其中 {needCheck} 組建議優先確認（已標註黃色提示）
+                                        其中 {items.filter(f => f.time_bomb).length} 條可能會過期、
+                                        {Object.values(peers).filter(p => p.length > 1).length} 組內容重複，
+                                        建議先確認這些（畫面上有標色）
                                     </p>
                                 )}
 
@@ -737,9 +746,9 @@ export default function ChatLogImportModal({
                                                                                     內容時效性提示，請確認
                                                                                 </span>
                                                                             )}
-                                                                            {f.duplicate_group > 0 && (
+                                                                            {peers[f.duplicate_group]?.length > 1 && (
                                                                                 <span className="px-1.5 py-0.5 rounded bg-orange-100 text-orange-800 text-[10px] font-bold">
-                                                                                    和其他對話組相同
+                                                                                    和另 {peers[f.duplicate_group].length - 1} 條重複
                                                                                 </span>
                                                                             )}
                                                                         </div>
@@ -757,8 +766,41 @@ export default function ChatLogImportModal({
                                                                             maxLength={FAQ_MAX_ANSWER}
                                                                             onChange={(e) => updateItem(i, 'answer', e.target.value)}
                                                                             placeholder="答案..."
-                                                                            className="w-full text-xs text-slate-655 bg-slate-50 rounded-lg px-2 py-1.5 resize-none outline-none focus:bg-white focus:ring-1 focus:ring-brand-200 transition-colors"
+                                                                            className="w-full text-xs text-slate-600 bg-slate-50 rounded-lg px-2 py-1.5 resize-none outline-none focus:bg-white focus:ring-1 focus:ring-brand-200 transition-colors"
                                                                         />
+
+                                                                        {/* 同一議題的其他條。分組是在資料層算的，但畫面依「分類」折疊，
+                                                                            同組成員可能被拆到不同區塊 —— 只顯示一個標籤的話，
+                                                                            商家看得到提示卻找不到對方，等於白算。 */}
+                                                                        {peers[f.duplicate_group]?.length > 1 && (
+                                                                            <div className="rounded-lg bg-orange-50 border border-orange-100 px-2 py-1.5">
+                                                                                <p className="text-[11px] font-bold text-orange-800">
+                                                                                    這幾條在講同一件事，請確認要留哪些：
+                                                                                </p>
+                                                                                <ul className="mt-0.5 space-y-0.5">
+                                                                                    {peers[f.duplicate_group]
+                                                                                        .filter(j => j !== i)
+                                                                                        .slice(0, 4)
+                                                                                        .map(j => (
+                                                                                            <li key={j} className="text-[11px] text-orange-900/80 leading-snug">
+                                                                                                ·{' '}
+                                                                                                {items[j].category !== f.category && (
+                                                                                                    <span className="text-orange-700">［{items[j].category}］</span>
+                                                                                                )}
+                                                                                                {items[j].question}
+                                                                                                {!picked.has(j) && (
+                                                                                                    <span className="text-slate-400">（未勾選）</span>
+                                                                                                )}
+                                                                                            </li>
+                                                                                        ))}
+                                                                                    {peers[f.duplicate_group].length > 5 && (
+                                                                                        <li className="text-[11px] text-orange-900/60">
+                                                                                            · 還有 {peers[f.duplicate_group].length - 5} 條
+                                                                                        </li>
+                                                                                    )}
+                                                                                </ul>
+                                                                            </div>
+                                                                        )}
                                                                     </div>
                                                                 </div>
                                                             );
