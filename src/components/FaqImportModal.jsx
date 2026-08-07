@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { X, Upload, Loader2, File, FileSpreadsheet } from 'lucide-react';
+import { X, Upload, Loader2, File, FileSpreadsheet, MessagesSquare } from 'lucide-react';
 import Cookies from 'js-cookie';
 import config from '../config';
 import { FAQ_MAX_QUESTION, FAQ_MAX_ANSWER, FAQ_MAX_COUNT, FAQ_MAX_CATEGORY } from '../utils/faqUtils';
@@ -21,7 +21,7 @@ const getFileIconInfo = (fileName) => {
     }
 };
 
-export default function FaqImportModal({ onClose, onConfirm, brandDescription = '', existingCategories = [], agentId }) {
+export default function FaqImportModal({ onClose, onConfirm, brandDescription = '', existingCategories = [], agentId, onOpenChatLogImport }) {
     const [tab, setTab] = useState('file');
     const [text, setText] = useState('');
     const [fileName, setFileName] = useState('');
@@ -80,7 +80,7 @@ export default function FaqImportModal({ onClose, onConfirm, brandDescription = 
     const handleFileChange = (e) => {
         const file = e.target.files?.[0];
         if (!file) return;
-        
+
         const ext = file.name.toLowerCase().split('.').pop();
         if (!['xlsx', 'csv'].includes(ext)) {
             alert('僅支援 .xlsx 或 .csv 格式');
@@ -92,7 +92,7 @@ export default function FaqImportModal({ onClose, onConfirm, brandDescription = 
             if (fileRef.current) fileRef.current.value = '';
             return;
         }
-        
+
         setPreview(null);
         setFileName(file.name);
     };
@@ -181,12 +181,12 @@ export default function FaqImportModal({ onClose, onConfirm, brandDescription = 
     const allCategories = [...new Set([...existingCategories, ...(preview || []).map(f => f.category || '常見問題')])];
 
     return (
-        <div 
+        <div
             onDragEnter={handleDrag}
             onDragOver={handleDrag}
             onDragLeave={handleDrag}
             onDrop={handleDrop}
-            className="fixed inset-0 z-50 flex items-center justify-center p-4" 
+            className="fixed inset-0 z-50 flex items-center justify-center p-4"
             onClick={handleClose}
         >
             <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
@@ -207,18 +207,20 @@ export default function FaqImportModal({ onClose, onConfirm, brandDescription = 
                     <button onClick={handleClose} className="p-1 text-slate-400 hover:text-slate-600 transition-colors"><X size={16} /></button>
                 </div>
                 <div className="flex border-b border-slate-100 flex-shrink-0">
-                    <button onClick={() => { setTab('file'); setPreview(null); setFileName(''); }} className={`flex-1 py-3 text-sm font-semibold transition-colors ${tab === 'file' ? 'text-brand-600 border-b-2 border-brand-500' : 'text-slate-400 hover:text-slate-600'}`}>上傳檔案</button>
-                    <button onClick={() => { setTab('text'); setPreview(null); setFileName(''); }} className={`flex-1 py-3 text-sm font-semibold transition-colors ${tab === 'text' ? 'text-brand-600 border-b-2 border-brand-500' : 'text-slate-400 hover:text-slate-600'}`}>貼上文字</button>
+                    <button onClick={() => { setTab('file'); setPreview(null); setFileName(''); }} className={`flex-1 py-3 text-xs sm:text-sm font-semibold transition-colors ${tab === 'file' ? 'text-brand-600 border-b-2 border-brand-500' : 'text-slate-400 hover:text-slate-600'}`}>上傳檔案</button>
+                    <button onClick={() => { setTab('text'); setPreview(null); setFileName(''); }} className={`flex-1 py-3 text-xs sm:text-sm font-semibold transition-colors ${tab === 'text' ? 'text-brand-600 border-b-2 border-brand-500' : 'text-slate-400 hover:text-slate-600'}`}>貼上文字</button>
+                    {agentId && (
+                        <button onClick={() => { setTab('chatlog'); setPreview(null); setFileName(''); }} className={`flex-1 py-3 text-xs sm:text-sm font-semibold transition-colors ${tab === 'chatlog' ? 'text-brand-600 border-b-2 border-brand-500' : 'text-slate-400 hover:text-slate-600'}`}>上傳聊天紀錄</button>
+                    )}
                 </div>
                 <div className="flex-1 overflow-y-auto p-6 space-y-4">
                     {tab === 'file' && !preview && (
                         <div>
-                            <label 
-                                className={`flex flex-col items-center justify-center w-full h-36 border-2 border-dashed rounded-2xl cursor-pointer transition-colors ${
-                                    fileName 
-                                        ? 'border-brand-400 bg-brand-50/50' 
-                                        : 'border-slate-200 hover:border-brand-300 hover:bg-brand-50/30'
-                                }`}
+                            <label
+                                className={`flex flex-col items-center justify-center w-full h-36 border-2 border-dashed rounded-2xl cursor-pointer transition-colors ${fileName
+                                    ? 'border-brand-400 bg-brand-50/50'
+                                    : 'border-slate-200 hover:border-brand-300 hover:bg-brand-50/30'
+                                    }`}
                             >
                                 {fileName ? (
                                     (() => {
@@ -256,6 +258,31 @@ export default function FaqImportModal({ onClose, onConfirm, brandDescription = 
                             />
                             <div className="text-[10px] text-slate-300 text-right">{text.length}/30000</div>
                             <p className="text-xs text-slate-400 mt-2">AI 會自動識別問答結構，支援 Q&A、數字編號、中文標點等各種格式</p>
+                        </div>
+                    )}
+                    {tab === 'chatlog' && (
+                        <div className="py-4 text-center space-y-4">
+                            <div className="mx-auto w-12 h-12 bg-brand-50 rounded-full flex items-center justify-center">
+                                <MessagesSquare size={22} className="text-brand-600" />
+                            </div>
+                            <div className="space-y-1.5 max-w-sm mx-auto">
+                                <p className="text-sm font-bold text-slate-800">從 LINE 對話紀錄自動生成 FAQ</p>
+                                <p className="text-xs text-slate-500 leading-relaxed">
+                                    匯出 LINE 官方帳號的對話紀錄（CSV 格式），透過 AI 智慧分群、提煉為標準的常見問題。
+                                </p>
+                            </div>
+                            <div className="pt-2">
+                                <button
+                                    onClick={() => {
+                                        if (onOpenChatLogImport) {
+                                            onOpenChatLogImport();
+                                        }
+                                    }}
+                                    className="px-6 py-2.5 bg-brand-600 hover:bg-brand-700 text-white font-bold text-xs sm:text-sm rounded-xl transition-all shadow-md shadow-brand-100/50"
+                                >
+                                    開始整理聊天紀錄
+                                </button>
+                            </div>
                         </div>
                     )}
                     {preview && (
@@ -310,7 +337,7 @@ export default function FaqImportModal({ onClose, onConfirm, brandDescription = 
                 </div>
                 <div className="px-6 py-4 border-t border-slate-100 flex items-center justify-between gap-3 flex-shrink-0">
                     <button onClick={handleClose} className="px-4 py-2.5 text-sm font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors">取消</button>
-                    {!preview ? (
+                    {tab !== 'chatlog' && (!preview ? (
                         <button
                             onClick={requestParse}
                             disabled={isParsing}
@@ -326,7 +353,7 @@ export default function FaqImportModal({ onClose, onConfirm, brandDescription = 
                                 {preview?.length ? `加入知識庫（${preview.length} 組）` : '已無可加入的 FAQ'}
                             </button>
                         </div>
-                    )}
+                    ))}
                 </div>
             </div>
 
