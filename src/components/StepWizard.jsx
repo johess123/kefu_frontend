@@ -9,6 +9,7 @@ import ChargeConfirmDialog from './ChargeConfirmDialog';
 import { useAuth } from '../context/AuthContext';
 import { isInsufficientBalanceError } from '../utils/pricing';
 import FaqImportModal from './FaqImportModal';
+import ChatLogImportModal from './ChatLogImportModal';
 import FaqAddModal from './FaqAddModal';
 import ProductAddModal from './ProductAddModal';
 import ProductImportModal from './ProductImportModal';
@@ -34,6 +35,7 @@ const StepWizard = ({ formData, setFormData, agentId, onComplete }) => {
     const [newFieldLabel, setNewFieldLabel] = useState('');
     const [schemaInputVisible, setSchemaInputVisible] = useState(false);
     const [showWizardFaqImportModal, setShowWizardFaqImportModal] = useState(false);
+    const [showWizardChatLogModal, setShowWizardChatLogModal] = useState(false);
     const [wizardCategoryOrder, setWizardCategoryOrder] = useState(['常見問題']);
     const [wizardDraggedCat, setWizardDraggedCat] = useState(null);
     const [wizardDragOverCat, setWizardDragOverCat] = useState(null);
@@ -745,6 +747,21 @@ const StepWizard = ({ formData, setFormData, agentId, onComplete }) => {
                         brandDescription={formData.brandDescription || ''}
                         existingCategories={[...new Set(formData.faqs.map(f => f.category || '常見問題'))]}
                         agentId={agentId}
+                        onOpenChatLogImport={() => {
+                            setShowWizardFaqImportModal(false);
+                            setShowWizardChatLogModal(true);
+                        }}
+                    />
+                )}
+
+                {showWizardChatLogModal && (
+                    <ChatLogImportModal
+                        onClose={() => setShowWizardChatLogModal(false)}
+                        agentId={agentId}
+                        adminId={Cookies.get('google_user_id')}
+                        merchantName={formData.businessName || ''}
+                        existingCategories={[...new Set(formData.faqs.map(f => f.category || '常見問題'))]}
+                        onConfirm={handleConfirmWizardImportFaqs}
                     />
                 )}
 
