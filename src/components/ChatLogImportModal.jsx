@@ -7,7 +7,7 @@ import { isInsufficientBalanceError } from '../utils/pricing';
 import {
     X, Loader2, FolderOpen, FileSpreadsheet, CheckCircle2, AlertTriangle, ShieldCheck,
     User, Bot, HelpCircle, ChevronLeft, ChevronRight, Sparkles, RotateCcw, Play,
-    Inbox, ChevronUp, ChevronDown, Trash2, Plus,
+    Inbox, ChevronUp, ChevronDown, Trash2, Plus, Wand2,
 } from 'lucide-react';
 import {
     FLAG_LABELS, REJECT_LABELS, TAG_LABELS, cleanFiles,
@@ -508,13 +508,11 @@ export default function ChatLogImportModal({
             onDragLeave={handleDrag}
             onDrop={handleDrop}
             className="fixed inset-0 z-50 flex items-center justify-center p-4"
-            onClick={onClose}
         >
             <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
-            <div
-                className="relative bg-white rounded-2xl shadow-xl w-full max-w-3xl flex flex-col max-h-[88vh] overflow-hidden"
-                onClick={(e) => e.stopPropagation()}
-            >
+            {/* 刻意不做「點外面關閉」—— 這個流程有付費步驟和 2～3 分鐘的等待，
+                誤觸關掉就取不回結果了。只能按右上角的叉叉或頁尾的關閉。 */}
+            <div className="relative bg-white rounded-2xl shadow-xl w-full max-w-3xl flex flex-col max-h-[88vh] overflow-hidden">
                 {isDragActive && (
                     <div className="absolute inset-0 bg-brand-500/10 backdrop-blur-[2px] border-4 border-dashed border-brand-500 rounded-2xl z-50 flex flex-col items-center justify-center pointer-events-none transition-all duration-150">
                         <div className="w-16 h-16 bg-white rounded-full shadow-lg flex items-center justify-center mb-3">
@@ -725,15 +723,6 @@ export default function ChatLogImportModal({
                                     <span className={`text-xs font-bold ml-auto ${overQuota ? 'text-rose-600' : 'text-slate-500'}`}>
                                         已選 {picked.size} 組 · 知識庫還可加入 {quotaLeft} 組
                                     </span>
-                                    {items.length > quotaLeft && (
-                                        <button
-                                            onClick={autoPick}
-                                            title="依被問次數由多到少挑選，剛好填滿額度；同一個重複議題只留一條"
-                                            className="shrink-0 px-2.5 py-1 rounded-lg text-xs font-bold text-brand-700 bg-brand-50 border border-brand-100 hover:bg-brand-100/70 transition-colors"
-                                        >
-                                            自動挑最常被問的 {quotaLeft} 組
-                                        </button>
-                                    )}
                                 </div>
                                 {overQuota > 0 && (
                                     <p className="text-xs text-rose-600 mb-2 leading-snug">
@@ -1312,6 +1301,17 @@ export default function ChatLogImportModal({
                                     整理中…
                                 </button>
                             )
+                        )}
+
+                        {step === 'picking' && items.length > quotaLeft && (
+                            <button
+                                onClick={autoPick}
+                                title="依被問次數由多到少挑選，剛好填滿額度；同一個重複議題只留一條"
+                                className="flex items-center gap-1.5 px-4 py-2.5 text-sm font-bold text-slate-700 bg-white border border-slate-300 rounded-xl hover:bg-slate-50 hover:border-slate-400 transition-colors whitespace-nowrap"
+                            >
+                                <Wand2 size={15} className="text-brand-600" />
+                                自動挑 {quotaLeft} 組
+                            </button>
                         )}
 
                         {step === 'picking' && (
