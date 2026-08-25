@@ -1346,8 +1346,11 @@ const BackendDashboard = () => {
             ...sa,
             // 合併後的 Knowledge Base 卡片涵蓋 FAQ + 商品庫
             ...(sa.name === 'Knowledge Base' ? {
-                title: '客服專員',
+                title: '知識庫管理（FAQ與商品規格）',
                 description: '處理常見問題，管理商品目錄，AI 會優先檢索這裡的內容來回答客戶。',
+            } : {}),
+            ...(sa.name === 'Escalation Manager' ? {
+                title: '人工介入機制設定',
             } : {}),
             icon: iconMap[sa.name] || <PieChart size={24} className="text-brand-600" />,
             bgColor: bgColorMap[sa.name] || 'bg-slate-50',
@@ -1392,7 +1395,7 @@ const BackendDashboard = () => {
         },
         {
             group: 'AI 團隊管理', items: [
-                { id: 'agents', label: '虛擬團隊 (Agents)', icon: <Users size={20} />, badge: factFixPendingCount > 0 ? (factFixPendingCount > 99 ? '99+' : factFixPendingCount) : undefined },
+                { id: 'agents', label: '客服Agent 設定調整', icon: <Users size={20} />, badge: factFixPendingCount > 0 ? (factFixPendingCount > 99 ? '99+' : factFixPendingCount) : undefined },
                 { id: 'activity-logs', label: '團隊運作日誌', icon: <Activity size={20} /> }
             ]
         },
