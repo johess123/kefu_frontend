@@ -502,7 +502,7 @@ const BackendDashboard = () => {
 
     const handleToggleSubagent = async (subagentId, currentStatus, subagentName) => {
         if (subagentName === 'Knowledge Base' && currentStatus === true) {
-            alert('客服專員必須開啟，無法關閉');
+            alert('知識庫管理（FAQ與商品規格）必須開啟，無法關閉');
             return;
         }
         try {
@@ -1346,8 +1346,10 @@ const BackendDashboard = () => {
             ...sa,
             // 合併後的 Knowledge Base 卡片涵蓋 FAQ + 商品庫
             ...(sa.name === 'Knowledge Base' ? {
-                title: '客服專員',
+                title: '知識庫管理（FAQ與商品規格）',
                 description: '處理常見問題，管理商品目錄，AI 會優先檢索這裡的內容來回答客戶。',
+            } : sa.name === 'Escalation Manager' ? {
+                title: '人工介入機制設定',
             } : {}),
             icon: iconMap[sa.name] || <PieChart size={24} className="text-brand-600" />,
             bgColor: bgColorMap[sa.name] || 'bg-slate-50',
@@ -1392,7 +1394,7 @@ const BackendDashboard = () => {
         },
         {
             group: 'AI 團隊管理', items: [
-                { id: 'agents', label: '虛擬團隊 (Agents)', icon: <Users size={20} />, badge: factFixPendingCount > 0 ? (factFixPendingCount > 99 ? '99+' : factFixPendingCount) : undefined },
+                { id: 'agents', label: '客服Agent 設定調整', icon: <Users size={20} />, badge: factFixPendingCount > 0 ? (factFixPendingCount > 99 ? '99+' : factFixPendingCount) : undefined },
                 { id: 'activity-logs', label: '團隊運作日誌', icon: <Activity size={20} /> }
             ]
         },
@@ -1543,7 +1545,7 @@ const BackendDashboard = () => {
                                     <button
                                         onClick={() => navigate('/')}
                                         className="flex items-center gap-1 text-xs text-slate-400 hover:text-brand-600 font-medium transition-colors flex-shrink-0"
-                                        title="切換虛擬團隊"
+                                        title="切換客服Agent 設定調整"
                                     >
                                         <LayoutGrid size={13} />
                                         切換
@@ -1591,7 +1593,7 @@ const BackendDashboard = () => {
                                 </button>
                             )}
                             <h2 className="text-lg font-bold text-slate-800">
-                                {editingSubagent ? editingSubagent : getActiveMenuLabel()}
+                                {editingSubagent ? (teamSubagents.find(sub => sub.name === editingSubagent)?.title || editingSubagent) : getActiveMenuLabel()}
                             </h2>
                         </div>
                     </div>
@@ -1742,8 +1744,8 @@ const BackendDashboard = () => {
                                                         <BookOpen size={22} />
                                                     </div>
                                                     <div className="min-w-0">
-                                                        <h1 className="text-xl sm:text-2xl font-bold text-slate-900">客服部專員 (Knowledge Base)</h1>
-                                                        <p className="text-slate-500 text-xs sm:text-sm">這是「客服部專員」的大腦。AI 會優先檢索這裡的內容來回答客戶。</p>
+                                                        <h1 className="text-xl sm:text-2xl font-bold text-slate-900">知識庫管理（FAQ與商品規格） (Knowledge Base)</h1>
+                                                        <p className="text-slate-500 text-xs sm:text-sm">這是「知識庫管理（FAQ與商品規格）」的大腦。AI 會優先檢索這裡的內容來回答客戶。</p>
                                                     </div>
                                                 </div>
                                             </div>
@@ -2221,7 +2223,7 @@ const BackendDashboard = () => {
                                                         <Shield size={24} />
                                                     </div>
                                                     <div>
-                                                        <h1 className="text-2xl font-bold text-slate-900">人機協作專員 (Escalation Manager)</h1>
+                                                        <h1 className="text-2xl font-bold text-slate-900">人工介入機制設定 (Escalation Manager)</h1>
                                                         <p className="text-slate-500 text-sm">管理 AI 轉接真人的邏輯。AI 會根據此設定決定何時尋求人類協助。</p>
                                                     </div>
                                                 </div>
@@ -2282,7 +2284,7 @@ const BackendDashboard = () => {
                                                 <div>
                                                     <h4 className="text-sm font-bold text-orange-800">防守型策略中心</h4>
                                                     <p className="text-xs text-orange-600 leading-relaxed mt-1">
-                                                        這裡定義人機協作專員的行為。當偵測到風險或回答不出來時，<span className="font-bold">Agent 會自動轉接並建立工單 (Ticket)</span>，確保你不會漏掉任何重要客戶。
+                                                        這裡定義人工介入機制設定的行為。當偵測到風險或回答不出來時，<span className="font-bold">Agent 會自動轉接並建立工單 (Ticket)</span>，確保你不會漏掉任何重要客戶。
                                                     </p>
                                                 </div>
                                             </div> */}
@@ -2919,19 +2921,19 @@ const BackendDashboard = () => {
                                             steps={[
                                                 {
                                                     targetRef: kbCardRef,
-                                                    title: '客服專員（Knowledge Base）',
+                                                    title: '知識庫管理（FAQ與商品規格）（Knowledge Base）',
                                                     description: '管理 FAQ 知識庫與商品目錄，是 AI 回答客戶問題的核心依據。先在這裡新增您的常見問答，AI 才能準確回覆客戶。',
                                                 },
                                                 {
                                                     targetRef: escalationCardRef,
-                                                    title: '協作專員（Escalation Manager）',
+                                                    title: '人工介入機制設定（Escalation Manager）',
                                                     description: '設定轉人工的觸發條件，並指定通知接收者。當顧客需要真人協助時，系統會自動通知指定的團隊成員。',
                                                 },
                                                 {
                                                     targetRef: analystCardRef,
                                                     title: '數據分析師（Conversation Analyst）',
                                                     description: '自動分析對話紀錄，找出 FAQ 覆蓋不足的問題並生成改善建議，幫助您持續優化 AI 客服品質。',
-                                                    ctaLabel: '開始設定客服專員',
+                                                    ctaLabel: '開始設定知識庫管理（FAQ與商品規格）',
                                                     onCta: () => {
                                                         localStorage.setItem('kefu_team_tour_done_v1', '1');
                                                         setShowTeamTour(false);
