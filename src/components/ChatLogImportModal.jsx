@@ -12,9 +12,16 @@ import {
 import {
     FLAG_LABELS, REJECT_LABELS, TAG_LABELS, cleanFiles,
 } from '../utils/conversationCleaner';
-import { FAQ_MAX_QUESTION, FAQ_MAX_ANSWER, FAQ_MAX_CATEGORY } from '../utils/faqUtils';
+import { FAQ_MAX_QUESTION, FAQ_MAX_ANSWER, FAQ_MAX_CATEGORY, FAQ_MAX_COUNT } from '../utils/faqUtils';
 
 const PAGE_SIZE = 20;
+
+// 一次能選幾個檔案。實測 1542 個檔案（33.7 MB）產出 1000 組真人問答，
+// 清洗全在瀏覽器跑，2000 個檔案約 44 MB、記憶體無壓力。
+// 真正的天花板不在這裡：後端一次最多 3000 組問答（約 4600 個檔案），
+// 而知識庫只收 200 條 FAQ —— 約 1300 個檔案就會產滿，再多的輸入
+// 只增加費用、不增加可用產出。
+const MAX_FILES = 2000;
 
 // 真人問答太少就先勸退 —— 實測整批 771 個檔案是 1000 組真人問答、最後產出 236 條，
 // 大約每 4 組才變 1 條 FAQ。低於這個數字幾乎一定是 0 條，但還是會照打 LLM 花錢。
@@ -91,6 +98,7 @@ function CategoryInput({ value, onChange }) {
 
 export default function ChatLogImportModal({
     onClose, agentId, adminId, merchantName = '', onConfirm, existingCategories = [],
+    existingFaqCount = 0,
 }) {
     // select → cleaning → result / failed → composing（統整進度）→ picking（勾選）
     const [step, setStep] = useState('select');
@@ -101,6 +109,38 @@ export default function ChatLogImportModal({
     const [items, setItems] = useState([]);
     const [picked, setPicked] = useState(() => new Set());
     const [openTopics, setOpenTopics] = useState(() => new Set());
+
+    // 知識庫寫死 FAQ_MAX_COUNT 條上限。勾選畫面原本對它一無所知，商家全選
+    // 236 條、按下去才被 alert「僅新增 N 組」，超出的靜默丟掉 —— 不透明。
+    // 這裡先算出還剩多少額度，讓他在按之前就能自己取捨。
+    const quotaLeft = Math.max(0, FAQ_MAX_COUNT - existingFaqCount);
+    const overQuota = Math.max(0, picked.size - quotaLeft);
+
+    /** 依重要程度自動勾選，剛好填滿知識庫額度。
+     *
+     * 排序依據：被問次數多的優先；次數相同時，把「會過期」與「和其他條重複」
+     * 的往後排 —— 那兩種本來就要人再確認，額度不夠時先讓位給乾淨的。
+     * 同一個重複議題只留次數最高的那一條，不然額度會被同義問答吃掉。
+     */
+    const autoPick = () => {
+        const seenGroup = new Set();
+        const order = items
+            .map((f, i) => ({ i, f }))
+            .sort((a, b) =>
+                (b.f.frequency || 1) - (a.f.frequency || 1)
+                || ((a.f.time_bomb ? 1 : 0) + (a.f.duplicate_group ? 1 : 0))
+                 - ((b.f.time_bomb ? 1 : 0) + (b.f.duplicate_group ? 1 : 0)));
+        const chosen = new Set();
+        for (const { i, f } of order) {
+            if (chosen.size >= quotaLeft) break;
+            if (f.duplicate_group) {
+                if (seenGroup.has(f.duplicate_group)) continue;
+                seenGroup.add(f.duplicate_group);
+            }
+            chosen.add(i);
+        }
+        setPicked(chosen);
+    };
 
     const updateItem = (i, field, val) =>
         setItems(prev => prev.map((f, idx) => idx === i ? { ...f, [field]: val } : f));
@@ -201,15 +241,15 @@ export default function ChatLogImportModal({
             return;
         }
 
-        // 3. 數量上限 1000 個，並進行重複性過濾
+        // 3. 數量上限，並進行重複性過濾
         const mergedTemp = [...files];
         csvs.forEach(newFile => {
             const dup = mergedTemp.some(f => f.name === newFile.name && f.size === newFile.size);
             if (!dup) mergedTemp.push(newFile);
         });
 
-        if (mergedTemp.length > 1000) {
-            const msg = '最多僅支援匯入 1000 個 CSV 檔案';
+        if (mergedTemp.length > MAX_FILES) {
+            const msg = `最多僅支援匯入 ${MAX_FILES} 個 CSV 檔案`;
             setError(msg);
             alert(msg);
             return;
@@ -647,8 +687,24 @@ export default function ChatLogImportModal({
                             const k = (f.category || '').trim() || '常見問題';
                             (byCat[k] = byCat[k] || []).push(i);
                         });
-                        const cats = Object.keys(byCat)
-                            .sort((a, b) => byCat[b].length - byCat[a].length);
+                        // 每個分類內部依「被問次數」由多到少排 —— 知識庫只收 200 條，
+                        // 商家常常得從 236 條裡砍掉幾十條，把多人問過的放最上面才方便取捨。
+                        // 次數相同時把「會過期」與「有重複」的往後排（那些更可能被捨棄）。
+                        const rank = (i) => {
+                            const f = items[i];
+                            const penalty = (f.time_bomb ? 1 : 0) + (f.duplicate_group ? 1 : 0);
+                            return [-(f.frequency || 1), penalty];
+                        };
+                        Object.values(byCat).forEach(list => list.sort((a, b) => {
+                            const [fa, pa] = rank(a), [fb, pb] = rank(b);
+                            return fa - fb || pa - pb;
+                        }));
+                        // 分類本身也依「最常被問的那一條」排，讓重要的分類浮到最上面；
+                        // 一樣才比條數。
+                        const topFreq = (cat) =>
+                            Math.max(...byCat[cat].map(i => items[i].frequency || 1));
+                        const cats = Object.keys(byCat).sort(
+                            (a, b) => topFreq(b) - topFreq(a) || byCat[b].length - byCat[a].length);
                         const needCheck = items.filter(f => f.time_bomb || f.duplicate_group).length;
                         // duplicate_group → 這一組有哪些條目（同組的可能被分類拆散到不同區塊）
                         const peers = {};
@@ -666,7 +722,27 @@ export default function ChatLogImportModal({
                                     <span className="text-xs text-slate-400">
                                         勾選要加入的，也可以直接修改內容與分類
                                     </span>
+                                    <span className={`text-xs font-bold ml-auto ${overQuota ? 'text-rose-600' : 'text-slate-500'}`}>
+                                        已選 {picked.size} 組 · 知識庫還可加入 {quotaLeft} 組
+                                    </span>
+                                    {items.length > quotaLeft && (
+                                        <button
+                                            onClick={autoPick}
+                                            title="依被問次數由多到少挑選，剛好填滿額度；同一個重複議題只留一條"
+                                            className="shrink-0 px-2.5 py-1 rounded-lg text-xs font-bold text-brand-700 bg-brand-50 border border-brand-100 hover:bg-brand-100/70 transition-colors"
+                                        >
+                                            自動挑最常被問的 {quotaLeft} 組
+                                        </button>
+                                    )}
                                 </div>
+                                {overQuota > 0 && (
+                                    <p className="text-xs text-rose-600 mb-2 leading-snug">
+                                        超出 {overQuota} 組。知識庫上限 {FAQ_MAX_COUNT} 組
+                                        （目前已有 {existingFaqCount} 組），
+                                        直接送出只會加入前 {quotaLeft} 組、其餘不會加入 ——
+                                        建議先取消勾選不需要的，或關掉視窗先刪掉舊的問答。
+                                    </p>
+                                )}
                                 {needCheck > 0 && (
                                     <p className="text-xs text-amber-700 mb-3">
                                         其中 {items.filter(f => f.time_bomb).length} 條可能會過期、
@@ -731,35 +807,39 @@ export default function ChatLogImportModal({
                                                                         className="mt-1.5 w-4 h-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500 shrink-0"
                                                                     />
                                                                     <div className="min-w-0 flex-1 space-y-1.5">
+                                                                        {/* 第一列：問題（主角，粗體較大）→ 提示標籤 → 分類（置右）。
+                                                                            分類放最右邊，讓視線先落在問題上。 */}
                                                                         <div className="flex items-center gap-2 flex-wrap">
-                                                                            <CategoryInput
-                                                                                value={f.category}
-                                                                                onChange={(val) => updateItem(i, 'category', val)}
+                                                                            <input
+                                                                                type="text"
+                                                                                value={f.question}
+                                                                                maxLength={FAQ_MAX_QUESTION}
+                                                                                onChange={(e) => updateItem(i, 'question', e.target.value)}
+                                                                                placeholder="問題..."
+                                                                                className="flex-1 min-w-[12rem] text-base font-bold text-slate-800 bg-transparent border-b border-slate-100 focus:border-brand-400 outline-none py-0.5 transition-colors"
                                                                             />
                                                                             {f.frequency > 1 && (
-                                                                                <span className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-500 text-[10px] font-bold">
+                                                                                <span className="shrink-0 px-1.5 py-0.5 rounded bg-slate-100 text-slate-500 text-[10px] font-bold">
                                                                                     被問 {f.frequency} 次
                                                                                 </span>
                                                                             )}
                                                                             {f.time_bomb && (
-                                                                                <span className="px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 text-[10px] font-bold">
+                                                                                <span className="shrink-0 px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 text-[10px] font-bold">
                                                                                     內容時效性提示，請確認
                                                                                 </span>
                                                                             )}
                                                                             {peers[f.duplicate_group]?.length > 1 && (
-                                                                                <span className="px-1.5 py-0.5 rounded bg-orange-100 text-orange-800 text-[10px] font-bold">
+                                                                                <span className="shrink-0 px-1.5 py-0.5 rounded bg-orange-100 text-orange-800 text-[10px] font-bold">
                                                                                     和另 {peers[f.duplicate_group].length - 1} 條重複
                                                                                 </span>
                                                                             )}
+                                                                            <div className="shrink-0 ml-auto">
+                                                                                <CategoryInput
+                                                                                    value={f.category}
+                                                                                    onChange={(val) => updateItem(i, 'category', val)}
+                                                                                />
+                                                                            </div>
                                                                         </div>
-                                                                        <input
-                                                                            type="text"
-                                                                            value={f.question}
-                                                                            maxLength={FAQ_MAX_QUESTION}
-                                                                            onChange={(e) => updateItem(i, 'question', e.target.value)}
-                                                                            placeholder="問題..."
-                                                                            className="w-full text-sm font-semibold text-slate-800 bg-transparent border-b border-slate-100 focus:border-brand-400 outline-none py-0.5 transition-colors"
-                                                                        />
                                                                         <textarea
                                                                             rows={2}
                                                                             value={f.answer}
@@ -1077,7 +1157,9 @@ export default function ChatLogImportModal({
                                         </button>
                                     </div>
 
-                                    <div className="mt-3 space-y-2">
+                                    {/* 固定高度＋內部滾動：清單很長時換頁鍵才不會被推到畫面外，
+                                        否則每次換頁都得再滾回底部找按鈕。 */}
+                                    <div className="mt-3 space-y-2 h-[46vh] min-h-[280px] overflow-y-auto pr-1">
                                         {pageItems.length === 0 && (
                                             <p className="py-8 text-center text-sm text-slate-400">此分類尚無資料</p>
                                         )}
@@ -1165,7 +1247,7 @@ export default function ChatLogImportModal({
                                     </div>
 
                                     {currentList.length > PAGE_SIZE && (
-                                        <div className="flex items-center justify-center gap-3 mt-4">
+                                        <div className="flex items-center justify-center gap-3 mt-2 pt-2 border-t border-slate-100">
                                             <button
                                                 disabled={page === 0}
                                                 onClick={() => setPage(p => Math.max(0, p - 1))}
@@ -1236,10 +1318,16 @@ export default function ChatLogImportModal({
                             <button
                                 onClick={confirmPicked}
                                 disabled={!picked.size}
-                                className="flex items-center gap-2 px-5 py-2.5 bg-brand-600 text-white rounded-xl text-sm font-bold hover:bg-brand-700 transition-all disabled:opacity-40 whitespace-nowrap"
+                                title={overQuota ? `超出知識庫上限 ${overQuota} 組，只會加入前 ${quotaLeft} 組` : ''}
+                                className={`flex items-center gap-2 px-5 py-2.5 text-white rounded-xl text-sm font-bold transition-all disabled:opacity-40 whitespace-nowrap ${overQuota ? 'bg-rose-600 hover:bg-rose-700' : 'bg-brand-600 hover:bg-brand-700'
+                                    }`}
                             >
                                 <Sparkles size={16} />
-                                {picked.size ? `加入知識庫（${picked.size} 組）` : '請先勾選'}
+                                {!picked.size
+                                    ? '請先勾選'
+                                    : overQuota
+                                        ? `僅能加入前 ${quotaLeft} 組（超出 ${overQuota}）`
+                                        : `加入知識庫（${picked.size} 組）`}
                             </button>
                         )}
 

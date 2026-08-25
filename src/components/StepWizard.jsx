@@ -762,6 +762,7 @@ const StepWizard = ({ formData, setFormData, agentId, onComplete }) => {
                         merchantName={formData.businessName || ''}
                         existingCategories={[...new Set(formData.faqs.map(f => f.category || '常見問題'))]}
                         onConfirm={handleConfirmWizardImportFaqs}
+                        existingFaqCount={(formData.faqs || []).length}
                     />
                 )}
 

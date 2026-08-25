@@ -4568,7 +4568,8 @@ const BackendDashboard = () => {
                     merchantName={currentAgent?.config?.raw_config?.merchant_name || currentAgent?.name || ''}
                     existingCategories={categoryOrder}
                     onConfirm={handleConfirmImportFaqs}
-                />
+                        existingFaqCount={editingFaqs.length}
+                    />
             )}
 
             {showProductImportModal && (
