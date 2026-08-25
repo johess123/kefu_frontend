@@ -508,13 +508,11 @@ export default function ChatLogImportModal({
             onDragLeave={handleDrag}
             onDrop={handleDrop}
             className="fixed inset-0 z-50 flex items-center justify-center p-4"
-            onClick={onClose}
         >
             <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
-            <div
-                className="relative bg-white rounded-2xl shadow-xl w-full max-w-3xl flex flex-col max-h-[88vh] overflow-hidden"
-                onClick={(e) => e.stopPropagation()}
-            >
+            {/* 刻意不做「點外面關閉」—— 這個流程有付費步驟和 2～3 分鐘的等待，
+                誤觸關掉就取不回結果了。只能按右上角的叉叉或頁尾的關閉。 */}
+            <div className="relative bg-white rounded-2xl shadow-xl w-full max-w-3xl flex flex-col max-h-[88vh] overflow-hidden">
                 {isDragActive && (
                     <div className="absolute inset-0 bg-brand-500/10 backdrop-blur-[2px] border-4 border-dashed border-brand-500 rounded-2xl z-50 flex flex-col items-center justify-center pointer-events-none transition-all duration-150">
                         <div className="w-16 h-16 bg-white rounded-full shadow-lg flex items-center justify-center mb-3">
