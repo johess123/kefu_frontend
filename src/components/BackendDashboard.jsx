@@ -1918,10 +1918,21 @@ const BackendDashboard = () => {
                                                                         if (editingFaqs.length >= FAQ_MAX_COUNT) { alert(FAQ_QUOTA_FULL_MESSAGE); return; }
                                                                         setShowFaqModal(true);
                                                                     }}
-                                                                    className="flex items-center gap-2 px-3 sm:px-5 py-2.5 bg-brand-600 text-white rounded-xl text-sm font-bold hover:bg-brand-700 transition-all shadow-md shadow-brand-100"
+                                                                    className="flex items-center gap-2 px-3 sm:px-5 py-2.5 bg-white border border-brand-200 text-brand-600 rounded-xl text-sm font-bold hover:bg-brand-50 transition-all shadow-sm"
                                                                 >
                                                                     <Plus size={18} />
                                                                     新增問答
+                                                                </button>
+                                                                {/* 儲存是唯一真正落地的動作，所以它是這一列唯一的實心 CTA，
+                                                                    並用分隔線與上面那些「編輯中」的動作區隔開。 */}
+                                                                <span className="hidden sm:block w-px h-7 bg-slate-200 mx-1" />
+                                                                <button
+                                                                    disabled={isSaving}
+                                                                    onClick={handleSaveFaqs}
+                                                                    className="flex items-center gap-2 px-4 sm:px-6 py-2.5 bg-brand-600 text-white rounded-xl text-sm font-bold hover:bg-brand-700 disabled:opacity-50 transition-all shadow-md shadow-brand-200 active:scale-95"
+                                                                >
+                                                                    {isSaving ? <Loader2 className="animate-spin" size={18} /> : <Check size={18} />}
+                                                                    儲存設定
                                                                 </button>
                                                             </div>
                                                         </div>
@@ -2074,16 +2085,6 @@ const BackendDashboard = () => {
                                                             <div ref={faqsEndRef} />
                                                         </div>
 
-                                                        <div className="px-4 sm:px-10 py-6 sm:py-8 bg-slate-50/50 border-t border-slate-100 flex justify-end">
-                                                            <button
-                                                                disabled={isSaving}
-                                                                onClick={handleSaveFaqs}
-                                                                className="bg-brand-600 hover:bg-brand-700 disabled:opacity-50 text-white font-bold px-10 py-3.5 rounded-2xl shadow-lg shadow-brand-200 transition-all active:scale-95 flex items-center gap-2"
-                                                            >
-                                                                {isSaving ? <Loader2 className="animate-spin" size={20} /> : <Check size={20} />}
-                                                                儲存設定
-                                                            </button>
-                                                        </div>
                                                     </div>
                                                 </>
                                             ) : (
@@ -2131,10 +2132,20 @@ const BackendDashboard = () => {
                                                                         setNewProduct({ name: '', description: '', keywords: '' });
                                                                         setShowProductModal(true);
                                                                     }}
-                                                                    className="flex items-center gap-2 px-3 sm:px-5 py-2.5 bg-green-600 text-white rounded-xl text-sm font-bold hover:bg-green-700 transition-all shadow-md shadow-green-100"
+                                                                    className="flex items-center gap-2 px-3 sm:px-5 py-2.5 bg-white border border-green-200 text-green-700 rounded-xl text-sm font-bold hover:bg-green-50 transition-all shadow-sm"
                                                                 >
                                                                     <Plus size={18} />
                                                                     新增商品
+                                                                </button>
+                                                                {/* 與 FAQ 頁一致：儲存是這一列唯一的實心 CTA。 */}
+                                                                <span className="hidden sm:block w-px h-7 bg-slate-200 mx-1" />
+                                                                <button
+                                                                    disabled={isSaving}
+                                                                    onClick={handleSaveProducts}
+                                                                    className="flex items-center gap-2 px-4 sm:px-6 py-2.5 bg-green-600 text-white rounded-xl text-sm font-bold hover:bg-green-700 disabled:opacity-50 transition-all shadow-md shadow-green-200 active:scale-95"
+                                                                >
+                                                                    {isSaving ? <Loader2 className="animate-spin" size={18} /> : <Check size={18} />}
+                                                                    儲存設定
                                                                 </button>
                                                             </div>
                                                         </div>
@@ -2310,16 +2321,6 @@ const BackendDashboard = () => {
                                                             )}
                                                         </div>
 
-                                                        <div className="px-4 sm:px-10 py-6 sm:py-8 bg-slate-50/50 border-t border-slate-100 flex justify-end">
-                                                            <button
-                                                                disabled={isSaving}
-                                                                onClick={handleSaveProducts}
-                                                                className="bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white font-bold px-10 py-3.5 rounded-2xl shadow-lg shadow-green-200 transition-all active:scale-95 flex items-center gap-2"
-                                                            >
-                                                                {isSaving ? <Loader2 className="animate-spin" size={20} /> : <Check size={20} />}
-                                                                儲存設定
-                                                            </button>
-                                                        </div>
                                                     </div>
                                                 </>
                                             )}
