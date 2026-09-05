@@ -21,7 +21,7 @@ const getFileIconInfo = (fileName) => {
     }
 };
 
-export default function FaqImportModal({ onClose, onConfirm, brandDescription = '', existingCategories = [], agentId, onOpenChatLogImport }) {
+export default function FaqImportModal({ onClose, onConfirm, brandDescription = '', existingCategories = [], existingFaqCount = 0, agentId, onOpenChatLogImport }) {
     const [tab, setTab] = useState('file');
     const [text, setText] = useState('');
     const [fileName, setFileName] = useState('');
@@ -180,6 +180,18 @@ export default function FaqImportModal({ onClose, onConfirm, brandDescription = 
 
     const allCategories = [...new Set([...existingCategories, ...(preview || []).map(f => f.category || '常見問題')])];
 
+    // 額度引導。「上傳檔案」與「貼上文字」走的是同一個 onConfirm、有同樣的超額行為，
+    // 所以兩個分頁都要顯示同一段說明，不能只有檔案那一頁看得到。
+    const quotaHint = existingFaqCount >= FAQ_MAX_COUNT ? (
+        <p className="text-xs text-amber-600 mt-2 text-center">
+            正式 FAQ 已達 {FAQ_MAX_COUNT} 組上限，匯入的內容會全部存入備用草稿庫，之後可從草稿庫加回。
+        </p>
+    ) : (
+        <p className="text-xs text-slate-400 mt-2 text-center">
+            正式 FAQ 目前 {existingFaqCount} / {FAQ_MAX_COUNT} 組，超出額度的部分會存入備用草稿庫，不會遺失。
+        </p>
+    );
+
     return (
         <div
             onDragEnter={handleDrag}
@@ -244,7 +256,10 @@ export default function FaqImportModal({ onClose, onConfirm, brandDescription = 
                                 )}
                                 <input ref={fileRef} type="file" accept=".xlsx,.csv" className="hidden" onChange={handleFileChange} />
                             </label>
-                            <p className="text-xs text-slate-400 mt-3 text-center">AI 會自動識別問題與回答欄位，每次最多解析 {FAQ_MAX_COUNT} 組</p>
+                            <p className="text-xs text-slate-400 mt-3 text-center">
+                                AI 會自動識別問題與回答欄位，每次最多解析 {FAQ_MAX_COUNT} 組
+                            </p>
+                            {quotaHint}
                         </div>
                     )}
                     {tab === 'text' && !preview && (
@@ -258,6 +273,7 @@ export default function FaqImportModal({ onClose, onConfirm, brandDescription = 
                             />
                             <div className="text-[10px] text-slate-300 text-right">{text.length}/30000</div>
                             <p className="text-xs text-slate-400 mt-2">AI 會自動識別問答結構，支援 Q&A、數字編號、中文標點等各種格式</p>
+                            {quotaHint}
                         </div>
                     )}
                     {tab === 'chatlog' && (

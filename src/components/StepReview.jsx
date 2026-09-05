@@ -94,6 +94,37 @@ const StepReview = ({ onNext, onEdit, formData, setFormData, sessionId, agentId,
         }
     }, []);
 
+    /** 刪掉待清理的圖片。存檔成功後才呼叫。
+     *
+     * 刪之前再確認一次沒有任何仍在使用的項目引用它 —— 商家可能刪掉草稿後又重新上傳
+     * 同一張圖，或在別處用到同一個 image_id。誤刪圖片是不可復原的，多這一道很便宜。
+     * 刪除失敗只記錄不擋流程：設定已經存好了，孤兒檔遠比中斷商家流程無害。
+     */
+    const flushPendingImageDeletes = async (savedFaqs) => {
+        // 兩個來源：明確按過「移除圖片」/「永久刪除」的（涵蓋本次上傳又移除的），
+        // 以及進來時就存在、現在已無人引用的（涵蓋刪整張 FAQ、刪整個分類等路徑）。
+        const candidates = [...new Set([
+            ...(formData.pendingImageDeletes || []),
+            ...(formData.originalImageIds || []),
+        ])];
+        if (candidates.length === 0) return;
+
+        const stillInUse = new Set(
+            [...(savedFaqs || []), ...(formData.faqDrafts || []), ...(formData.products || [])]
+                .map(item => item?.image_id)
+                .filter(Boolean)
+        );
+        const toDelete = candidates.filter(id => !stillInUse.has(id));
+
+        await Promise.all(toDelete.map(async (image_id) => {
+            try {
+                await axios.post(`${config.API_URL}/api/admin/delete_image`, { image_id });
+            } catch (e) {
+                console.error('Failed to delete image:', image_id, e);
+            }
+        }));
+    };
+
     const handleConfirm = async () => {
         setIsLoading(true);
         try {
@@ -104,6 +135,9 @@ const StepReview = ({ onNext, onEdit, formData, setFormData, sessionId, agentId,
                 line_user_id: line_user_id,
                 agent_id: agentId, // Pass agentId for update
                 faqs: reviewData.faqs, // Pass potential edits
+                // 草稿一併送出。精靈載入時已把既有草稿讀進 formData，
+                // 所以這裡送的是「既有 + 本次新增」的完整集合，不會清掉商家原本的草稿。
+                faq_drafts: formData.faqDrafts || [],
                 products: formData.products || [], // Pass products from wizard Q4
                 product_field_schema: formData.productFieldSchema || [],
                 handoff_triggers: reviewData.handoff_triggers,
@@ -112,11 +146,17 @@ const StepReview = ({ onNext, onEdit, formData, setFormData, sessionId, agentId,
 
             if (res.data.status === 'ok') {
                 setAgentId(res.data.agent_id);
+                // 設定已落地，這時才真的清掉精靈裡被永久刪除的草稿所帶的圖片。
+                // 送出前刪的話，一旦商家中途離開，DB 裡仍在引用的圖就沒了。
+                await flushPendingImageDeletes(reviewData.faqs);
+
                 // Update global formData with edits
                 setFormData({
                     ...formData,
                     faqs: reviewData.faqs,
                     handoffTriggers: reviewData.handoff_triggers,
+                    pendingImageDeletes: [],
+                    originalImageIds: [],
                 });
                 onNext();
             } else {
@@ -227,6 +267,11 @@ const StepReview = ({ onNext, onEdit, formData, setFormData, sessionId, agentId,
             <div className="text-center mb-8">
                 <h2 className="text-2xl font-bold text-slate-800 mb-2">Step 2－整理 FAQ</h2>
                 <p className="text-slate-600">請確認並編輯 AI 產生的 FAQ 與轉接規則</p>
+                {(formData.faqDrafts || []).length > 0 && (
+                    <p className="text-xs text-amber-600 mt-2">
+                        另有 {(formData.faqDrafts || []).length} 組存放在備用草稿庫，不會提供 AI 回答，也不佔正式 FAQ 額度；完成設定後可在「知識庫管理」中取用。
+                    </p>
+                )}
             </div>
 
             <div className="grid grid-cols-12 gap-6 h-[600px]">

@@ -723,16 +723,16 @@ export default function ChatLogImportModal({
                                     <span className="text-xs text-slate-400">
                                         勾選要加入的，也可以直接修改內容與分類
                                     </span>
-                                    <span className={`text-xs font-bold ml-auto ${overQuota ? 'text-rose-600' : 'text-slate-500'}`}>
+                                    {/* 超額不是錯誤：超出的部分會進草稿庫、不會遺失，所以用琥珀提醒而非紅色警示 */}
+                                    <span className={`text-xs font-bold ml-auto ${overQuota ? 'text-amber-600' : 'text-slate-500'}`}>
                                         已選 {picked.size} 組 · 知識庫還可加入 {quotaLeft} 組
                                     </span>
                                 </div>
                                 {overQuota > 0 && (
-                                    <p className="text-xs text-rose-600 mb-2 leading-snug">
+                                    <p className="text-xs text-amber-600 mb-2 leading-snug">
                                         超出 {overQuota} 組。知識庫上限 {FAQ_MAX_COUNT} 組
                                         （目前已有 {existingFaqCount} 組），
-                                        直接送出只會加入前 {quotaLeft} 組、其餘不會加入 ——
-                                        建議先取消勾選不需要的，或關掉視窗先刪掉舊的問答。
+                                        超出的 {overQuota} 組會存入備用草稿庫，不會遺失，之後可從草稿庫加回正式 FAQ。
                                     </p>
                                 )}
                                 {needCheck > 0 && (
@@ -1321,15 +1321,15 @@ export default function ChatLogImportModal({
                             <button
                                 onClick={confirmPicked}
                                 disabled={!picked.size}
-                                title={overQuota ? `超出知識庫上限 ${overQuota} 組，只會加入前 ${quotaLeft} 組` : ''}
-                                className={`flex items-center gap-2 px-5 py-2.5 text-white rounded-xl text-sm font-bold transition-all disabled:opacity-40 whitespace-nowrap ${overQuota ? 'bg-rose-600 hover:bg-rose-700' : 'bg-brand-600 hover:bg-brand-700'
+                                title={overQuota ? `超出知識庫上限 ${overQuota} 組，這些會存入備用草稿庫` : ''}
+                                className={`flex items-center gap-2 px-5 py-2.5 text-white rounded-xl text-sm font-bold transition-all disabled:opacity-40 whitespace-nowrap ${overQuota ? 'bg-amber-600 hover:bg-amber-700' : 'bg-brand-600 hover:bg-brand-700'
                                     }`}
                             >
                                 <Sparkles size={16} />
                                 {!picked.size
                                     ? '請先勾選'
                                     : overQuota
-                                        ? `僅能加入前 ${quotaLeft} 組（超出 ${overQuota}）`
+                                        ? `加入 ${quotaLeft} 組，其餘 ${overQuota} 組進草稿庫`
                                         : `加入知識庫（${picked.size} 組）`}
                             </button>
                         )}

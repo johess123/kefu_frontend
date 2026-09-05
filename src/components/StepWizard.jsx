@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Bot, ArrowLeft, ArrowRight, Trash2, Plus, CheckCircle2, Globe, Sparkles, Loader2, AlertCircle, Stethoscope, RotateCcw, Upload, Package, FileSpreadsheet, X, ChevronDown, ChevronRight, GripVertical, FolderInput } from 'lucide-react';
+import { Bot, ArrowLeft, ArrowRight, Trash2, Plus, CheckCircle2, Globe, Sparkles, Loader2, AlertCircle, Stethoscope, RotateCcw, Upload, Package, FileSpreadsheet, X, ChevronDown, ChevronRight, GripVertical, FolderInput, Archive } from 'lucide-react';
 import axios from 'axios';
 import Cookies from 'js-cookie';
 import config from '../config';
@@ -11,9 +11,11 @@ import { isInsufficientBalanceError } from '../utils/pricing';
 import FaqImportModal from './FaqImportModal';
 import ChatLogImportModal from './ChatLogImportModal';
 import FaqAddModal from './FaqAddModal';
+import FaqDraftLibraryModal from './FaqDraftLibraryModal';
+import ImageLightbox from './ImageLightbox';
 import ProductAddModal from './ProductAddModal';
 import ProductImportModal from './ProductImportModal';
-import { FAQ_MAX_QUESTION, FAQ_MAX_ANSWER, FAQ_MAX_COUNT, FAQ_MAX_CATEGORY, getDefaultFaqCategory, validateFaqsForSave, validateFaqsForAnalyze, validateFaqItemForOptimize } from '../utils/faqUtils';
+import { FAQ_MAX_QUESTION, FAQ_MAX_ANSWER, FAQ_MAX_COUNT, FAQ_MAX_CATEGORY, getDefaultFaqCategory, validateFaqsForSave, validateFaqsForAnalyze, validateFaqItemForOptimize, FAQ_QUOTA_FULL_MESSAGE, moveFaqToDrafts, restoreDraftToFaqs, splitImportByQuota, ensureCategory } from '../utils/faqUtils';
 
 const StepWizard = ({ formData, setFormData, agentId, onComplete }) => {
     const { userBalance, refreshUserBalance } = useAuth();
@@ -46,6 +48,27 @@ const StepWizard = ({ formData, setFormData, agentId, onComplete }) => {
     const showAlert = (message) => setAlertDialog({ open: true, message });
     const closeAlert = () => setAlertDialog({ open: false, message: '' });
     const [wizardAddFaqModal, setWizardAddFaqModal] = useState({ open: false, category: '', categoryFixed: false });
+    // 備用草稿庫。精靈裡的移轉一樣是純本地狀態，按下「確認送出」才會生效。
+    const [showWizardDraftLibrary, setShowWizardDraftLibrary] = useState(false);
+    const [wizardDraftTransfer, setWizardDraftTransfer] = useState({ open: false, mode: null, source: null, faqIndex: null });
+    const [wizardLightboxSrc, setWizardLightboxSrc] = useState('');
+    const [wizardLightboxZIndex, setWizardLightboxZIndex] = useState('z-50');
+    // 精靈原本只有「提示」用的單鍵 dialog，草稿永久刪除需要可取消的二次確認
+    const [wizardConfirm, setWizardConfirm] = useState({ isOpen: false, title: '', message: '', confirmText: '確認', onConfirm: null });
+
+    /** 記下一張待清理的圖片，但先不刪。
+     *
+     * 精靈是「按下開始測試對話才生效」的流程 —— 當下刪圖會刪掉尚未送出的設定仍然
+     * 引用著的檔案，商家中途離開就再也救不回來。實際刪除由 StepReview 在
+     * confirm_setup 成功後統一執行，並會再確認沒有任何項目還在引用它。
+     */
+    const queueImageDelete = (imageId) => {
+        if (!imageId) return;
+        setFormData(prev => ({
+            ...prev,
+            pendingImageDeletes: [...new Set([...(prev.pendingImageDeletes || []), imageId])],
+        }));
+    };
     const [showWizardCategoryModal, setShowWizardCategoryModal] = useState(false);
     const [wizardNewCategoryName, setWizardNewCategoryName] = useState('');
 
@@ -89,7 +112,7 @@ const StepWizard = ({ formData, setFormData, agentId, onComplete }) => {
         }
 
         if (qIndex === 2) {
-            const { error, cleaned: cleanedFaqs } = validateFaqsForSave(formData.faqs);
+            const { error, cleaned: cleanedFaqs } = validateFaqsForSave(formData.faqs, formData.faqDrafts || []);
             if (error) { showAlert(error); return; }
             setFormData(prev => ({ ...prev, faqs: cleanedFaqs }));
         }
@@ -305,9 +328,75 @@ const StepWizard = ({ formData, setFormData, agentId, onComplete }) => {
 
     const renderQ3 = () => {
         const addFAQ = (category = '', fixed = false) => {
-            if (formData.faqs.length >= FAQ_MAX_COUNT) { showAlert(`FAQ 問答已達 ${FAQ_MAX_COUNT} 組上限`); return; }
+            if (formData.faqs.length >= FAQ_MAX_COUNT) { showAlert(FAQ_QUOTA_FULL_MESSAGE); return; }
             const cat = category || getDefaultFaqCategory(formData.faqs);
             setWizardAddFaqModal({ open: true, category: cat, categoryFixed: fixed });
+        };
+
+        const wizardDrafts = formData.faqDrafts || [];
+
+        const openWizardMoveToDraft = (faqId) => {
+            const idx = formData.faqs.findIndex(f => f.id === faqId);
+            if (idx < 0) return;
+            setWizardDraftTransfer({ open: true, mode: 'toDraft', source: formData.faqs[idx], faqIndex: idx });
+        };
+
+        const openWizardRestoreDraft = (draft) => {
+            if (formData.faqs.length >= FAQ_MAX_COUNT) { showAlert(FAQ_QUOTA_FULL_MESSAGE); return; }
+            setWizardDraftTransfer({ open: true, mode: 'restore', source: draft, faqIndex: null });
+        };
+
+        const openWizardEditDraft = (draft) => {
+            setWizardDraftTransfer({ open: true, mode: 'editDraft', source: draft, faqIndex: null });
+        };
+
+        const closeWizardDraftTransfer = () =>
+            setWizardDraftTransfer({ open: false, mode: null, source: null, faqIndex: null });
+
+        const handleWizardDraftTransferSubmit = (values) => {
+            const { mode, source, faqIndex } = wizardDraftTransfer;
+            if (mode === 'toDraft') {
+                const r = moveFaqToDrafts(formData.faqs, wizardDrafts, faqIndex, values);
+                setFormData(prev => ({ ...prev, faqs: r.faqs, faqDrafts: r.drafts }));
+            } else if (mode === 'restore') {
+                const r = restoreDraftToFaqs(formData.faqs, wizardDrafts, source.id, values);
+                // 草稿必須保留 —— 加入失敗不可讓內容消失
+                if (r.error) { showAlert(r.error); closeWizardDraftTransfer(); return; }
+                setFormData(prev => ({ ...prev, faqs: r.faqs, faqDrafts: r.drafts }));
+                const cat = r.faqs[r.faqs.length - 1].category;
+                setWizardCategoryOrder(prev => ensureCategory(prev, cat));
+                setExpandedCategories(prev => new Set([...prev, cat]));
+            } else if (mode === 'editDraft') {
+                setFormData(prev => ({
+                    ...prev,
+                    faqDrafts: (prev.faqDrafts || []).map(d => d.id === source.id ? {
+                        ...d,
+                        question: values.question,
+                        answer: values.answer,
+                        category: (values.category || '常見問題').trim() || '常見問題',
+                        image_id: values.image_id || '',
+                        _preview_url: values._preview_url || '',
+                    } : d),
+                }));
+            }
+            closeWizardDraftTransfer();
+        };
+
+        // 精靈裡不當場呼叫 delete_image：整份設定要按下「開始測試對話」才生效，
+        // 此刻刪圖會刪掉尚未送出的設定仍然引用著的檔案。改為記下 image_id，
+        // 由 StepReview 在 confirm_setup 成功之後統一清理。
+        const deleteWizardDraft = (draft) => {
+            setWizardConfirm({
+                isOpen: true,
+                title: '永久刪除草稿',
+                message: '確定要永久刪除此草稿嗎？刪除後無法復原。',
+                confirmText: '永久刪除',
+                onConfirm: () => {
+                    queueImageDelete(draft.image_id);
+                    setFormData(prev => ({ ...prev, faqDrafts: (prev.faqDrafts || []).filter(d => d.id !== draft.id) }));
+                    setWizardConfirm(prev => ({ ...prev, isOpen: false }));
+                },
+            });
         };
 
         const renameCategory = (oldName, newName) => {
@@ -514,13 +603,19 @@ const StepWizard = ({ formData, setFormData, agentId, onComplete }) => {
         };
 
         const handleConfirmWizardImportFaqs = (newFaqs) => {
-            const remaining = FAQ_MAX_COUNT - formData.faqs.length;
-            if (remaining <= 0) { showAlert(`FAQ 問答已達 ${FAQ_MAX_COUNT} 組上限`); return; }
-            const toAdd = newFaqs.slice(0, remaining);
-            if (toAdd.length < newFaqs.length) showAlert(`已達 ${FAQ_MAX_COUNT} 組上限，僅新增 ${toAdd.length} 組`);
-            updateField('faqs', [...formData.faqs, ...toAdd]);
-            const newCats = new Set(toAdd.map(f => f.category));
-            setExpandedCategories(prev => new Set([...prev, ...newCats]));
+            // 超額的內容一律進草稿庫，不丟棄 —— 草稿不設上限，一定放得下。
+            const { toFaqs, toDrafts } = splitImportByQuota(formData.faqs.length, newFaqs);
+            setFormData(prev => ({
+                ...prev,
+                faqs: toFaqs.length > 0 ? [...prev.faqs, ...toFaqs] : prev.faqs,
+                faqDrafts: toDrafts.length > 0 ? [...(prev.faqDrafts || []), ...toDrafts] : (prev.faqDrafts || []),
+            }));
+            if (toFaqs.length > 0) {
+                setExpandedCategories(prev => new Set([...prev, ...new Set(toFaqs.map(f => f.category))]));
+            }
+            if (toDrafts.length > 0) {
+                showAlert(`已加入 ${toFaqs.length} 組到正式 FAQ，其餘 ${toDrafts.length} 組已存入備用草稿庫，可隨時取用。`);
+            }
         };
 
         return (
@@ -536,6 +631,14 @@ const StepWizard = ({ formData, setFormData, agentId, onComplete }) => {
                     )}
                     {formData.faqs.length > 0 && <div />}
                     <div className="flex items-center gap-2 flex-wrap">
+                        <button onClick={() => setShowWizardDraftLibrary(true)}
+                            className="flex items-center gap-2 px-3 py-2 bg-white border border-slate-200 text-slate-600 rounded-xl text-sm font-bold hover:bg-slate-50 transition-all shadow-sm">
+                            <Archive size={16} className="text-amber-500" />
+                            <span className="hidden sm:inline">備用草稿庫</span>
+                            {wizardDrafts.length > 0 && (
+                                <span className="text-[10px] font-black bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full">{wizardDrafts.length}</span>
+                            )}
+                        </button>
                         <button onClick={handleAnalyzeFaqs} disabled={isAnalyzing || formData.faqs.length === 0}
                             className="flex items-center gap-2 px-3 py-2 bg-white border border-slate-200 text-slate-600 rounded-xl text-sm font-bold hover:bg-slate-50 transition-all shadow-sm disabled:opacity-50">
                             {isAnalyzing ? <Loader2 size={16} className="text-blue-500 animate-spin" /> : <Stethoscope size={16} className="text-blue-500" />}
@@ -600,6 +703,10 @@ const StepWizard = ({ formData, setFormData, agentId, onComplete }) => {
                                                 className="w-7 h-7 flex items-center justify-center text-slate-300 hover:text-brand-500 rounded-lg" title="移動到其他分類">
                                                 <FolderInput size={13} />
                                             </button>
+                                            <button onClick={() => openWizardMoveToDraft(faq.id)}
+                                                className="w-7 h-7 flex items-center justify-center text-slate-300 hover:text-amber-500 rounded-lg" title="移至備用草稿庫">
+                                                <Archive size={13} />
+                                            </button>
                                             <button onClick={() => { if (window.confirm(`確定刪除「${faq.question || '此問答'}」？`)) removeFAQ(faq.id); }}
                                                 className="w-7 h-7 flex items-center justify-center text-slate-300 hover:text-red-500 rounded-lg" title="刪除">
                                                 <Trash2 size={13} />
@@ -646,7 +753,7 @@ const StepWizard = ({ formData, setFormData, agentId, onComplete }) => {
                                                 {faq.image_id ? (
                                                     <div className="flex items-center gap-3">
                                                         <img src={faq._preview_url} alt="附圖" className="w-14 h-14 object-cover rounded-xl border border-slate-200" onError={(e) => { e.target.style.display = 'none'; }} />
-                                                        <button onClick={() => updateFAQ(faq.id, 'image_id', '')} className="flex items-center gap-1.5 px-3 py-2 bg-white border border-red-200 text-red-500 rounded-xl text-xs font-bold hover:bg-red-50"><Trash2 size={14} />移除圖片</button>
+                                                        <button onClick={() => { queueImageDelete(faq.image_id); updateFAQ(faq.id, 'image_id', ''); }} className="flex items-center gap-1.5 px-3 py-2 bg-white border border-red-200 text-red-500 rounded-xl text-xs font-bold hover:bg-red-50"><Trash2 size={14} />移除圖片</button>
                                                     </div>
                                                 ) : (
                                                     <label className="flex items-center gap-2 px-4 py-3 bg-white border border-dashed border-slate-200 rounded-xl cursor-pointer hover:border-brand-300 hover:bg-brand-50/50 transition-all">
@@ -854,6 +961,44 @@ const StepWizard = ({ formData, setFormData, agentId, onComplete }) => {
                         setWizardAddFaqModal({ open: false, category: '', categoryFixed: false });
                     }}
                 />
+
+                <FaqDraftLibraryModal
+                    open={showWizardDraftLibrary}
+                    drafts={formData.faqDrafts || []}
+                    faqCount={formData.faqs.length}
+                    onClose={() => setShowWizardDraftLibrary(false)}
+                    onEdit={openWizardEditDraft}
+                    onRestore={openWizardRestoreDraft}
+                    onDelete={deleteWizardDraft}
+                    onPreviewImage={(url) => { setWizardLightboxSrc(url); setWizardLightboxZIndex('z-[140]'); }}
+                />
+
+                {wizardDraftTransfer.open && (
+                    <FaqAddModal
+                        open={wizardDraftTransfer.open}
+                        onClose={closeWizardDraftTransfer}
+                        zIndexClass="z-[120]"
+                        categories={wizardCategoryOrder}
+                        defaultCategory={wizardDraftTransfer.source?.category || '常見問題'}
+                        initialValues={wizardDraftTransfer.source}
+                        title={
+                            wizardDraftTransfer.mode === 'toDraft' ? '移至備用草稿庫'
+                                : wizardDraftTransfer.mode === 'restore' ? '加入正式 FAQ'
+                                    : '編輯草稿'
+                        }
+                        subtitle={
+                            wizardDraftTransfer.mode === 'toDraft' ? '此問答暫時不會提供 AI 回答，之後可隨時重新加入正式 FAQ。'
+                                : wizardDraftTransfer.mode === 'restore' ? '加入後，完成設定即會提供 AI 回答客戶。'
+                                    : '草稿不會提供 AI 回答。'
+                        }
+                        submitText={
+                            wizardDraftTransfer.mode === 'toDraft' ? '移至草稿庫'
+                                : wizardDraftTransfer.mode === 'restore' ? '加入正式 FAQ'
+                                    : '儲存草稿'
+                        }
+                        onSubmit={handleWizardDraftTransferSubmit}
+                    />
+                )}
             </div>
         );
     };
@@ -1024,7 +1169,7 @@ const StepWizard = ({ formData, setFormData, agentId, onComplete }) => {
                                         {product.image_id ? (
                                             <div className="flex items-center gap-3">
                                                 <img src={product._preview_url || product.preview_url || ''} alt="商品附圖" className="w-14 h-14 object-cover rounded-xl border border-slate-200" onError={(e) => { e.target.style.display = 'none'; }} />
-                                                <button onClick={() => updateProduct(product.id, 'image_id', '')} className="flex items-center gap-1.5 px-3 py-2 bg-white border border-red-200 text-red-500 rounded-xl text-xs font-bold hover:bg-red-50"><Trash2 size={14} />移除圖片</button>
+                                                <button onClick={() => { queueImageDelete(product.image_id); updateProduct(product.id, 'image_id', ''); }} className="flex items-center gap-1.5 px-3 py-2 bg-white border border-red-200 text-red-500 rounded-xl text-xs font-bold hover:bg-red-50"><Trash2 size={14} />移除圖片</button>
                                             </div>
                                         ) : (
                                             <label className="flex items-center gap-2 px-4 py-3 bg-white border border-dashed border-slate-200 rounded-xl cursor-pointer hover:border-green-300 hover:bg-green-50/50 transition-all">
@@ -1259,7 +1404,25 @@ const StepWizard = ({ formData, setFormData, agentId, onComplete }) => {
                 message={alertDialog.message}
                 confirmText="確認"
                 variant="default"
+                zIndexClass={showWizardDraftLibrary ? 'z-[150]' : 'z-50'}
                 onConfirm={closeAlert}
+            />
+
+            <ConfirmDialog
+                isOpen={wizardConfirm.isOpen}
+                title={wizardConfirm.title}
+                message={wizardConfirm.message}
+                confirmText={wizardConfirm.confirmText}
+                zIndexClass="z-[130]"
+                onConfirm={wizardConfirm.onConfirm}
+                onCancel={() => setWizardConfirm(prev => ({ ...prev, isOpen: false }))}
+            />
+
+            <ImageLightbox
+                isOpen={!!wizardLightboxSrc}
+                src={wizardLightboxSrc}
+                zIndexClass={wizardLightboxZIndex}
+                onClose={() => { setWizardLightboxSrc(''); setWizardLightboxZIndex('z-50'); }}
             />
 
             <ChargeConfirmDialog

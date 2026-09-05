@@ -21,6 +21,7 @@ import {
     Plus,
     Lock,
     BookOpen,
+    Archive,
     Shield,
     PieChart,
     Package,
@@ -76,9 +77,10 @@ import NotifyBanner from './NotifyBanner';
 import FaqImportModal from './FaqImportModal';
 import ChatLogImportModal from './ChatLogImportModal';
 import FaqAddModal from './FaqAddModal';
+import FaqDraftLibraryModal from './FaqDraftLibraryModal';
 import ProductAddModal from './ProductAddModal';
 import ProductImportModal from './ProductImportModal';
-import { FAQ_MAX_QUESTION, FAQ_MAX_ANSWER, FAQ_MAX_COUNT, FAQ_MAX_CATEGORY, getDefaultFaqCategory, validateFaqsForSave, validateFaqsForAnalyze, validateFaqItemForOptimize } from '../utils/faqUtils';
+import { FAQ_MAX_QUESTION, FAQ_MAX_ANSWER, FAQ_MAX_COUNT, FAQ_MAX_CATEGORY, getDefaultFaqCategory, validateFaqsForSave, validateFaqsForAnalyze, validateFaqItemForOptimize, FAQ_QUOTA_FULL_MESSAGE, moveFaqToDrafts, restoreDraftToFaqs, splitImportByQuota, ensureCategory, mergeFaqValues } from '../utils/faqUtils';
 import SpotlightTour from './SpotlightTour';
 import OnboardingChecklist from './OnboardingChecklist';
 import InboxIntroModal from './InboxIntroModal';
@@ -176,6 +178,9 @@ const BackendDashboard = () => {
     // Edit Subagent states
     const editingSubagent = subSection ? (SUB_SECTION_MAP[subSection] ?? null) : null;
     const [editingFaqs, setEditingFaqs] = useState([]);
+    // 備用草稿庫：不佔 200 組額度、不被 AI 使用。與 editingFaqs 一起在
+    // 「儲存設定」時送出，所以移轉在按下儲存前都只是本地狀態。
+    const [editingFaqDrafts, setEditingFaqDrafts] = useState([]);
     const [editingProducts, setEditingProducts] = useState([]);
     const [knowledgeTab, setKnowledgeTab] = useState('faq');
     const [handoffConfig, setHandoffConfig] = useState({
@@ -215,6 +220,9 @@ const BackendDashboard = () => {
 
     // Add FAQ / Product modal states
     const [showFaqModal, setShowFaqModal] = useState(false);
+    const [showDraftLibrary, setShowDraftLibrary] = useState(false);
+    // 移轉／恢復／編輯共用的彈窗。mode: 'toDraft' | 'restore' | 'editDraft'
+    const [draftTransferModal, setDraftTransferModal] = useState({ open: false, mode: null, source: null, faqIndex: null });
     const [showCategoryModal, setShowCategoryModal] = useState(false);
     const [newCategoryName, setNewCategoryName] = useState('');
     const [uploadingFaqIdx, setUploadingFaqIdx] = useState(null);
@@ -261,11 +269,14 @@ const BackendDashboard = () => {
 
     // Lightbox state
     const [lightboxSrc, setLightboxSrc] = useState(null);
+    // 燈箱是全頁共用的單一實例，預設 z-50；從 z-[100] 的備用草稿庫開啟時要拉高，
+    // 否則會開在草稿庫底下。關閉時歸位，其他呼叫點不必知道這件事。
+    const [lightboxZIndex, setLightboxZIndex] = useState('z-50');
 
     // ConfirmDialog state
-    const [confirmDialog, setConfirmDialog] = useState({ isOpen: false, title: '', message: '', onConfirm: null, confirmText: '確認', cancelText: '取消', variant: 'danger' });
-    const openConfirm = ({ title, message, onConfirm, confirmText = '確認', cancelText = '取消', variant = 'danger' }) =>
-        setConfirmDialog({ isOpen: true, title, message, onConfirm, confirmText, cancelText, variant });
+    const [confirmDialog, setConfirmDialog] = useState({ isOpen: false, title: '', message: '', onConfirm: null, confirmText: '確認', cancelText: '取消', variant: 'danger', zIndexClass: 'z-50' });
+    const openConfirm = ({ title, message, onConfirm, confirmText = '確認', cancelText = '取消', variant = 'danger', zIndexClass = 'z-50' }) =>
+        setConfirmDialog({ isOpen: true, title, message, onConfirm, confirmText, cancelText, variant, zIndexClass });
     const closeConfirm = () =>
         setConfirmDialog(prev => ({ ...prev, isOpen: false }));
 
@@ -360,8 +371,11 @@ const BackendDashboard = () => {
     useEffect(() => {
         if (currentAgent) {
             const rawConfig = currentAgent.config?.raw_config || {};
-            const faqs = rawConfig.faqs || [];
+            // 草稿的編輯／恢復／刪除全都以 id 比對，兩筆沒有 id 的資料會被當成同一群一起動到。
+            // 目前所有建立路徑都會給 id，但舊資料可能沒有，所以比照商品在載入時補上。
+            const faqs = (rawConfig.faqs || []).map((f, i) => ({ ...f, id: f.id || `faq_${i}` }));
             setEditingFaqs(faqs);
+            setEditingFaqDrafts((rawConfig.faq_drafts || []).map((d, i) => ({ ...d, id: d.id || `draft_${i}` })));
             const orderedCats = [...new Set(faqs.map(f => f.category || '常見問題'))];
             setCategoryOrder(orderedCats.length > 0 ? orderedCats : ['常見問題']);
             setEditingProducts((rawConfig.products || []).map((p, i) => ({ ...p, id: p.id || `prod_${i}` })));
@@ -979,6 +993,70 @@ const BackendDashboard = () => {
         setMovingFaqId(null);
     };
 
+    /** 開啟「移至備用草稿庫」彈窗（不直接移轉——商家可以先改內容與分類）。 */
+    const openMoveToDraft = (globalIdx) => {
+        const faq = editingFaqs[globalIdx];
+        if (!faq) return;
+        setDraftTransferModal({ open: true, mode: 'toDraft', source: faq, faqIndex: globalIdx });
+    };
+
+    /** 開啟「加入正式 FAQ」彈窗。額度已滿就當場擋下，草稿保持原狀。 */
+    const openRestoreDraft = (draft) => {
+        if (editingFaqs.length >= FAQ_MAX_COUNT) { alert(FAQ_QUOTA_FULL_MESSAGE); return; }
+        setDraftTransferModal({ open: true, mode: 'restore', source: draft, faqIndex: null });
+    };
+
+    const openEditDraft = (draft) => {
+        setDraftTransferModal({ open: true, mode: 'editDraft', source: draft, faqIndex: null });
+    };
+
+    const closeDraftTransfer = () =>
+        setDraftTransferModal({ open: false, mode: null, source: null, faqIndex: null });
+
+    /** 三種模式共用的送出。彈窗回傳的 values 已含商家改過的問題／回答／分類／附圖。 */
+    const handleDraftTransferSubmit = (values) => {
+        const { mode, source, faqIndex } = draftTransferModal;
+        if (mode === 'toDraft') {
+            const r = moveFaqToDrafts(editingFaqs, editingFaqDrafts, faqIndex, values);
+            setEditingFaqs(r.faqs);
+            setEditingFaqDrafts(r.drafts);
+        } else if (mode === 'restore') {
+            const r = restoreDraftToFaqs(editingFaqs, editingFaqDrafts, source.id, values);
+            // 草稿必須保留 —— 加入失敗不可讓內容消失
+            if (r.error) { alert(r.error); closeDraftTransfer(); return; }
+            setEditingFaqs(r.faqs);
+            setEditingFaqDrafts(r.drafts);
+            const cat = r.faqs[r.faqs.length - 1].category;
+            setCategoryOrder(prev => ensureCategory(prev, cat));
+            setExpandedCategories(prev => new Set([...prev, cat]));
+        } else if (mode === 'editDraft') {
+            // 與移轉／恢復共用同一個合併函式 —— 手寫第二份實作正是附圖預覽走失的原因
+            setEditingFaqDrafts(prev => prev.map(d => d.id === source.id ? mergeFaqValues(d, values) : d));
+        }
+        closeDraftTransfer();
+    };
+
+    /** 永久刪除草稿。這是唯一會真的刪圖的地方 —— 此時草稿是該圖的唯一引用者。 */
+    const deleteDraftPermanently = (draft) => {
+        openConfirm({
+            title: '永久刪除草稿',
+            message: '確定要永久刪除此草稿嗎？刪除後無法復原。',
+            confirmText: '永久刪除',
+            zIndexClass: 'z-[130]',
+            onConfirm: async () => {
+                if (draft.image_id) {
+                    try {
+                        await axios.post(`${config.API_URL}/api/admin/delete_image`, { image_id: draft.image_id });
+                    } catch (e) {
+                        console.error('Failed to delete draft image:', e);
+                    }
+                }
+                setEditingFaqDrafts(prev => prev.filter(d => d.id !== draft.id));
+                closeConfirm();
+            },
+        });
+    };
+
     const addNewFaqCategory = () => {
         setNewCategoryName('');
         setShowCategoryModal(true);
@@ -1003,14 +1081,15 @@ const BackendDashboard = () => {
             const bi = categoryOrder.indexOf(b.category || '常見問題');
             return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi);
         });
-        const { error, cleaned: cleanedFaqs } = validateFaqsForSave(sortedFaqs);
+        const { error, cleaned: cleanedFaqs } = validateFaqsForSave(sortedFaqs, editingFaqDrafts);
         if (error) { alert(error); return; }
 
         try {
             setIsSaving(true);
             const res = await axios.post(`${config.API_URL}/api/admin/agent/${currentAgent._id}/update_faqs`, {
                 userId: currentAgent.admin_id,
-                faqs: cleanedFaqs
+                faqs: cleanedFaqs,
+                faq_drafts: editingFaqDrafts,
             });
             if (res.data.status === 'ok') {
                 alert('FAQ 更新成功！');
@@ -1019,6 +1098,9 @@ const BackendDashboard = () => {
                 });
                 setCurrentAgent(agentRes.data);
                 navigate('/agent/' + routeAgentId + '/agents');
+            } else {
+                // 後端回 error 時不能沉默 —— 商家會以為存好了，離開頁面就整批編輯消失
+                alert(res.data.message || '儲存失敗，請確認正式 FAQ 與備用草稿的內容是否符合字數限制後再試一次。');
             }
         } catch (error) {
             console.error('Failed to save FAQs:', error);
@@ -1029,16 +1111,21 @@ const BackendDashboard = () => {
     };
 
     const handleConfirmImportFaqs = (newFaqs) => {
-        const remaining = FAQ_MAX_COUNT - editingFaqs.length;
-        if (remaining <= 0) { alert(`FAQ 問答已達 ${FAQ_MAX_COUNT} 組上限`); return; }
-        const toAdd = newFaqs.slice(0, remaining);
-        if (toAdd.length < newFaqs.length) alert(`已達 ${FAQ_MAX_COUNT} 組上限，僅新增 ${toAdd.length} 組`);
-        setEditingFaqs(prev => [...prev, ...toAdd]);
-        const newCats = [...new Set(toAdd.map(f => f.category))];
-        setCategoryOrder(prev => {
-            const toAddCats = newCats.filter(c => !prev.includes(c));
-            return toAddCats.length > 0 ? [...prev, ...toAddCats] : prev;
-        });
+        // 超額的內容一律進草稿庫，不丟棄 —— 草稿不設上限，一定放得下。
+        const { toFaqs, toDrafts } = splitImportByQuota(editingFaqs.length, newFaqs);
+        if (toFaqs.length > 0) {
+            setEditingFaqs(prev => [...prev, ...toFaqs]);
+            const newCats = [...new Set(toFaqs.map(f => f.category))];
+            setCategoryOrder(prev => {
+                const toAddCats = newCats.filter(c => !prev.includes(c));
+                return toAddCats.length > 0 ? [...prev, ...toAddCats] : prev;
+            });
+        }
+        if (toDrafts.length > 0) {
+            setEditingFaqDrafts(prev => [...prev, ...toDrafts]);
+            // N 是「這次加入了幾組」，此刻的剩餘額度其實是 0，不可說成「額度剩 N 組」
+            alert(`已加入 ${toFaqs.length} 組到正式 FAQ，其餘 ${toDrafts.length} 組已存入備用草稿庫，可隨時取用。`);
+        }
     };
 
     const handleFaqImageUpload = async (idx, file) => {
@@ -1773,9 +1860,33 @@ const BackendDashboard = () => {
                                                         <div className="p-4 sm:p-8 border-b border-slate-100 bg-slate-50/30 flex flex-wrap items-center justify-between gap-3">
                                                             <div>
                                                                 <h3 className="text-lg font-bold text-slate-800">FAQ 知識庫管理</h3>
-                                                                <p className="text-xs text-slate-400 mt-1 uppercase tracking-widest font-bold">Manage Knowledge Base</p>
+                                                                <div className="flex items-center gap-2 mt-1 flex-wrap">
+                                                                    <p className="text-xs text-slate-400 uppercase tracking-widest font-bold">Manage Knowledge Base</p>
+                                                                    <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full border ${
+                                                                        editingFaqs.length >= FAQ_MAX_COUNT
+                                                                            ? 'bg-red-50 text-red-600 border-red-200'
+                                                                            : editingFaqs.length >= FAQ_MAX_COUNT - 10
+                                                                                ? 'bg-amber-50 text-amber-700 border-amber-200'
+                                                                                : 'bg-white text-slate-500 border-slate-200'
+                                                                    }`}>
+                                                                        正式 FAQ {editingFaqs.length} / {FAQ_MAX_COUNT} 組
+                                                                    </span>
+                                                                    {editingFaqs.length >= FAQ_MAX_COUNT && (
+                                                                        <span className="text-[11px] text-amber-600">可先將一組目前不使用的 FAQ 移至備用草稿庫釋出額度</span>
+                                                                    )}
+                                                                </div>
                                                             </div>
                                                             <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
+                                                                <button
+                                                                    onClick={() => setShowDraftLibrary(true)}
+                                                                    className="flex items-center gap-2 px-3 sm:px-5 py-2.5 bg-white border border-slate-200 text-slate-600 rounded-xl text-sm font-bold hover:bg-slate-50 transition-all shadow-sm"
+                                                                >
+                                                                    <Archive size={18} className="text-amber-500" />
+                                                                    <span className="hidden sm:inline">備用草稿庫</span>
+                                                                    {editingFaqDrafts.length > 0 && (
+                                                                        <span className="text-[10px] font-black bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full">{editingFaqDrafts.length}</span>
+                                                                    )}
+                                                                </button>
                                                                 <button
                                                                     onClick={handleAnalyzeFaqs}
                                                                     disabled={isAnalyzing}
@@ -1804,13 +1915,24 @@ const BackendDashboard = () => {
                                                                 </button>
                                                                 <button
                                                                     onClick={() => {
-                                                                        if (editingFaqs.length >= FAQ_MAX_COUNT) { alert(`FAQ 問答已達 ${FAQ_MAX_COUNT} 組上限`); return; }
+                                                                        if (editingFaqs.length >= FAQ_MAX_COUNT) { alert(FAQ_QUOTA_FULL_MESSAGE); return; }
                                                                         setShowFaqModal(true);
                                                                     }}
-                                                                    className="flex items-center gap-2 px-3 sm:px-5 py-2.5 bg-brand-600 text-white rounded-xl text-sm font-bold hover:bg-brand-700 transition-all shadow-md shadow-brand-100"
+                                                                    className="flex items-center gap-2 px-3 sm:px-5 py-2.5 bg-white border border-brand-200 text-brand-600 rounded-xl text-sm font-bold hover:bg-brand-50 transition-all shadow-sm"
                                                                 >
                                                                     <Plus size={18} />
                                                                     新增問答
+                                                                </button>
+                                                                {/* 儲存是唯一真正落地的動作，所以它是這一列唯一的實心 CTA，
+                                                                    並用分隔線與上面那些「編輯中」的動作區隔開。 */}
+                                                                <span className="hidden sm:block w-px h-7 bg-slate-200 mx-1" />
+                                                                <button
+                                                                    disabled={isSaving}
+                                                                    onClick={handleSaveFaqs}
+                                                                    className="flex items-center gap-2 px-4 sm:px-6 py-2.5 bg-brand-600 text-white rounded-xl text-sm font-bold hover:bg-brand-700 disabled:opacity-50 transition-all shadow-md shadow-brand-200 active:scale-95"
+                                                                >
+                                                                    {isSaving ? <Loader2 className="animate-spin" size={18} /> : <Check size={18} />}
+                                                                    儲存設定
                                                                 </button>
                                                             </div>
                                                         </div>
@@ -1875,7 +1997,7 @@ const BackendDashboard = () => {
                                                                                     className="flex-1 bg-transparent font-bold text-slate-700 text-sm focus:outline-none focus:border-b focus:border-brand-400 min-w-0"
                                                                                 />
                                                                                 <span className="text-xs text-slate-400 flex-shrink-0">{items.length} 組</span>
-                                                                                <button onClick={(e) => { e.stopPropagation(); if (editingFaqs.length >= FAQ_MAX_COUNT) { alert(`FAQ 問答已達 ${FAQ_MAX_COUNT} 組上限`); return; } setAddFaqCategoryModal({ open: true, category: cat }); }} className="w-7 h-7 flex items-center justify-center text-slate-400 hover:text-brand-600 flex-shrink-0" title="新增此分類 FAQ"><Plus size={14} /></button>
+                                                                                <button onClick={(e) => { e.stopPropagation(); if (editingFaqs.length >= FAQ_MAX_COUNT) { alert(FAQ_QUOTA_FULL_MESSAGE); return; } setAddFaqCategoryModal({ open: true, category: cat }); }} className="w-7 h-7 flex items-center justify-center text-slate-400 hover:text-brand-600 flex-shrink-0" title="新增此分類 FAQ"><Plus size={14} /></button>
                                                                                 <button onClick={(e) => { e.stopPropagation(); deleteFaqCategory(cat); }} className="w-7 h-7 flex items-center justify-center text-slate-400 hover:text-red-500 flex-shrink-0" title="刪除此分類"><Trash2 size={14} /></button>
                                                                             </div>
                                                                             {isExpanded && (
@@ -1894,6 +2016,9 @@ const BackendDashboard = () => {
                                                                                                         </button>
                                                                                                         <button onClick={() => setMoveFaqModal({ open: true, idx, faqQuestion: faq.question, currentCat: cat })} className="w-7 h-7 flex items-center justify-center text-slate-300 hover:text-brand-500 rounded-lg transition-all" title="移動到其他分類">
                                                                                                             <FolderInput size={13} />
+                                                                                                        </button>
+                                                                                                        <button onClick={() => openMoveToDraft(idx)} className="w-7 h-7 flex items-center justify-center text-slate-300 hover:text-amber-500 rounded-lg transition-all" title="移至備用草稿庫">
+                                                                                                            <Archive size={13} />
                                                                                                         </button>
                                                                                                         <button onClick={() => openConfirm({ title: '刪除 FAQ', message: `確定要刪除 FAQ「${faq.question || ''}」嗎？儲存後才會生效。`, confirmText: '確定刪除', onConfirm: () => { setEditingFaqs(editingFaqs.filter((_, i) => i !== idx)); closeConfirm(); } })} className="w-7 h-7 flex items-center justify-center text-slate-300 hover:text-red-500 rounded-lg transition-all" title="刪除">
                                                                                                             <Trash2 size={13} />
@@ -1960,16 +2085,6 @@ const BackendDashboard = () => {
                                                             <div ref={faqsEndRef} />
                                                         </div>
 
-                                                        <div className="px-4 sm:px-10 py-6 sm:py-8 bg-slate-50/50 border-t border-slate-100 flex justify-end">
-                                                            <button
-                                                                disabled={isSaving}
-                                                                onClick={handleSaveFaqs}
-                                                                className="bg-brand-600 hover:bg-brand-700 disabled:opacity-50 text-white font-bold px-10 py-3.5 rounded-2xl shadow-lg shadow-brand-200 transition-all active:scale-95 flex items-center gap-2"
-                                                            >
-                                                                {isSaving ? <Loader2 className="animate-spin" size={20} /> : <Check size={20} />}
-                                                                儲存設定
-                                                            </button>
-                                                        </div>
                                                     </div>
                                                 </>
                                             ) : (
@@ -2017,10 +2132,20 @@ const BackendDashboard = () => {
                                                                         setNewProduct({ name: '', description: '', keywords: '' });
                                                                         setShowProductModal(true);
                                                                     }}
-                                                                    className="flex items-center gap-2 px-3 sm:px-5 py-2.5 bg-green-600 text-white rounded-xl text-sm font-bold hover:bg-green-700 transition-all shadow-md shadow-green-100"
+                                                                    className="flex items-center gap-2 px-3 sm:px-5 py-2.5 bg-white border border-green-200 text-green-700 rounded-xl text-sm font-bold hover:bg-green-50 transition-all shadow-sm"
                                                                 >
                                                                     <Plus size={18} />
                                                                     新增商品
+                                                                </button>
+                                                                {/* 與 FAQ 頁一致：儲存是這一列唯一的實心 CTA。 */}
+                                                                <span className="hidden sm:block w-px h-7 bg-slate-200 mx-1" />
+                                                                <button
+                                                                    disabled={isSaving}
+                                                                    onClick={handleSaveProducts}
+                                                                    className="flex items-center gap-2 px-4 sm:px-6 py-2.5 bg-green-600 text-white rounded-xl text-sm font-bold hover:bg-green-700 disabled:opacity-50 transition-all shadow-md shadow-green-200 active:scale-95"
+                                                                >
+                                                                    {isSaving ? <Loader2 className="animate-spin" size={18} /> : <Check size={18} />}
+                                                                    儲存設定
                                                                 </button>
                                                             </div>
                                                         </div>
@@ -2196,16 +2321,6 @@ const BackendDashboard = () => {
                                                             )}
                                                         </div>
 
-                                                        <div className="px-4 sm:px-10 py-6 sm:py-8 bg-slate-50/50 border-t border-slate-100 flex justify-end">
-                                                            <button
-                                                                disabled={isSaving}
-                                                                onClick={handleSaveProducts}
-                                                                className="bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white font-bold px-10 py-3.5 rounded-2xl shadow-lg shadow-green-200 transition-all active:scale-95 flex items-center gap-2"
-                                                            >
-                                                                {isSaving ? <Loader2 className="animate-spin" size={20} /> : <Check size={20} />}
-                                                                儲存設定
-                                                            </button>
-                                                        </div>
                                                     </div>
                                                 </>
                                             )}
@@ -4544,7 +4659,8 @@ const BackendDashboard = () => {
                 isOpen={!!lightboxSrc}
                 src={lightboxSrc}
                 alt="FAQ 附圖"
-                onClose={() => setLightboxSrc(null)}
+                zIndexClass={lightboxZIndex}
+                onClose={() => { setLightboxSrc(null); setLightboxZIndex('z-50'); }}
             />
 
             {/* 移動分類彈窗 */}
@@ -4554,6 +4670,7 @@ const BackendDashboard = () => {
                     onConfirm={handleConfirmImportFaqs}
                     brandDescription={currentAgent?.brand_description || ''}
                     existingCategories={categoryOrder}
+                    existingFaqCount={editingFaqs.length}
                     agentId={routeAgentId}
                     onOpenChatLogImport={() => {
                         setShowFaqImportModal(false);
@@ -4618,6 +4735,46 @@ const BackendDashboard = () => {
                 />
             )}
 
+            <FaqDraftLibraryModal
+                open={showDraftLibrary}
+                drafts={editingFaqDrafts}
+                faqCount={editingFaqs.length}
+                onClose={() => setShowDraftLibrary(false)}
+                onEdit={openEditDraft}
+                onRestore={openRestoreDraft}
+                onDelete={deleteDraftPermanently}
+                onPreviewImage={(url) => { setLightboxZIndex('z-[140]'); setLightboxSrc(url); }}
+            />
+
+            {draftTransferModal.open && (
+                <FaqAddModal
+                    open={draftTransferModal.open}
+                    onClose={closeDraftTransfer}
+                    zIndexClass="z-[120]"
+                    // 用 categoryOrder 而非從 editingFaqs 導出：全部 FAQ 都移進草稿後
+                    // editingFaqs 是空的，導出的分類清單也會是空的，恢復草稿時下拉會 render 成空白
+                    categories={categoryOrder}
+                    defaultCategory={draftTransferModal.source?.category || '常見問題'}
+                    initialValues={draftTransferModal.source}
+                    title={
+                        draftTransferModal.mode === 'toDraft' ? '移至備用草稿庫'
+                            : draftTransferModal.mode === 'restore' ? '加入正式 FAQ'
+                                : '編輯草稿'
+                    }
+                    subtitle={
+                        draftTransferModal.mode === 'toDraft' ? '此問答暫時不會提供 AI 回答，之後可隨時重新加入正式 FAQ。'
+                            : draftTransferModal.mode === 'restore' ? '加入後，儲存設定即會提供 AI 回答客戶。'
+                                : '草稿不會提供 AI 回答。'
+                    }
+                    submitText={
+                        draftTransferModal.mode === 'toDraft' ? '移至草稿庫'
+                            : draftTransferModal.mode === 'restore' ? '加入正式 FAQ'
+                                : '儲存草稿'
+                    }
+                    onSubmit={handleDraftTransferSubmit}
+                />
+            )}
+
             <ConfirmDialog
                 isOpen={confirmDialog.isOpen}
                 title={confirmDialog.title}
@@ -4627,6 +4784,7 @@ const BackendDashboard = () => {
                 variant={confirmDialog.variant}
                 onConfirm={confirmDialog.onConfirm}
                 onCancel={closeConfirm}
+                zIndexClass={confirmDialog.zIndexClass || 'z-50'}
             />
 
             <ChargeConfirmDialog
