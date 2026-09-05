@@ -76,6 +76,17 @@ const WizardPage = () => {
             tone: rawConfig.tone || '親切自然',
             toneAvoid: rawConfig.tone_avoid || '',
             faqs: rawConfig.faqs || [],
+            // 必須一併載入 —— 精靈送出時會覆蓋 faq_drafts，
+            // 沒讀進來的話重跑精靈會清空商家既有的草稿
+            faqDrafts: rawConfig.faq_drafts || [],
+            pendingImageDeletes: [],
+            originalImageIds: [
+                ...new Set(
+                    [...(rawConfig.faqs || []), ...(rawConfig.products || []), ...(rawConfig.faq_drafts || [])]
+                        .map(item => item?.image_id)
+                        .filter(Boolean)
+                ),
+            ],
             products: rawConfig.products || [],
             handoffTriggers,
             handoffCustomTrigger

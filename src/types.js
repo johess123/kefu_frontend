@@ -29,6 +29,14 @@ export const DEFAULT_FORM_DATA = {
     toneAvoid: '',
     toneCustom: '',
     faqs: [],
+    // 備用草稿庫：不佔正式 FAQ 的 200 組額度，也不會被 AI 使用
+    faqDrafts: [],
+    // 精靈裡被永久刪除的草稿所帶的 image_id。精靈是「按下開始測試對話才生效」的流程，
+    // 當下刪圖會刪掉尚未送出的設定仍然引用著的檔案，所以先記著、送出成功後才統一清理。
+    pendingImageDeletes: [],
+    // 進精靈時既有設定引用的所有 image_id。存檔時拿它跟最終引用清單對差，
+    // 就能涵蓋所有沒經過「移除圖片」按鈕的路徑（刪整張 FAQ、刪整個分類…）。
+    originalImageIds: [],
     products: [],
     handoffTriggers: [],
     handoffCustomTrigger: '',
