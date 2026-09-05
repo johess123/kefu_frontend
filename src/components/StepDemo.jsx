@@ -1,13 +1,15 @@
 import React, { useState, useRef, useEffect } from 'react';
 import axios from 'axios';
 import config from '../config';
-import { Send, User, Bot, Loader2, RotateCcw, ArrowRight, MessageCircle, Info, ShieldAlert, CheckCircle2, Lightbulb, HelpCircle, Package, ChevronDown, ChevronRight, Image as ImageIcon } from 'lucide-react';
+import { Send, User, Bot, Loader2, RotateCcw, ArrowRight, MessageCircle, Info, ShieldAlert, CheckCircle2, Lightbulb, HelpCircle, Package, ChevronDown, ChevronRight, Image as ImageIcon, Pencil } from 'lucide-react';
 import { AppStep } from '../types';
 import ImageLightbox from './ImageLightbox';
+import FaqAddModal from './FaqAddModal';
+import { FAQ_MAX_QUESTION, FAQ_MAX_ANSWER, mergeFaqValues, findFaqIndexForHit } from '../utils/faqUtils';
 
 import Cookies from 'js-cookie';
 
-const StepDemo = ({ formData, sessionId, setSessionId, agentId, onNext, setCurrentStep }) => {
+const StepDemo = ({ formData, setFormData, sessionId, setSessionId, agentId, onNext, setCurrentStep }) => {
     const [messages, setMessages] = useState([
         { role: 'model', text: '你好！我是你的 AI 智能客服，有什麼可以幫你的嗎？' }
     ]);
@@ -23,6 +25,11 @@ const StepDemo = ({ formData, sessionId, setSessionId, agentId, onNext, setCurre
     const [imageUploading, setImageUploading] = useState(false);
     const [lightboxSrc, setLightboxSrc] = useState(null);
     const fileInputRef = useRef(null);
+
+    // 回應分析面板的「編輯此 FAQ」：faqIndex 指向 formData.faqs，
+    // hitIndex 指向 lastResponseInfo.related_faqs（存檔後要就地更新，面板才不會還顯示舊文字）
+    const [faqEdit, setFaqEdit] = useState({ open: false, faqIndex: -1, hitIndex: -1 });
+    const [isSavingFaq, setIsSavingFaq] = useState(false);
 
     const toggleFaqCat = (cat) => {
         setCollapsedFaqCats(prev => {
@@ -106,6 +113,57 @@ const StepDemo = ({ formData, sessionId, setSessionId, agentId, onNext, setCurre
         } finally {
             setPendingCount(c => Math.max(0, c - 1));
             setImageUploading(false);
+        }
+    };
+
+    // 從回應分析面板直接改一筆 FAQ。這一步 agent 已經建立（Step 3 的 confirm_setup），
+    // 所以直接寫回知識庫；同時更新 formData，左側清單與後續步驟才不會是舊資料。
+    // 刻意不送 faq_drafts —— 後端把「沒帶這個 key」視為不動草稿。
+    const handleFaqEditSubmit = async (values) => {
+        if (isSavingFaq) return;
+        const { faqIndex, hitIndex } = faqEdit;
+        const faqs = formData.faqs || [];
+        const src = faqs[faqIndex];
+        if (!src) { alert('找不到對應的 FAQ，請重新整理後再試一次。'); return; }
+
+        const merged = mergeFaqValues(src, values);
+        const q = (merged.question || '').trim();
+        const a = (merged.answer || '').trim();
+        if (!q || !a) { alert('問題與回答皆為必填'); return; }
+        if (q.length > FAQ_MAX_QUESTION || a.length > FAQ_MAX_ANSWER) {
+            alert(`內容超過字數限制 (問題 ${FAQ_MAX_QUESTION} 字，回答 ${FAQ_MAX_ANSWER} 字)`);
+            return;
+        }
+
+        const nextFaqs = faqs.map((f, i) => (i === faqIndex ? merged : f));
+        try {
+            setIsSavingFaq(true);
+            const res = await axios.post(`${config.API_URL}/api/admin/agent/${agentId}/update_faqs`, {
+                userId: Cookies.get('google_user_id'),
+                faqs: nextFaqs,
+            });
+            if (res.data.status !== 'ok') {
+                // 存檔失敗時彈窗不關，使用者剛打的內容才不會憑空消失
+                alert(res.data.message || '儲存失敗，請確認內容是否符合字數限制後再試一次。');
+                return;
+            }
+            setFormData(prev => ({ ...prev, faqs: nextFaqs }));
+            setLastResponseInfo(prev => {
+                if (!prev || !Array.isArray(prev.related_faqs) || !prev.related_faqs[hitIndex]) return prev;
+                return {
+                    ...prev,
+                    related_faqs: prev.related_faqs.map((f, i) =>
+                        i === hitIndex ? { ...f, Q: merged.question, A: merged.answer } : f
+                    ),
+                };
+            });
+            setFaqEdit({ open: false, faqIndex: -1, hitIndex: -1 });
+            alert('FAQ 已更新，接下來的測試對話會使用新內容。');
+        } catch (error) {
+            console.error('Failed to update FAQ from demo:', error);
+            alert('儲存失敗');
+        } finally {
+            setIsSavingFaq(false);
         }
     };
 
@@ -415,7 +473,11 @@ const StepDemo = ({ formData, sessionId, setSessionId, agentId, onNext, setCurre
                                 <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
                                     {/* FAQ Hits - Each in its own block */}
                                     {lastResponseInfo.related_faqs && lastResponseInfo.related_faqs.length > 0 &&
-                                        lastResponseInfo.related_faqs.map((faq, i) => (
+                                        lastResponseInfo.related_faqs.map((faq, i) => {
+                                            // AI 偶爾不回 id 或改寫問題文字，對不回知識庫時就不給編輯入口，
+                                            // 否則會編到別題、或改了卻沒生效
+                                            const matchedIdx = findFaqIndexForHit(formData.faqs, faq);
+                                            return (
                                             <div key={`faq-${i}`} className="space-y-3">
                                                 <div className="flex items-center gap-2 text-green-600">
                                                     <CheckCircle2 size={16} />
@@ -433,6 +495,15 @@ const StepDemo = ({ formData, sessionId, setSessionId, agentId, onNext, setCurre
                                                             <span className="text-slate-600">{faq.A}</span>
                                                         </div>
                                                     </div>
+                                                    {matchedIdx !== -1 && agentId && (
+                                                        <button
+                                                            onClick={() => setFaqEdit({ open: true, faqIndex: matchedIdx, hitIndex: i })}
+                                                            className="mt-3 w-full py-2 rounded-xl bg-white border border-green-200 text-green-700 text-xs font-bold flex items-center justify-center gap-1.5 hover:bg-green-50 hover:border-green-300 transition-all"
+                                                        >
+                                                            <Pencil size={13} />
+                                                            編輯此 FAQ
+                                                        </button>
+                                                    )}
                                                     <hr className="my-3 border-green-100" />
                                                     <div className="bg-white/60 p-2 rounded border border-green-50 text-[11px] text-green-700 font-medium flex items-start gap-1">
                                                         <Lightbulb size={14} className="mt-0.5 flex-shrink-0" />
@@ -443,7 +514,8 @@ const StepDemo = ({ formData, sessionId, setSessionId, agentId, onNext, setCurre
                                                     </div>
                                                 </div>
                                             </div>
-                                        ))
+                                            );
+                                        })
                                     }
 
                                     {/* Product Hits - Each in its own block */}
@@ -520,6 +592,20 @@ const StepDemo = ({ formData, sessionId, setSessionId, agentId, onNext, setCurre
                 src={lightboxSrc}
                 alt="測試對話附圖"
                 onClose={() => setLightboxSrc(null)}
+            />
+
+            {/* 回應分析：直接編輯命中的那一筆 FAQ */}
+            <FaqAddModal
+                open={faqEdit.open}
+                onClose={() => setFaqEdit({ open: false, faqIndex: -1, hitIndex: -1 })}
+                categories={[...new Set((formData.faqs || []).map(f => f.category || '常見問題'))]}
+                defaultCategory={(formData.faqs || [])[faqEdit.faqIndex]?.category || '常見問題'}
+                initialValues={(formData.faqs || [])[faqEdit.faqIndex] || null}
+                title="編輯此 FAQ"
+                subtitle="修改後會直接更新知識庫"
+                submitText={isSavingFaq ? '儲存中...' : '儲存'}
+                submitIcon={isSavingFaq ? <Loader2 size={16} className="animate-spin" /> : <Pencil size={16} />}
+                onSubmit={handleFaqEditSubmit}
             />
         </div>
     );

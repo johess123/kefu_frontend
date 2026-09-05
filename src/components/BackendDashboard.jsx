@@ -60,7 +60,8 @@ import {
     SlidersHorizontal,
     ToggleLeft,
     ToggleRight,
-    MessagesSquare
+    MessagesSquare,
+    Pencil
 } from 'lucide-react';
 import Cookies from 'js-cookie';
 import { DEFAULT_HANDOFF_OPTIONS, ToneType, TONE_PROMPTS } from '../types';
@@ -80,7 +81,7 @@ import FaqAddModal from './FaqAddModal';
 import FaqDraftLibraryModal from './FaqDraftLibraryModal';
 import ProductAddModal from './ProductAddModal';
 import ProductImportModal from './ProductImportModal';
-import { FAQ_MAX_QUESTION, FAQ_MAX_ANSWER, FAQ_MAX_COUNT, FAQ_MAX_CATEGORY, getDefaultFaqCategory, validateFaqsForSave, validateFaqsForAnalyze, validateFaqItemForOptimize, FAQ_QUOTA_FULL_MESSAGE, moveFaqToDrafts, restoreDraftToFaqs, splitImportByQuota, ensureCategory, mergeFaqValues } from '../utils/faqUtils';
+import { FAQ_MAX_QUESTION, FAQ_MAX_ANSWER, FAQ_MAX_COUNT, FAQ_MAX_CATEGORY, getDefaultFaqCategory, validateFaqsForSave, validateFaqsForAnalyze, validateFaqItemForOptimize, FAQ_QUOTA_FULL_MESSAGE, moveFaqToDrafts, restoreDraftToFaqs, splitImportByQuota, ensureCategory, mergeFaqValues, findFaqIndexForHit } from '../utils/faqUtils';
 import SpotlightTour from './SpotlightTour';
 import OnboardingChecklist from './OnboardingChecklist';
 import InboxIntroModal from './InboxIntroModal';
@@ -174,6 +175,10 @@ const BackendDashboard = () => {
     const [playgroundImageUploading, setPlaygroundImageUploading] = useState(false);
     const playgroundMessagesEndRef = React.useRef(null);
     const playgroundFileInputRef = React.useRef(null);
+    // 回應分析面板的「編輯此 FAQ」：faqIndex 指向 editingFaqs，hitIndex 指向
+    // lastResponseInfo.related_faqs（存檔後要就地更新該筆，面板才不會還顯示舊文字）
+    const [playgroundFaqEdit, setPlaygroundFaqEdit] = useState({ open: false, faqIndex: -1, hitIndex: -1 });
+    const [isSavingPlaygroundFaq, setIsSavingPlaygroundFaq] = useState(false);
 
     // Edit Subagent states
     const editingSubagent = subSection ? (SUB_SECTION_MAP[subSection] ?? null) : null;
@@ -1107,6 +1112,62 @@ const BackendDashboard = () => {
             alert('儲存失敗');
         } finally {
             setIsSaving(false);
+        }
+    };
+
+    // 從 Playground 回應分析面板直接改一筆 FAQ。
+    // 刻意不送 faq_drafts —— 後端把「沒帶這個 key」視為不動草稿，
+    // 單筆快速修正不該有機會波及備用草稿庫。
+    const handlePlaygroundFaqEditSubmit = async (values) => {
+        if (isSavingPlaygroundFaq) return;
+        const { faqIndex, hitIndex } = playgroundFaqEdit;
+        const src = editingFaqs[faqIndex];
+        if (!src) { alert('找不到對應的 FAQ，請重新整理後再試一次。'); return; }
+
+        const merged = mergeFaqValues(src, values);
+        const q = (merged.question || '').trim();
+        const a = (merged.answer || '').trim();
+        if (!q || !a) { alert('問題與回答皆為必填'); return; }
+        if (q.length > FAQ_MAX_QUESTION || a.length > FAQ_MAX_ANSWER) {
+            alert(`內容超過字數限制 (問題 ${FAQ_MAX_QUESTION} 字，回答 ${FAQ_MAX_ANSWER} 字)`);
+            return;
+        }
+
+        const nextFaqs = editingFaqs.map((f, i) => (i === faqIndex ? merged : f));
+        try {
+            setIsSavingPlaygroundFaq(true);
+            const res = await axios.post(`${config.API_URL}/api/admin/agent/${currentAgent._id}/update_faqs`, {
+                userId: currentAgent.admin_id,
+                faqs: nextFaqs,
+            });
+            if (res.data.status !== 'ok') {
+                // 存檔失敗時彈窗不關，使用者剛打的內容才不會憑空消失
+                alert(res.data.message || '儲存失敗，請確認內容是否符合字數限制後再試一次。');
+                return;
+            }
+            // 左側 FAQ 清單讀的是 currentAgent.config.raw_config.faqs，
+            // 重抓 agent 才會更新（既有的 useEffect 也會一併同步 editingFaqs）
+            const agentRes = await axios.get(`${config.API_URL}/api/admin/agent/${currentAgent._id}`, {
+                params: { userId: currentAgent.admin_id }
+            });
+            setCurrentAgent(agentRes.data);
+            // 右側面板的參考來源同步顯示新內容
+            setLastResponseInfo(prev => {
+                if (!prev || !Array.isArray(prev.related_faqs) || !prev.related_faqs[hitIndex]) return prev;
+                return {
+                    ...prev,
+                    related_faqs: prev.related_faqs.map((f, i) =>
+                        i === hitIndex ? { ...f, Q: merged.question, A: merged.answer } : f
+                    ),
+                };
+            });
+            setPlaygroundFaqEdit({ open: false, faqIndex: -1, hitIndex: -1 });
+            alert('FAQ 已更新，接下來的測試對話會使用新內容。');
+        } catch (error) {
+            console.error('Failed to update FAQ from playground:', error);
+            alert('儲存失敗');
+        } finally {
+            setIsSavingPlaygroundFaq(false);
         }
     };
 
@@ -3654,7 +3715,11 @@ const BackendDashboard = () => {
                                                         ) : (
                                                             <div className="space-y-6">
                                                                 {lastResponseInfo.related_faqs && lastResponseInfo.related_faqs.length > 0 &&
-                                                                    lastResponseInfo.related_faqs.map((faq, i) => (
+                                                                    lastResponseInfo.related_faqs.map((faq, i) => {
+                                                                        // AI 偶爾不回 id 或改寫問題文字，對不回知識庫時就不給編輯入口，
+                                                                        // 否則會編到別題、或改了卻沒生效
+                                                                        const matchedIdx = findFaqIndexForHit(editingFaqs, faq);
+                                                                        return (
                                                                         <div key={`faq-${i}`} className="space-y-3">
                                                                             <div className="flex items-center gap-2 text-green-600">
                                                                                 <CheckCircle2 size={16} />
@@ -3672,6 +3737,15 @@ const BackendDashboard = () => {
                                                                                         <span className="text-slate-600 leading-relaxed">{faq.A}</span>
                                                                                     </div>
                                                                                 </div>
+                                                                                {matchedIdx !== -1 && (
+                                                                                    <button
+                                                                                        onClick={() => setPlaygroundFaqEdit({ open: true, faqIndex: matchedIdx, hitIndex: i })}
+                                                                                        className="mt-4 w-full py-2 rounded-xl bg-white border border-green-200 text-green-700 text-xs font-bold flex items-center justify-center gap-1.5 hover:bg-green-50 hover:border-green-300 transition-all"
+                                                                                    >
+                                                                                        <Pencil size={13} />
+                                                                                        編輯此 FAQ
+                                                                                    </button>
+                                                                                )}
                                                                                 <hr className="my-4 border-green-100/50" />
                                                                                 <div className="bg-white/80 p-3 rounded-xl border border-green-50 text-[11px] text-green-700 font-medium flex items-start gap-2">
                                                                                     <Lightbulb size={14} className="mt-0.5 shrink-0" />
@@ -3682,7 +3756,8 @@ const BackendDashboard = () => {
                                                                                 </div>
                                                                             </div>
                                                                         </div>
-                                                                    ))
+                                                                        );
+                                                                    })
                                                                 }
 
                                                                 {lastResponseInfo.related_products && lastResponseInfo.related_products.length > 0 &&
@@ -4555,6 +4630,20 @@ const BackendDashboard = () => {
                         setShowFaqModal(false);
                         setTimeout(() => { faqsEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }); }, 100);
                     }}
+                />
+
+                {/* Playground 回應分析：直接編輯命中的那一筆 FAQ */}
+                <FaqAddModal
+                    open={playgroundFaqEdit.open}
+                    onClose={() => setPlaygroundFaqEdit({ open: false, faqIndex: -1, hitIndex: -1 })}
+                    categories={categoryOrder}
+                    defaultCategory={editingFaqs[playgroundFaqEdit.faqIndex]?.category || '常見問題'}
+                    initialValues={editingFaqs[playgroundFaqEdit.faqIndex] || null}
+                    title="編輯此 FAQ"
+                    subtitle="修改後會直接更新知識庫"
+                    submitText={isSavingPlaygroundFaq ? '儲存中...' : '儲存'}
+                    submitIcon={isSavingPlaygroundFaq ? <Loader2 size={16} className="animate-spin" /> : <Pencil size={16} />}
+                    onSubmit={handlePlaygroundFaqEditSubmit}
                 />
 
                 {/* Add FAQ to Category Modal */}

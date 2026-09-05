@@ -196,6 +196,7 @@ const WizardPage = () => {
                 return (
                     <StepDemo
                         formData={formData}
+                        setFormData={setFormData}
                         sessionId={sessionId}
                         setSessionId={setSessionId}
                         agentId={agentId}
