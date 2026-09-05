@@ -4,7 +4,15 @@ import axios from 'axios';
 import config from '../config';
 import { FAQ_MAX_QUESTION, FAQ_MAX_ANSWER } from '../utils/faqUtils';
 
-export default function FaqAddModal({ open, onClose, categories = [], defaultCategory = '常見問題', categoryFixed = false, onSubmit }) {
+export default function FaqAddModal({
+    open, onClose, categories = [], defaultCategory = '常見問題',
+    categoryFixed = false, onSubmit,
+    title = '新增問答',
+    subtitle = '建立一組 FAQ 問答',
+    submitText = '新增',
+    initialValues = null,
+    zIndexClass = 'z-[110]',
+}) {
     const [form, setForm] = useState({ question: '', answer: '', image_id: '', _preview_url: '', category: defaultCategory });
     const [uploading, setUploading] = useState(false);
     const [isDragActive, setIsDragActive] = useState(false);
@@ -50,14 +58,28 @@ export default function FaqAddModal({ open, onClose, categories = [], defaultCat
         }
     };
 
+    // 只在 open 由 false→true 的那一次套用 initialValues；
+    // 依賴陣列刻意不含 initialValues —— 每次 render 都是新物件，
+    // 放進去會在使用者打字時把表單覆寫回原值。
     useEffect(() => {
         if (open) {
-            setForm({ question: '', answer: '', image_id: '', _preview_url: '', category: defaultCategory || categories[0] || '常見問題' });
+            setForm(initialValues ? {
+                question: initialValues.question || '',
+                answer: initialValues.answer || '',
+                image_id: initialValues.image_id || '',
+                // 剛上傳的資料帶 _preview_url，從伺服器載入的帶 preview_url（無底線）；
+                // 只讀前者的話，對一筆有附圖的既有 FAQ 開這個彈窗會 render 出破圖
+                _preview_url: initialValues._preview_url || initialValues.preview_url || '',
+                category: initialValues.category || defaultCategory || categories[0] || '常見問題',
+            } : {
+                question: '', answer: '', image_id: '', _preview_url: '',
+                category: defaultCategory || categories[0] || '常見問題',
+            });
             setUploading(false);
             setIsDragActive(false);
             dragCounter.current = 0;
         }
-    }, [open, defaultCategory]);
+    }, [open, defaultCategory]);   // eslint-disable-line react-hooks/exhaustive-deps
 
     if (!open) return null;
 
@@ -66,12 +88,12 @@ export default function FaqAddModal({ open, onClose, categories = [], defaultCat
     };
 
     return (
-        <div 
+        <div
             onDragEnter={handleDrag}
             onDragOver={handleDrag}
             onDragLeave={handleDrag}
             onDrop={handleDrop}
-            className="fixed inset-0 z-[110] flex items-center justify-center p-4"
+            className={`fixed inset-0 ${zIndexClass} flex items-center justify-center p-4`}
         >
             <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={onClose} />
             <div 
@@ -91,8 +113,8 @@ export default function FaqAddModal({ open, onClose, categories = [], defaultCat
                             <BookOpen size={20} />
                         </div>
                         <div>
-                            <h2 className="text-xl font-bold text-slate-800">新增問答</h2>
-                            <p className="text-slate-400 text-xs mt-0.5">建立一組 FAQ 問答</p>
+                            <h2 className="text-xl font-bold text-slate-800">{title}</h2>
+                            <p className="text-slate-400 text-xs mt-0.5">{subtitle}</p>
                         </div>
                     </div>
                     <button onClick={onClose} className="w-10 h-10 flex items-center justify-center text-slate-400 hover:text-slate-600 hover:bg-slate-50 rounded-full transition-all">
@@ -108,6 +130,9 @@ export default function FaqAddModal({ open, onClose, categories = [], defaultCat
                         ) : (
                             <select value={form.category} onChange={(e) => setForm(f => ({ ...f, category: e.target.value }))}
                                 className="w-full bg-white border border-slate-200 rounded-2xl px-5 py-3.5 text-slate-700 text-sm focus:ring-2 focus:ring-brand-500/10 focus:border-brand-500 outline-none transition-all appearance-none cursor-pointer">
+                                {categories.length > 0 && !categories.includes(form.category) && form.category && (
+                                    <option value={form.category}>{form.category}（原分類）</option>
+                                )}
                                 {categories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
                                 {categories.length === 0 && <option value="常見問題">常見問題</option>}
                             </select>
@@ -168,7 +193,7 @@ export default function FaqAddModal({ open, onClose, categories = [], defaultCat
                         disabled={!form.question.trim() || !form.answer.trim()}
                         className="flex items-center gap-2 px-6 py-2.5 bg-brand-600 text-white rounded-xl text-sm font-bold hover:bg-brand-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed">
                         <Plus size={16} />
-                        新增
+                        {submitText}
                     </button>
                 </div>
             </div>

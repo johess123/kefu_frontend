@@ -9,8 +9,11 @@ import { X } from 'lucide-react';
  *   src     {string}   圖片 URL
  *   alt     {string}   圖片 alt 文字
  *   onClose {function} 關閉 callback
+ *   zIndexClass {string} 疊層。預設 z-50 即原本的值，既有呼叫不受影響；
+ *                        從更上層的視窗（例如 z-[100] 的備用草稿庫）開啟時要傳更大的值，
+ *                        否則燈箱會開在那個視窗底下，看不見也點不到。
  */
-export default function ImageLightbox({ isOpen, src, alt = '圖片', onClose }) {
+export default function ImageLightbox({ isOpen, src, alt = '圖片', onClose, zIndexClass = 'z-50' }) {
     // ESC 關閉
     useEffect(() => {
         if (!isOpen) return;
@@ -23,7 +26,7 @@ export default function ImageLightbox({ isOpen, src, alt = '圖片', onClose }) 
 
     return (
         <div
-            className="fixed inset-0 z-50 flex items-center justify-center p-4"
+            className={`fixed inset-0 ${zIndexClass} flex items-center justify-center p-4`}
             onClick={onClose}
         >
             {/* Backdrop */}

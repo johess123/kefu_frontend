@@ -11,6 +11,7 @@ import { AlertTriangle, X } from 'lucide-react';
  *   confirmText {string}   確認按鈕文字（預設「確認」）
  *   cancelText  {string}   取消按鈕文字（預設「取消」）
  *   variant     {string}   'danger' | 'default'（預設 'danger'）
+ *   zIndexClass {string}   外層 z-index class（預設 'z-50'；疊在其他 modal 上時傳更高值）
  *   onConfirm   {function} 點擊確認的 callback
  *   onCancel    {function} 點擊取消或背景的 callback
  */
@@ -21,6 +22,7 @@ export default function ConfirmDialog({
     confirmText = '確認',
     cancelText = '取消',
     variant = 'danger',
+    zIndexClass = 'z-50',
     onConfirm,
     onCancel,
 }) {
@@ -38,7 +40,7 @@ export default function ConfirmDialog({
 
     return (
         <div
-            className="fixed inset-0 z-50 flex items-center justify-center p-4"
+            className={`fixed inset-0 ${zIndexClass} flex items-center justify-center p-4`}
             onClick={onCancel}
         >
             {/* Backdrop */}
