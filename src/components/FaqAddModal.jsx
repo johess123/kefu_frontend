@@ -10,6 +10,8 @@ export default function FaqAddModal({
     title = '新增問答',
     subtitle = '建立一組 FAQ 問答',
     submitText = '新增',
+    // 編輯情境用的圖示（預設是新增用的 +，「＋ 儲存」讀起來不對）
+    submitIcon = <Plus size={16} />,
     initialValues = null,
     zIndexClass = 'z-[110]',
 }) {
@@ -192,7 +194,7 @@ export default function FaqAddModal({
                     <button onClick={handleSubmit}
                         disabled={!form.question.trim() || !form.answer.trim()}
                         className="flex items-center gap-2 px-6 py-2.5 bg-brand-600 text-white rounded-xl text-sm font-bold hover:bg-brand-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed">
-                        <Plus size={16} />
+                        {submitIcon}
                         {submitText}
                     </button>
                 </div>

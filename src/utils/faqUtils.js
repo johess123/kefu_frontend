@@ -147,3 +147,29 @@ export function ensureCategory(categoryOrder, category) {
     const cat = (category || '常見問題').trim() || '常見問題';
     return categoryOrder.includes(cat) ? categoryOrder : [...categoryOrder, cat];
 }
+
+/**
+ * 把「AI 回傳的命中 FAQ」對回知識庫裡的原始那一筆。
+ *
+ * AI 有時不回 id、有時把問題文字改寫過，所以比對策略與後端配圖時一致
+ * （agent_service 的 faq_image_map / faq_question_map）：先比 id，再比問題文字。
+ * 兩者都對不到就回 -1 —— 呼叫端必須據此隱藏編輯入口，
+ * 否則使用者會編到別題，或以為改了卻沒生效。
+ *
+ * @returns {number} faqs 中的索引，對不到為 -1
+ */
+export function findFaqIndexForHit(faqs, hit) {
+    if (!Array.isArray(faqs) || faqs.length === 0 || !hit) return -1;
+
+    const hitId = hit.id === undefined || hit.id === null ? '' : String(hit.id).trim();
+    if (hitId) {
+        const byId = faqs.findIndex(f => f && f.id !== undefined && f.id !== null && String(f.id).trim() === hitId);
+        if (byId !== -1) return byId;
+    }
+
+    const hitQ = (hit.Q || hit.question || '').trim();
+    if (hitQ) {
+        return faqs.findIndex(f => f && (f.question || '').trim() === hitQ);
+    }
+    return -1;
+}
