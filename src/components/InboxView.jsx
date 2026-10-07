@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useRef, useCallback } from 'react';
 import axios from 'axios';
 import config from '../config';
 import { RefreshCw, Send, MessageSquare, Search, PanelRightOpen, PanelRightClose, Loader2 } from 'lucide-react';
@@ -6,6 +6,29 @@ import { safeUrl } from '../utils/urlUtils';
 import CrmMemberPanel, { getTagColor } from './CrmMemberPanel';
 
 const API = config.API_URL;
+
+function AutoResizeTextarea({ value, onChange, className, style, ...props }) {
+    const textareaRef = useRef(null);
+
+    useLayoutEffect(() => {
+        const textarea = textareaRef.current;
+        if (!textarea) return;
+
+        textarea.style.height = 'auto';
+        textarea.style.height = `${textarea.scrollHeight}px`;
+    }, [value]);
+
+    return (
+        <textarea
+            {...props}
+            ref={textareaRef}
+            value={value}
+            onChange={onChange}
+            className={className}
+            style={{ ...style, overflowY: 'hidden' }}
+        />
+    );
+}
 
 export default function InboxView({ currentAgent }) {
     const [sessions, setSessions] = useState([]);
@@ -566,11 +589,10 @@ export default function InboxView({ currentAgent }) {
                                                             AI 草稿待審 · {msg.time}
                                                         </p>
                                                         <div className="rounded-2xl border-2 border-dashed border-amber-300 bg-amber-50 p-3">
-                                                            <textarea
+                                                            <AutoResizeTextarea
                                                                 value={editVal}
                                                                 onChange={(e) => setDraftEdits(prev => ({ ...prev, [msg.chat_id]: e.target.value }))}
                                                                 disabled={busy}
-                                                                rows={3}
                                                                 maxLength={1000}
                                                                 className="w-full resize-none rounded-xl border border-amber-200 bg-white px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-300 disabled:opacity-50"
                                                             />
